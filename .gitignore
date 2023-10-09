@@ -1,0 +1,12 @@
+*.db
+*.swp
+cscope.*
+*.pem
+*.json
+cmd/tesla-control/tesla-control
+cmd/tesla-auth-token/tesla-auth-token
+cmd/tesla-key-setup/tesla-key-setup
+examples/unlock/unlock
+examples/ble/ble
+*.DS_Store
+*.key
