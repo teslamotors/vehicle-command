@@ -25,7 +25,7 @@ obtain a valid OAuth token from the user, and the user must enroll the
 application's public key in the vehicle.
 
 Tesla's website has [instructions for obtaining OAuth
-tokens](https://developer.tesla.com/docs/tesla-fleet-api). This README has
+tokens](https://developer.tesla.com/docs/fleet-api). This README has
 instructions for generating private keys and directing the user to the
 public-key enrollment flow. The tools in this repository can use the OAuth
 token and the private key to send commands to vehicles.
@@ -71,7 +71,7 @@ The final command installs the following utilities:
  * **tesla-http-proxy**: An HTTP proxy that exposes a REST API for sending
    vehicle commands.
  * **tesla-auth-token**: Write an OAuth token to your system keyring. This
-   utility does not fetch tokens. Read the [Fleet API documentation](https://developer.tesla.com/docs/tesla-fleet-api#authentication)
+   utility does not fetch tokens. Read the [Fleet API documentation](https://developer.tesla.com/docs/fleet-api#authentication)
    for information on fetching OAuth tokens.
 
 Configure environment variables (optional):
@@ -117,7 +117,7 @@ As discussed above, your HTTP proxy will need to authenticate both with Tesla
 Tesla's servers require your client to provide an OAuth access token before
 they will forward commands to a vehicle. You must obtain the OAuth token from
 the vehicle's owner. See [Tesla's
-website](https://developer.tesla.com/docs/tesla-fleet-api) for instructions on
+website](https://developer.tesla.com/docs/fleet-api) for instructions on
 registering a developer account and obtaining OAuth tokens.
 
 ### Generating a command-authentication private key
@@ -160,7 +160,7 @@ identifies your application. The Tesla app will display this domain name to the
 user when it asks if they wish to approve your request.
 
 Follow the instructions to [register your public key and
-domain](https://developer.tesla.com/docs/tesla-fleet-api#partner-endpoints).
+domain](https://developer.tesla.com/docs/fleet-api#register).
 The public key referred to in those instructions is the `public_key.pem` file
 in the above example.
 
@@ -230,7 +230,7 @@ curl --cacert cert.pem \
 
 ### REST API documentation
 
-The HTTP proxy implements the [Tesla Fleet API vehicle command endpoints](https://developer.tesla.com/docs/tesla-fleet-api#vehicle-commands).
+The HTTP proxy implements the [Tesla Fleet API vehicle command endpoints](https://developer.tesla.com/docs/fleet-api#vehicle-commands).
 
 ## Using the Golang library
 

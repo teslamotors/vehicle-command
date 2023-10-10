@@ -544,7 +544,7 @@ func (v *Vehicle) SetSentryMode(ctx context.Context, state bool) error {
 //
 // We recommend users avoid this command unless they are managing a fleet of vehicles and understand
 // the implications of enabling the mode. See official API documentation at
-// https://developer.tesla.com/docs/tesla-fleet-api#guest_mode.
+// https://developer.tesla.com/docs/fleet-api#guest_mode.
 func (v *Vehicle) SetGuestMode(ctx context.Context, enabled bool) error {
 	return v.executeCarServerAction(ctx,
 		&carserver.Action_VehicleAction{
