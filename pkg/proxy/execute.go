@@ -10,22 +10,23 @@ import (
 	"time"
 
 	"github.com/teslamotors/vehicle-command/pkg/connector/inet"
+	"github.com/teslamotors/vehicle-command/pkg/protocol"
 	"github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/carserver"
 	"github.com/teslamotors/vehicle-command/pkg/vehicle"
 )
-
-func invalidValue(key string) error {
-	return &inet.HttpError{Code: http.StatusUnprocessableEntity, Message: "invalid value for " + key}
-}
-
-func invalidType(key string, value interface{}) error {
-	return &inet.HttpError{Code: http.StatusUnprocessableEntity, Message: fmt.Sprintf("invalid type %T for %s", value, key)}
-}
 
 var (
 	ErrNotImplemented = errors.New("command not implemented")
 	ErrUseRESTAPI     = errors.New("command requires using the REST API")
 )
+
+func missingParamError(key string) error {
+	return &protocol.NominalError{Details: fmt.Errorf("missing %s param", key)}
+}
+
+func invalidParamError(key string) error {
+	return &protocol.NominalError{Details: fmt.Errorf("invalid %s param", key)}
+}
 
 type requestParameters map[string]interface{}
 
@@ -33,11 +34,13 @@ func (p requestParameters) getString(key string, required bool) (string, error) 
 	if value, ok := p[key]; ok {
 		if s, ok := value.(string); ok {
 			return s, nil
+		} else {
+			return "", invalidParamError(key)
 		}
 	} else if !required {
 		return "", nil
 	}
-	return "", invalidValue(key)
+	return "", missingParamError(key)
 }
 
 func (p requestParameters) getBool(key string, required bool) (bool, error) {
@@ -45,12 +48,12 @@ func (p requestParameters) getBool(key string, required bool) (bool, error) {
 		if s, ok := value.(bool); ok {
 			return s, nil
 		} else {
-			return false, invalidType(key, value)
+			return false, invalidParamError(key)
 		}
 	} else if !required {
 		return false, nil
 	}
-	return false, invalidValue(key)
+	return false, missingParamError(key)
 }
 
 func (p requestParameters) getNumber(key string, required bool) (float64, error) {
@@ -58,12 +61,12 @@ func (p requestParameters) getNumber(key string, required bool) (float64, error)
 		if s, ok := value.(float64); ok {
 			return s, nil
 		} else {
-			return 0, invalidType(key, value)
+			return 0, invalidParamError(key)
 		}
 	} else if !required {
 		return 0, nil
 	}
-	return 0, invalidValue(key)
+	return 0, missingParamError(key)
 }
 
 func (p requestParameters) getPolicy(enabledKey string, weekdaysOnlyKey string) (vehicle.ChargingPolicy, error) {
@@ -261,7 +264,19 @@ func execute(ctx context.Context, req *http.Request, car *vehicle.Vehicle, comma
 		return car.ChangeClimateTemp(ctx, float32(driverTemp), float32(passengerTemp))
 	// Vehicle actuation commands
 	case "actuate_trunk":
-		return ErrNotImplemented
+		if which, err := params.getString("which_trunk", false); err == nil {
+			switch which {
+			case "front":
+				return car.OpenFrunk(ctx)
+			case "rear":
+				return car.OpenTrunk(ctx)
+			default:
+				return &protocol.NominalError{
+					Details: protocol.NewError("invalid_value", false, false),
+				}
+			}
+		}
+		return car.OpenTrunk(ctx)
 	case "charge_port_door_open":
 		return car.ChargePortOpen(ctx)
 	case "charge_port_door_close":

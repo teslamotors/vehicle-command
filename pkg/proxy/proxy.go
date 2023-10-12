@@ -101,6 +101,11 @@ type Response struct {
 	ErrDetails string      `json:"error_description"`
 }
 
+type carResponse struct {
+	Result bool   `json:"result"`
+	Reason string `json:"string"`
+}
+
 func writeJSONError(w http.ResponseWriter, code int, err error) {
 	reply := Response{}
 
@@ -112,6 +117,9 @@ func writeJSONError(w http.ResponseWriter, code int, err error) {
 	} else {
 		if err == nil {
 			reply.Error = http.StatusText(code)
+		} else if protocol.IsNominalError(err) {
+			// Response came from the car as opposed to Tesla's servers
+			reply.Response = &carResponse{Reason: err.Error()}
 		} else {
 			reply.Error = err.Error()
 		}

@@ -1,4 +1,6 @@
 # Tesla Vehicle Command SDK
+[![Go Reference](https://pkg.go.dev/badge/github.com/teslamotors/vehicle-command/pkg.svg)](https://pkg.go.dev/github.com/teslamotors/vehicle-command/pkg)
+
 Tesla vehicles now support a protocol that provides end-to-end command
 authentication. This Golang package uses the new protocol to control vehicle
 functions, such as climate control and charging.
@@ -9,7 +11,10 @@ to the new vehicle-command protocol.
 Some developers may be familiar with Tesla's Owner API. Owner API will stop
 working as vehicles begin requiring end-to-end command authentication. If you
 are one of these developers, you can set up the proxy server or refactor your
-application to use this library directly.
+application to use this library directly. Pre-2021 Model S and X vehicles do
+not support this new protocol. [Fleet
+API](https://developer.tesla.com/docs/tesla-fleet-api#fleet-api) will continue
+to work on these vehicles.
 
 ## System overview
 
@@ -84,7 +89,7 @@ in lieu of command-line flags when using the above applications:
  * `TESLA_TOKEN_NAME` used to derive the entry name for your OAuth token in
    your system keyring.
  * `TESLA_KEYRING_TYPE` used override the default system keyring type for your
-   OS. Run `tesla-key-control -h` to see supported values listed in the
+   OS. Run `tesla-keygen -h` to see supported values listed in the
    `-keyring-type` flag documentation. Consult [keyring
    documentation](https://github.com/99designs/keyring/#readme) for details on
    each option.
@@ -134,7 +139,7 @@ tesla-keygen create > public_key.pem
 ```
 
 The system keyring uses your OS-dependent credential storage as the system
-keyring. On macOS, for example, it defaults to using your iCloud keychain. Run
+keyring. On macOS, for example, it defaults to using your login keychain. Run
 `tesla-keygen -h` for more options.
 
 Re-running the `tesla-keygen` command will print out the same public key
@@ -234,17 +239,8 @@ The HTTP proxy implements the [Tesla Fleet API vehicle command endpoints](https:
 
 ## Using the Golang library
 
-Pre-2021 Model S and X vehicles will continue to support the full REST API, and
-do not support the new protocol.
+You can read package [documentation on pkg.go.dev](https://pkg.go.dev/github.com/teslamotors/vehicle-command/pkg).
 
-This repository supports `go mod`.
-
-Generate documentation using `pkgsite`.
-
-Install with `go install golang.org/x/pkgsite/cmd/pkgsite@latest`.
-
-Start the documentation server by running `pkgsite`. Once the server is
-running, navigate to `localhost:8080`.
-
-*Note:* The documentation server may take a couple minutes to start the first
-time it is launched.
+This repository supports `go mod` and follows [Go version
+semantics](https://go.dev/doc/modules/version-numbers). Note that v0.x.x
+releases do not guarantee API stability.
