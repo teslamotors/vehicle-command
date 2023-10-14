@@ -131,7 +131,7 @@ var (
 
 // Config fields determine how a client authenticates to vehicles and/or Tesla's backend.
 type Config struct {
-	Flags            Flag   // Controls which set of enviornment variables/CLI flags to use.
+	Flags            Flag   // Controls which set of environment variables/CLI flags to use.
 	KeyringKeyName   string // Username for private key in system keyring
 	KeyringTokenName string // Username for OAuth token in system keyring
 	VIN              string
