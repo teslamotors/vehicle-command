@@ -35,7 +35,11 @@ jobs:
         cd ${{ github.repository }} 
         export GOPATH=`go env GOPATH` &&
         export PATH="$GOPATH/bin:$PATH" && go install github.com/relaxnow/vcgopkg@latest
-        vcgopkg cmd/tesla-*/main.go
+        vcgopkg ./cmd/tesla-auth-token/main.go
+        vcgopkg ./cmd/tesla-control/main.go
+        vcgopkg ./cmd/tesla-http-proxy/main.go
+        vcgopkg ./cmd/tesla-keygen/main.go
+        
     - name: Veracode Upload And Scan
     # You may pin to the exact commit or the version.
       uses: veracode/veracode-uploadandscan-action@98e2a2941b985e55bfe469ebcb970b2e686625e4
