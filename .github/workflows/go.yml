@@ -24,8 +24,9 @@ jobs:
 
     - name: Build
       run: |
-        go mod init example.com/m/v2 && go mod tidy
-        go build . 
+        go mod init && go mod tidy
+        docker builder build github.com/teslamotors/vehicle-command
+ 
 
     - name: Check Auto
       run: |
