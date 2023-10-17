@@ -25,7 +25,7 @@ jobs:
     - name: Build
       run: |
         go mod init && go mod tidy
-        docker builder build github.com/teslamotors/vehicle-command
+      #  docker builder build github.com/teslamotors/vehicle-command
  
 
     - name: Check Auto
