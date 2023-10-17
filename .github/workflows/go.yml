@@ -22,10 +22,10 @@ jobs:
         go-version: '1.20'
 
 
-    - name: Build
-      run: |
-        go mod init && go mod tidy
-      #  docker builder build github.com/teslamotors/vehicle-command
+    # - name: Build
+    #   run: |
+    #     go mod init && go mod tidy
+    #   #  docker builder build github.com/teslamotors/vehicle-command
  
 
     - name: Check Auto
