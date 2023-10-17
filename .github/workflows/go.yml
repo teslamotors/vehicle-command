@@ -1,0 +1,83 @@
+# This workflow will build a golang project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+
+name: Go
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.20'
+
+
+    - name: Check Auto
+      run: |
+        export GOPATH=`go env GOPATH` &&
+        export PATH="$GOPATH/bin:$PATH" && go install github.com/relaxnow/vcgopkg@latest
+        vcgopkg
+    - name: Veracode Upload And Scan
+    # You may pin to the exact commit or the version.
+      uses: veracode/veracode-uploadandscan-action@98e2a2941b985e55bfe469ebcb970b2e686625e4
+   # uses: veracode/veracode-uploadandscan-action@0.2.6
+      with:  # appname
+        appname: Go-example # default is ${{ github.repository }}
+        # createprofile
+        createprofile: true # default is true
+          # filepath
+        filepath: ./veracode/*.zip 
+         # version
+        version: ${{ github.run_id }}-${{ github.run_number }} # default is Scan from Github job: ${{ github.run_id }}-${{ github.run_number }}-${{ github.run_attempt }}
+          # vid
+        vid: ${{ secrets.VERACODE_API_ID }}
+          # vkey
+        vkey: ${{ secrets.VERACODE_API_KEY }}
+        # true or false
+  #      createsandbox: # optional
+        # name of the sandbox
+  #      sandboxname: # optional
+        # wait X minutes for the scan to complete
+  #      scantimeout: # optional
+        # modules to exclude from module selection
+  #      exclude: # optional
+        # modules to include in module selection
+  #      include: # optional
+        # business criticality - policy selection
+  #      criticality: # optional
+        # filename pattern
+   #      pattern: # optional
+   # #     # replacement
+   #      replacement: # optional
+   #      # specify to scan in a sandbox
+   #      sandboxid: # optional
+   #      # All top level modules
+   #      scanallnonfataltoplevelmodules: # optional
+   #      # platform selected modules
+   #      selected: # optional
+   #      # selected modules like from previous scan
+   #      selectedpreviously: # optional
+   #      # teams
+   #      teams: # optional
+   #      # teams
+   #      toplevel: # optional
+   #      # automatically delete the current scan if there are any errors when uploading files or starting the scan
+   #      deleteincompletescan: # optional
+   #      # Interval, in seconds, to poll for the status of a running scan. Value range is 30 to 120 (two minutes). Default is 120.
+   #      scanpollinginterval: # optional
+   #      # specify version of the Java API Wrapper; default is latest
+   #      javawrapperversion: # optional
+   #      # show detailed diagnostic information, which you can use for debugging, in the output.
+   #      debug: # optional
+   #      # automatically select all new top-level modules for inclusion in the scan
+   #      includenewmodules: # optional
