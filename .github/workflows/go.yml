@@ -30,6 +30,8 @@ jobs:
 
     - name: Check Auto
       run: |
+        pwd 
+        ls */**
         cd ${{ github.repository }} 
         export GOPATH=`go env GOPATH` &&
         export PATH="$GOPATH/bin:$PATH" && go install github.com/relaxnow/vcgopkg@latest
