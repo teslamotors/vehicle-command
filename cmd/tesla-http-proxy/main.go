@@ -43,6 +43,7 @@ func main() {
 		verbose      bool
 		host         string
 		port         int
+		skipTLS      bool
 	)
 	config := cli.Config{Flags: cli.FlagPrivateKey}
 	var err error
@@ -58,6 +59,7 @@ func main() {
 	flag.BoolVar(&verbose, "verbose", false, "Enable verbose logging")
 	flag.StringVar(&host, "host", "localhost", "Proxy server `hostname`")
 	flag.IntVar(&port, "port", defaultPort, "`Port` to listen on")
+	flag.BoolVar(&skipTLS, "skip-tls", false, "Skip TLS and serve HTTP only")
 	flag.Usage = Usage
 	config.RegisterCommandLineFlags()
 	flag.Parse()
@@ -94,10 +96,16 @@ func main() {
 	addr := fmt.Sprintf("%s:%d", host, port)
 	log.Info("Listening on %s", addr)
 
-	// To add more application logic requests, such as alternative client authentication, create
-	// a http.HandleFunc implementation (https://pkg.go.dev/net/http#HandlerFunc). The ServeHTTP
-	// method of your implementation can perform your business logic and then, if the request is
-	// authorized, invoke p.ServeHTTP. Finally, replace p in the below ListenAndServeTLS call with
-	// an object of your newly created type.
-	log.Error("Server stopped: %s", http.ListenAndServeTLS(addr, certFilename, keyFilename, p))
+	if skipTLS {
+		log.Info("TLS is disabled. Serving HTTP only.")
+		log.Error("Server stopped: %s", http.ListenAndServe(addr, p))
+	} else {
+		// Your existing TLS setup and server start code
+		// To add more application logic requests, such as alternative client authentication, create
+		// a http.HandleFunc implementation (https://pkg.go.dev/net/http#HandlerFunc). The ServeHTTP
+		// method of your implementation can perform your business logic and then, if the request is
+		// authorized, invoke p.ServeHTTP. Finally, replace p in the below ListenAndServeTLS call with
+		// an object of your newly created type.
+		log.Error("Server stopped: %s", http.ListenAndServeTLS(addr, certFilename, keyFilename, p))
+	}
 }
