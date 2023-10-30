@@ -190,6 +190,8 @@ openssl req -x509 -nodes -newkey ec -pkeyopt ec_paramgen_curve:secp521r1 \
 
 This command creates an unencrypted private key, `key.pem`.
 
+*Note:* To skip the above key generation, pass the `-skip-tls` flag. This will allow you to run the server without creating a TLS key and certificate.
+
 ### Running the proxy server
 
 You can start the proxy server using the following command:
@@ -200,6 +202,8 @@ tesla-http-proxy -tls-key key.pem -cert cert.pem -port 4443
 
 *Note:* In production, you'll likely want to omit the `-port 4443` and listen on
 the standard port 443.
+
+
 
 ### Sending commands to the proxy server
 
