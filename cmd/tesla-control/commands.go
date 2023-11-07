@@ -402,7 +402,8 @@ var commands = map[string]*Command{
 		},
 	},
 	"flash-lights": &Command{
-		help: "Flash lights",
+		help:         "Flash lights",
+		requiresAuth: true,
 		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
 			return car.FlashLights(ctx)
 		},
