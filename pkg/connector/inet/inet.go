@@ -118,6 +118,10 @@ func SendFleetAPICommand(ctx context.Context, client *http.Client, userAgent, au
 	return nil, &HttpError{Code: result.StatusCode, Message: string(body)}
 }
 
+func ValidTeslaDomainSuffix(domain string) bool {
+	return strings.HasSuffix(domain, ".tesla.com") || strings.HasSuffix(domain, ".tesla.cn") || strings.HasSuffix(domain, ".teslamotors.com")
+}
+
 // Sends a command to a Fleet API REST endpoint. Returns the response body and an error. The
 // response body is not necessarily nil if the error is set.
 func (c *Connection) SendFleetAPICommand(ctx context.Context, endpoint string, command interface{}) ([]byte, error) {

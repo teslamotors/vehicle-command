@@ -79,7 +79,16 @@ type oauthPayload struct {
 var domainRegEx = regexp.MustCompile(`^[A-Za-z0-9-.]+$`) // We're mostly interested in stopping paths; the http package handles the rest.
 var remappedDomains = map[string]string{}                // For use during development; populate in an init() function.
 
+const defaultDomain = "fleet-api.prd.na.vn.cloud.tesla.com"
+
 func (p *oauthPayload) domain() string {
+	if len(remappedDomains) > 0 {
+		for _, a := range p.Audiences {
+			if d, ok := remappedDomains[a]; ok {
+				return d
+			}
+		}
+	}
 	for _, u := range p.Audiences {
 		if strings.HasPrefix(u, "https://auth.tesla.com") {
 			continue
@@ -89,14 +98,17 @@ func (p *oauthPayload) domain() string {
 		if !domainRegEx.MatchString(d) {
 			continue
 		}
-		if remapped, ok := remappedDomains[d]; ok {
-			return remapped
+		if d == defaultDomain {
+			// Some tokens include audiences for both NA and another region. These tokens should
+			// default to the non-NA region.
+			continue
 		}
-		if strings.HasSuffix(d, ".tesla.com") || strings.HasSuffix(d, ".tesla.cn") {
+
+		if inet.ValidTeslaDomainSuffix(d) && strings.HasPrefix(d, "fleet-api.") {
 			return d
 		}
 	}
-	return ""
+	return defaultDomain
 }
 
 // New returns an [Account] that can be used to fetch a [vehicle.Vehicle].
