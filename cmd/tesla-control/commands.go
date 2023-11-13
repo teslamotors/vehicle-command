@@ -422,6 +422,21 @@ var commands = map[string]*Command{
 			return car.ChangeChargeLimit(ctx, int32(limit))
 		},
 	},
+	"charging-set-amps": &Command{
+		help:             "Set charge current to AMPS",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		args: []Argument{
+			Argument{name: "AMPS", help: "Charging current"},
+		},
+		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			limit, err := strconv.Atoi(args["AMPS"])
+			if err != nil {
+				return fmt.Errorf("error parsing AMPS")
+			}
+			return car.SetChargingAmps(ctx, int32(limit))
+		},
+	},
 	"charging-start": &Command{
 		help:             "Start charging",
 		requiresAuth:     true,
