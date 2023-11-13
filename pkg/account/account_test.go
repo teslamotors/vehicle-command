@@ -11,7 +11,7 @@ func b64Encode(payload string) string {
 }
 
 func TestNewAccount(t *testing.T) {
-	validDomain := "example.tesla.com"
+	validDomain := "fleet-api.example.tesla.com"
 	if _, err := New(""); err == nil {
 		t.Error("Returned success empty JWT")
 	}
