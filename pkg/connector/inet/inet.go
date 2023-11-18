@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,6 +40,16 @@ func readWithContext(ctx context.Context, r io.Reader, p []byte) ([]byte, error)
 
 var ErrVehicleNotAwake = protocol.NewError("vehicle unavailable: vehicle is offline or asleep", false, false)
 
+/*
+The regular expression below extracts domains from HTTP bodies:
+	{
+	  "response": null,
+	  "error": "user out of region, use base URL: https://fleet-api.prd.na.vn.cloud.tesla.com, see https://developer.tesla.com/docs/fleet-api#regional-requirements",
+	  "error_description": ""
+	}
+*/
+var baseDomainRE = regexp.MustCompile(`use base URL: https://([-a-z0-9.]*)`)
+
 type HttpError struct {
 	Code    int
 	Message string
@@ -60,6 +73,7 @@ func (e *HttpError) Temporary() bool {
 	return e.Code == http.StatusServiceUnavailable ||
 		e.Code == http.StatusGatewayTimeout ||
 		e.Code == http.StatusRequestTimeout ||
+		e.Code == http.StatusMisdirectedRequest ||
 		e.Code == http.StatusTooManyRequests
 }
 
@@ -126,7 +140,18 @@ func ValidTeslaDomainSuffix(domain string) bool {
 // response body is not necessarily nil if the error is set.
 func (c *Connection) SendFleetAPICommand(ctx context.Context, endpoint string, command interface{}) ([]byte, error) {
 	url := fmt.Sprintf("https://%s/%s", c.serverURL, endpoint)
-	return SendFleetAPICommand(ctx, &c.client, c.UserAgent, c.authHeader, url, command)
+	rsp, err := SendFleetAPICommand(ctx, &c.client, c.UserAgent, c.authHeader, url, command)
+	if err != nil {
+		var httpErr *HttpError
+		if errors.As(err, &httpErr) && httpErr.Code == http.StatusMisdirectedRequest {
+			matches := baseDomainRE.FindStringSubmatch(httpErr.Message)
+			if len(matches) == 2 && ValidTeslaDomainSuffix(matches[1]) {
+				log.Debug("Received HTTP Status 421. Updating server URL.")
+				c.serverURL = matches[1]
+			}
+		}
+	}
+	return rsp, err
 }
 
 // Connection implements the connector.Connector interface by POSTing commands to a server.
