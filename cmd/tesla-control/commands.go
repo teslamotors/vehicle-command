@@ -517,7 +517,7 @@ var commands = map[string]*Command{
 	},
 	"wake": &Command{
 		help:             "Wake up vehicle",
-		requiresAuth:     false,
+		requiresAuth:     true,
 		requiresFleetAPI: false,
 		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
 			return car.Wakeup(ctx)
