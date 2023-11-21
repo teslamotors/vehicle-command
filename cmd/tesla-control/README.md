@@ -34,8 +34,8 @@ Generate a private key in your system keyring, and save the public key to a file
 tesla-keygen create > public_key.pem
 ```
 
-Now you can pair your public key with your Tesla. Get in your car and have your
-NFC card handy. Then run:
+Now you can pair your public key with your Tesla. Get in your car, enable bluetooth
+on your laptop and have your NFC card handy. Then run:
 
 ```
 tesla-control -ble add-key-request public_key.pem owner cloud_key
