@@ -172,7 +172,7 @@ in the above example.
 Once your public key is successfully registered, provide vehicle owners with a
 link to `https://tesla.com/_ak/<your_domain_name>`. For example, if you
 registered `example.com`, provide a link to
-`https://tesla.com/_ak/example.com`. The official Tesla iPhone or Android mobile app (version 4.25.5 or above)
+`https://tesla.com/_ak/example.com`. The official Tesla iPhone or Android mobile app (version 4.27.3 or above)
 will handle the rest. Customers with more than one Tesla product must select the desired vehicle before clicking
 the link or scanning the QR code.
 
