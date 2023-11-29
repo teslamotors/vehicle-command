@@ -454,7 +454,7 @@ var commands = map[string]*Command{
 		},
 	},
 	"charging-schedule": &Command{
-		help:             "Schedule charging to xx minutes after midnight and enable daily scheduling",
+		help:             "Schedule charging to MINS minutes after midnight and enable daily scheduling",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
 		args: []Argument{
