@@ -44,8 +44,8 @@ func main() {
 		host         string
 		port         int
 	)
-	config := cli.Config{Flags: cli.FlagPrivateKey}
-	var err error
+
+	config, err := cli.NewConfig(cli.FlagPrivateKey)
 	defer func() {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
