@@ -453,6 +453,31 @@ var commands = map[string]*Command{
 			return car.ChargeStop(ctx)
 		},
 	},
+	"charging-schedule": &Command{
+		help:             "Schedule charging to xx minutes after midnight and enable daily scheduling",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		args: []Argument{
+			Argument{name: "MINS", help: "Time after midnight in minutes"},
+		},
+		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			minutesAfterMidnight, err := strconv.Atoi(args["MINS"])
+			if err != nil {
+				return fmt.Errorf("error parsing minutes")
+			}
+			// Convert minutes to a time.Duration
+			chargingTime := time.Duration(minutesAfterMidnight) * time.Minute
+			return car.ScheduleCharging(ctx, true, chargingTime)
+		},
+	},
+	"charging-schedule-cancel": &Command{
+		help:             "Cancel scheduled charge start",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			return car.ScheduleCharging(ctx, false, 0*time.Hour)
+		},
+	},
 	"media-set-volume": &Command{
 		help:             "Set volume",
 		requiresAuth:     true,
