@@ -35,7 +35,7 @@ func readWithContext(ctx context.Context, r io.Reader, p []byte) ([]byte, error)
 	}
 }
 
-var ErrVehicleNotAwake = protocol.NewError("vehicle not awake", false, false)
+var ErrVehicleNotAwake = protocol.NewError("vehicle unavailable: vehicle is offline or asleep", false, false)
 
 type HttpError struct {
 	Code    int
@@ -110,6 +110,10 @@ func SendFleetAPICommand(ctx context.Context, client *http.Client, userAgent, au
 		}
 	case http.StatusServiceUnavailable:
 		return nil, ErrVehicleNotAwake
+	case http.StatusRequestTimeout:
+		if bytes.Contains(body, []byte("vehicle is offline")) {
+			return nil, ErrVehicleNotAwake
+		}
 	}
 	return nil, &HttpError{Code: result.StatusCode, Message: string(body)}
 }
