@@ -46,6 +46,12 @@ func main() {
 	)
 
 	config, err := cli.NewConfig(cli.FlagPrivateKey)
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to load credential configuration: %s\n", err)
+		return
+	}
+
 	defer func() {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
