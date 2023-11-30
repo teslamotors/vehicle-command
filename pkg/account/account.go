@@ -74,6 +74,7 @@ type Account struct {
 // We don't parse JWTs beyond what's required to extract the API server domain name
 type oauthPayload struct {
 	Audiences []string `json:"aud"`
+	OUCode    string   `json:"ou_code"`
 }
 
 var domainRegEx = regexp.MustCompile(`^[A-Za-z0-9-.]+$`) // We're mostly interested in stopping paths; the http package handles the rest.
@@ -89,8 +90,10 @@ func (p *oauthPayload) domain() string {
 			}
 		}
 	}
+	domain := defaultDomain
+	ouCodeMatch := fmt.Sprintf(".%s.", strings.ToLower(p.OUCode))
 	for _, u := range p.Audiences {
-		if strings.HasPrefix(u, "https://auth.tesla.com") {
+		if strings.HasPrefix(u, "https://auth.tesla.") {
 			continue
 		}
 		d, _ := strings.CutPrefix(u, "https://")
@@ -98,17 +101,16 @@ func (p *oauthPayload) domain() string {
 		if !domainRegEx.MatchString(d) {
 			continue
 		}
-		if d == defaultDomain {
-			// Some tokens include audiences for both NA and another region. These tokens should
-			// default to the non-NA region.
-			continue
-		}
 
 		if inet.ValidTeslaDomainSuffix(d) && strings.HasPrefix(d, "fleet-api.") {
-			return d
+			domain = d
+			// Prefer domains that contain the ou_code (region)
+			if strings.Contains(domain, ouCodeMatch) {
+				return domain
+			}
 		}
 	}
-	return defaultDomain
+	return domain
 }
 
 // New returns an [Account] that can be used to fetch a [vehicle.Vehicle].

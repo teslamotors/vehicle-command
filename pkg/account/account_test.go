@@ -2,6 +2,7 @@ package account
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"testing"
 )
@@ -41,4 +42,38 @@ func TestNewAccount(t *testing.T) {
 	if acct == nil || acct.Host != validDomain {
 		t.Errorf("acct = %+v", acct)
 	}
+}
+
+func TestDomainDefault(t *testing.T) {
+	payload := &oauthPayload{
+		Audiences: []string{"https://auth.tesla.com/nts"},
+	}
+
+	acct, err := New(makeTestJWT(payload))
+	if err != nil {
+		t.Fatalf("Returned error on valid JWT: %s", err)
+	}
+	if acct == nil || acct.Host != defaultDomain {
+		t.Errorf("acct = %+v", acct)
+	}
+}
+
+func TestDomainExtraction(t *testing.T) {
+	payload := &oauthPayload{
+		Audiences: []string{"https://auth.tesla.com/nts", "https://fleet-api.prd.na.vn.cloud.tesla.com", "https://fleet-api.prd.eu.vn.cloud.tesla.com"},
+		OUCode:    "EU",
+	}
+
+	acct, err := New(makeTestJWT(payload))
+	if err != nil {
+		t.Fatalf("Returned error on valid JWT: %s", err)
+	}
+	if acct == nil || acct.Host != "fleet-api.prd.eu.vn.cloud.tesla.com" {
+		t.Errorf("acct = %+v", acct)
+	}
+}
+
+func makeTestJWT(payload *oauthPayload) string {
+	jwtBody, _ := json.Marshal(payload)
+	return fmt.Sprintf("x.%s.y", b64Encode(string(jwtBody)))
 }
