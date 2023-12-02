@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+package Signatures;
+
+option go_package = "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/signatures";
+option java_package = "com.tesla.generated.signatures";
+
+enum Tag
+{
+    TAG_SIGNATURE_TYPE  = 0;
+    TAG_DOMAIN          = 1;
+    TAG_PERSONALIZATION = 2;
+    TAG_EPOCH           = 3;
+    TAG_EXPIRES_AT      = 4;
+    TAG_COUNTER         = 5;
+    TAG_CHALLENGE       = 6;
+    TAG_FLAGS           = 7;
+    TAG_END             = 255;
+}
+
+enum SignatureType
+{
+    SIGNATURE_TYPE_AES_GCM = 0;
+    SIGNATURE_TYPE_AES_GCM_PERSONALIZED = 5;
+    SIGNATURE_TYPE_HMAC                 = 6;
+    reserved 7;
+    SIGNATURE_TYPE_HMAC_PERSONALIZED    = 8;
+}
+
+message KeyIdentity {
+    reserved 2;
+    oneof identity_type {
+        bytes public_key = 1;
+    }
+}
+
+message AES_GCM_Personalized_Signature_Data {
+    bytes   epoch       = 1;
+    bytes   nonce       = 2;
+    uint32  counter     = 3;
+    fixed32 expires_at  = 4;
+    bytes   tag         = 5;
+}
+
+message HMAC_Signature_Data {
+    bytes tag = 1;
+}
+
+message HMAC_Personalized_Signature_Data {
+    bytes   epoch       = 1;
+    uint32  counter     = 2;
+    fixed32 expires_at  = 3;
+    bytes   tag         = 4;
+}
+
+message SignatureData {
+    reserved 7;
+    KeyIdentity    signer_identity          = 1;
+    oneof sig_type {
+        AES_GCM_Personalized_Signature_Data AES_GCM_Personalized_data = 5;
+        HMAC_Signature_Data                 session_info_tag          = 6;
+        HMAC_Personalized_Signature_Data    HMAC_Personalized_data    = 8;
+    }
+}
+
+message GetSessionInfoRequest {
+    KeyIdentity key_identity = 1;
+}
+
+enum Session_Info_Status {
+    SESSION_INFO_STATUS_OK = 0;
+    SESSION_INFO_STATUS_KEY_NOT_ON_WHITELIST = 1;
+}
+
+
+message SessionInfo {
+    uint32  counter            = 1;
+    bytes   publicKey          = 2;
+    bytes   epoch              = 3;
+    fixed32 clock_time         = 4;
+    Session_Info_Status status = 5;
+}

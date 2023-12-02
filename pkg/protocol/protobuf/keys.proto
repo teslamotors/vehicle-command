@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package Keys;
+option java_package = "com.tesla.generated.keys";
+option go_package = "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/keys";
+
+enum Role
+{
+    ROLE_NONE            = 0;
+    ROLE_SERVICE         = 1;
+    ROLE_OWNER           = 2;
+    ROLE_DRIVER          = 3;
+    ROLE_FM              = 4;
+    ROLE_VEHICLE_MONITOR = 5;
+    ROLE_CHARGING_MANAGER = 6;
+}

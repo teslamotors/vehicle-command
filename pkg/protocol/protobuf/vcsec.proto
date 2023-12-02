@@ -1,0 +1,235 @@
+syntax = "proto3";
+
+package VCSEC;
+option java_package = "com.tesla.generated.vcsec";
+option go_package = "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/vcsec";
+
+import "keys.proto";
+import "errors.proto";
+
+enum SignatureType
+{
+    SIGNATURE_TYPE_NONE = 0;
+    SIGNATURE_TYPE_PRESENT_KEY  = 2;
+}
+
+message SignedMessage {
+    bytes protobufMessageAsBytes = 2;
+    SignatureType signatureType = 3;
+}
+
+message ToVCSECMessage {
+    SignedMessage signedMessage = 1;
+}
+
+message KeyIdentifier {
+    bytes publicKeySHA1 = 1;
+}
+
+enum KeyFormFactor
+{
+    KEY_FORM_FACTOR_UNKNOWN                 = 0;
+    KEY_FORM_FACTOR_NFC_CARD                = 1;
+    KEY_FORM_FACTOR_IOS_DEVICE              = 6;
+    KEY_FORM_FACTOR_ANDROID_DEVICE          = 7;
+    KEY_FORM_FACTOR_CLOUD_KEY               = 9;
+}
+
+message KeyMetadata
+{
+    KeyFormFactor           keyFormFactor = 1;
+}
+
+message PublicKey {
+    bytes PublicKeyRaw = 1;
+}
+
+enum InformationRequestType {
+    INFORMATION_REQUEST_TYPE_GET_STATUS = 0;
+    INFORMATION_REQUEST_TYPE_GET_WHITELIST_INFO = 5;
+    INFORMATION_REQUEST_TYPE_GET_WHITELIST_ENTRY_INFO = 6;
+}
+
+message WhitelistInfo {
+    uint32                      numberOfEntries = 1;
+    repeated KeyIdentifier      whitelistEntries = 2;
+    uint32                      slotMask = 3;
+}
+
+message WhitelistEntryInfo {
+    KeyIdentifier                           keyId = 1;
+    PublicKey                               publicKey = 2;
+    KeyMetadata                             metadataForKey = 4;
+    uint32                                  slot = 6;
+    Keys.Role                               keyRole = 7;
+}
+
+message InformationRequest {
+    InformationRequestType      informationRequestType = 1;
+    oneof key {
+        KeyIdentifier keyId = 2;
+        bytes         publicKey = 3;
+        uint32        slot = 4;
+    }
+}
+
+enum RKEAction_E {
+    RKE_ACTION_UNLOCK = 0;
+    RKE_ACTION_LOCK = 1;
+    RKE_ACTION_REMOTE_DRIVE       = 20;
+    RKE_ACTION_AUTO_SECURE_VEHICLE = 29;
+    RKE_ACTION_WAKE_VEHICLE = 30;
+}
+
+enum ClosureMoveType_E{
+
+    CLOSURE_MOVE_TYPE_NONE = 0;
+    CLOSURE_MOVE_TYPE_MOVE = 1;
+    CLOSURE_MOVE_TYPE_STOP = 2;
+    CLOSURE_MOVE_TYPE_OPEN = 3;
+    CLOSURE_MOVE_TYPE_CLOSE = 4;
+}
+
+message ClosureMoveRequest {
+    ClosureMoveType_E   frontDriverDoor = 1;
+    ClosureMoveType_E   frontPassengerDoor = 2;
+    ClosureMoveType_E   rearDriverDoor = 3;
+    ClosureMoveType_E   rearPassengerDoor = 4;
+    ClosureMoveType_E   rearTrunk = 5;
+    ClosureMoveType_E   frontTrunk = 6;
+    ClosureMoveType_E   chargePort = 7;
+}
+
+message PermissionChange {
+    PublicKey key               = 1;
+    uint32    secondsToBeActive = 3;
+    Keys.Role keyRole           = 4;
+}
+
+message ReplaceKey {
+    oneof keyToReplace
+    {
+        PublicKey           publicKeyToReplace = 1;
+        uint32              slotToReplace      = 2;
+    }
+    PublicKey           keyToAdd = 3;
+    Keys.Role           keyRole = 4;
+    bool                impermanent = 5;
+}
+
+message WhitelistOperation {
+    oneof sub_message {
+        PublicKey          addPublicKeyToWhitelist = 1;
+        PublicKey          removePublicKeyFromWhitelist = 2;
+        PermissionChange   addPermissionsToPublicKey = 3;
+        PermissionChange   removePermissionsFromPublicKey = 4;
+        PermissionChange   addKeyToWhitelistAndAddPermissions = 5;
+        PermissionChange   updateKeyAndPermissions = 7;
+        PermissionChange   addImpermanentKey = 8;
+        PermissionChange   addImpermanentKeyAndRemoveExisting = 9;
+        bool               removeAllImpermanentKeys = 16;
+
+        ReplaceKey         replaceKey = 17;
+    }
+    KeyMetadata  metadataForKey = 6;
+}
+
+enum OperationStatus_E
+{
+    OPERATIONSTATUS_OK = 0;
+    OPERATIONSTATUS_WAIT = 1;
+    OPERATIONSTATUS_ERROR = 2;
+}
+
+enum SignedMessage_information_E
+{
+    SIGNEDMESSAGE_INFORMATION_NONE = 0;
+    SIGNEDMESSAGE_INFORMATION_FAULT_UNKNOWN = 1;
+    SIGNEDMESSAGE_INFORMATION_FAULT_NOT_ON_WHITELIST = 2;
+    SIGNEDMESSAGE_INFORMATION_FAULT_IV_SMALLER_THAN_EXPECTED = 3;
+    SIGNEDMESSAGE_INFORMATION_FAULT_INVALID_TOKEN = 4;
+    SIGNEDMESSAGE_INFORMATION_FAULT_TOKEN_AND_COUNTER_INVALID = 5;
+    SIGNEDMESSAGE_INFORMATION_FAULT_AES_DECRYPT_AUTH = 6;
+    SIGNEDMESSAGE_INFORMATION_FAULT_ECDSA_INPUT = 7;
+    SIGNEDMESSAGE_INFORMATION_FAULT_ECDSA_SIGNATURE = 8;
+    SIGNEDMESSAGE_INFORMATION_FAULT_LOCAL_ENTITY_START = 9;
+    SIGNEDMESSAGE_INFORMATION_FAULT_LOCAL_ENTITY_RESULT = 10;
+    SIGNEDMESSAGE_INFORMATION_FAULT_COULD_NOT_RETRIEVE_KEY = 11;
+    SIGNEDMESSAGE_INFORMATION_FAULT_COULD_NOT_RETRIEVE_TOKEN = 12;
+    SIGNEDMESSAGE_INFORMATION_FAULT_SIGNATURE_TOO_SHORT = 13;
+    SIGNEDMESSAGE_INFORMATION_FAULT_TOKEN_IS_INCORRECT_LENGTH = 14;
+    SIGNEDMESSAGE_INFORMATION_FAULT_INCORRECT_EPOCH = 15;
+    SIGNEDMESSAGE_INFORMATION_FAULT_IV_INCORRECT_LENGTH = 16;
+    SIGNEDMESSAGE_INFORMATION_FAULT_TIME_EXPIRED = 17;
+    SIGNEDMESSAGE_INFORMATION_FAULT_NOT_PROVISIONED_WITH_IDENTITY = 18;
+    SIGNEDMESSAGE_INFORMATION_FAULT_COULD_NOT_HASH_METADATA = 19;
+}
+
+enum WhitelistOperation_information_E
+{
+    WHITELISTOPERATION_INFORMATION_NONE = 0;
+    WHITELISTOPERATION_INFORMATION_UNDOCUMENTED_ERROR = 1;
+    WHITELISTOPERATION_INFORMATION_NO_PERMISSION_TO_REMOVE_ONESELF = 2;
+    WHITELISTOPERATION_INFORMATION_KEYFOB_SLOTS_FULL = 3;
+    WHITELISTOPERATION_INFORMATION_WHITELIST_FULL = 4;
+    WHITELISTOPERATION_INFORMATION_NO_PERMISSION_TO_ADD = 5;
+    WHITELISTOPERATION_INFORMATION_INVALID_PUBLIC_KEY = 6;
+    WHITELISTOPERATION_INFORMATION_NO_PERMISSION_TO_REMOVE = 7;
+    WHITELISTOPERATION_INFORMATION_NO_PERMISSION_TO_CHANGE_PERMISSIONS = 8;
+    WHITELISTOPERATION_INFORMATION_ATTEMPTING_TO_ELEVATE_OTHER_ABOVE_ONESELF = 9;
+    WHITELISTOPERATION_INFORMATION_ATTEMPTING_TO_DEMOTE_SUPERIOR_TO_ONESELF = 10;
+    WHITELISTOPERATION_INFORMATION_ATTEMPTING_TO_REMOVE_OWN_PERMISSIONS = 11;
+    WHITELISTOPERATION_INFORMATION_PUBLIC_KEY_NOT_ON_WHITELIST = 12;
+    WHITELISTOPERATION_INFORMATION_ATTEMPTING_TO_ADD_KEY_THAT_IS_ALREADY_ON_THE_WHITELIST = 13;
+    WHITELISTOPERATION_INFORMATION_NOT_ALLOWED_TO_ADD_UNLESS_ON_READER = 14;
+    WHITELISTOPERATION_INFORMATION_FM_MODIFYING_OUTSIDE_OF_F_MODE = 15;
+    WHITELISTOPERATION_INFORMATION_FM_ATTEMPTING_TO_ADD_PERMANENT_KEY = 16;
+    WHITELISTOPERATION_INFORMATION_FM_ATTEMPTING_TO_REMOVE_PERMANENT_KEY = 17;
+    WHITELISTOPERATION_INFORMATION_KEYCHAIN_WHILE_FS_FULL = 18;
+    WHITELISTOPERATION_INFORMATION_ATTEMPTING_TO_ADD_KEY_WITHOUT_ROLE = 19;
+    WHITELISTOPERATION_INFORMATION_ATTEMPTING_TO_ADD_KEY_WITH_SERVICE_ROLE = 20;
+    WHITELISTOPERATION_INFORMATION_NON_SERVICE_KEY_ATTEMPTING_TO_ADD_SERVICE_TECH = 21;
+    WHITELISTOPERATION_INFORMATION_SERVICE_KEY_ATTEMPTING_TO_ADD_SERVICE_TECH_OUTSIDE_SERVICE_MODE = 22;
+}
+
+message WhitelistOperation_status
+{
+    WhitelistOperation_information_E  whitelistOperationInformation = 1;
+    KeyIdentifier                     signerOfOperation             = 2;
+    OperationStatus_E                 operationStatus               = 3;
+}
+
+message SignedMessage_status
+{
+    uint32 counter = 1;
+    SignedMessage_information_E signedMessageInformation = 2;
+}
+
+message CommandStatus
+{
+    OperationStatus_E                       operationStatus   = 1;
+    oneof sub_message {
+        SignedMessage_status                signedMessageStatus = 2;
+        WhitelistOperation_status           whitelistOperationStatus = 3;
+    }
+}
+
+message UnsignedMessage {
+    reserved 6,7,10,12,13;
+    oneof sub_message {
+        InformationRequest           InformationRequest = 1;
+        RKEAction_E                  RKEAction = 2;
+        ClosureMoveRequest           closureMoveRequest = 4;
+        WhitelistOperation           WhitelistOperation = 16;
+    }
+}
+
+message FromVCSECMessage {
+    reserved 6 to 10;
+    oneof sub_message {
+        CommandStatus               commandStatus = 4;
+        WhitelistInfo               whitelistInfo = 16;
+        WhitelistEntryInfo          whitelistEntryInfo = 17;
+        Errors.NominalError         nominalError = 46;
+    }
+}

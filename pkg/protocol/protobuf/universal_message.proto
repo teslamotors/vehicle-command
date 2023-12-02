@@ -1,0 +1,95 @@
+syntax = "proto3";
+
+package UniversalMessage;
+
+option go_package = "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/universalmessage";
+option java_package = "com.tesla.generated.universalmessage";
+
+import "signatures.proto";
+
+enum Domain {
+    DOMAIN_BROADCAST = 0;
+    DOMAIN_VEHICLE_SECURITY = 2;
+    DOMAIN_INFOTAINMENT = 3;
+}
+
+message Destination {
+    oneof sub_destination{
+        Domain domain            = 1;
+        bytes  routing_address   = 2;
+    }
+}
+
+enum OperationStatus_E
+{
+    OPERATIONSTATUS_OK = 0;
+    OPERATIONSTATUS_WAIT = 1;
+    OPERATIONSTATUS_ERROR = 2;
+}
+
+enum MessageFault_E
+{
+    MESSAGEFAULT_ERROR_NONE = 0;
+    MESSAGEFAULT_ERROR_BUSY = 1;
+    MESSAGEFAULT_ERROR_TIMEOUT = 2;
+    MESSAGEFAULT_ERROR_UNKNOWN_KEY_ID = 3;
+    MESSAGEFAULT_ERROR_INACTIVE_KEY = 4;
+    MESSAGEFAULT_ERROR_INVALID_SIGNATURE = 5;
+    MESSAGEFAULT_ERROR_INVALID_TOKEN_OR_COUNTER = 6;
+    MESSAGEFAULT_ERROR_INSUFFICIENT_PRIVILEGES = 7;
+    MESSAGEFAULT_ERROR_INVALID_DOMAINS = 8;
+    MESSAGEFAULT_ERROR_INVALID_COMMAND = 9;
+    MESSAGEFAULT_ERROR_DECODING = 10;
+    MESSAGEFAULT_ERROR_INTERNAL = 11;
+    MESSAGEFAULT_ERROR_WRONG_PERSONALIZATION = 12;
+    MESSAGEFAULT_ERROR_BAD_PARAMETER = 13;
+    MESSAGEFAULT_ERROR_KEYCHAIN_IS_FULL = 14;
+    MESSAGEFAULT_ERROR_INCORRECT_EPOCH = 15;
+    MESSAGEFAULT_ERROR_IV_INCORRECT_LENGTH = 16;
+    MESSAGEFAULT_ERROR_TIME_EXPIRED = 17;
+    MESSAGEFAULT_ERROR_NOT_PROVISIONED_WITH_IDENTITY = 18;
+    MESSAGEFAULT_ERROR_COULD_NOT_HASH_METADATA = 19;
+    MESSAGEFAULT_ERROR_TIME_TO_LIVE_TOO_LONG = 20;
+    MESSAGEFAULT_ERROR_REMOTE_ACCESS_DISABLED = 21;
+    MESSAGEFAULT_ERROR_REMOTE_SERVICE_ACCESS_DISABLED = 22;
+    MESSAGEFAULT_ERROR_COMMAND_REQUIRES_ACCOUNT_CREDENTIALS = 23;
+}
+
+message MessageStatus
+{
+    OperationStatus_E operation_status = 1;
+    MessageFault_E signed_message_fault = 2;
+}
+
+message SessionInfoRequest
+{
+    bytes public_key = 1;
+    bytes challenge = 2;
+}
+
+enum Flags {
+    FLAG_USER_COMMAND = 0;
+}
+
+message RoutableMessage {
+    reserved 1 to 5;
+    reserved 16 to 40;
+    reserved 11;
+    Destination to_destination = 6;
+    Destination from_destination = 7;
+
+    oneof payload {
+        bytes protobuf_message_as_bytes = 10;
+        SessionInfoRequest session_info_request = 14;
+        bytes session_info = 15;
+    }
+
+    oneof sub_sigData {
+        Signatures.SignatureData signature_data = 13;
+    }
+
+    MessageStatus signedMessageStatus = 12;
+    bytes request_uuid           = 50;
+    bytes uuid                   = 51;
+    uint32 flags = 52;
+}

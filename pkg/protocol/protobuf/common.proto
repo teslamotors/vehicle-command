@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package CarServer;
+
+option go_package = "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/carserver";
+option java_package = "com.tesla.generated.carserver.common";
+
+enum Invalid {
+    INVALID = 0;
+}
+
+message Void {}
+
+message LatLong {
+    float latitude = 1;
+    float longitude = 2;
+}
+
+message PreconditioningTimes {
+    oneof times {
+        Void all_week = 1;
+        Void weekdays = 2;
+    }
+}
+
+message OffPeakChargingTimes {
+    oneof times {
+        Void all_week = 1;
+        Void weekdays = 2;
+    }
+}

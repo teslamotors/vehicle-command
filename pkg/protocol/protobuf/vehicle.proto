@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package CarServer;
+
+option go_package = "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/carserver";
+option java_package = "com.tesla.generated.carserver.vehicle";
+option java_outer_classname = "Vehicle";
+
+message VehicleState {
+    message GuestMode {
+        bool GuestModeActive = 1;
+    }
+    GuestMode guestMode = 74;
+}
+
+message ClimateState {
+    enum CopActivationTemp {
+        CopActivationTempUnspecified = 0;
+        CopActivationTempLow = 1;
+        CopActivationTempMedium = 2;
+        CopActivationTempHigh = 3;
+    }
+}
