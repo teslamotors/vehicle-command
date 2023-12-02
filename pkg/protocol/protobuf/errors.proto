@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package Errors;
+
+option go_package = "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/errors";
+option java_package = "com.tesla.generated.errors";
+
+enum GenericError_E
+{
+    GENERICERROR_NONE = 0;
+    GENERICERROR_UNKNOWN = 1;
+    GENERICERROR_CLOSURES_OPEN = 2;
+    GENERICERROR_ALREADY_ON = 3;
+    GENERICERROR_DISABLED_FOR_USER_COMMAND = 4;
+    GENERICERROR_VEHICLE_NOT_IN_PARK = 5;
+    GENERICERROR_UNAUTHORIZED = 6;
+    GENERICERROR_NOT_ALLOWED_OVER_TRANSPORT = 7;
+}
+
+message NominalError {
+    GenericError_E  genericError = 1;
+}
