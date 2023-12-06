@@ -162,7 +162,8 @@ Here's the enrollment process from the owner's perspective:
 
 In order for this process to work, you must register a domain name that
 identifies your application. The Tesla app will display this domain name to the
-user when it asks if they wish to approve your request.
+user when it asks if they wish to approve your request, and the vehicle will
+display the domain name next to the key in the Locks screen.
 
 Follow the instructions to [register your public key and
 domain](https://developer.tesla.com/docs/fleet-api#register).
