@@ -32,7 +32,7 @@ func main() {
 
 	// Specify the user-agent header value used in HTTP requests to Tesla's servers. The default
 	// value is constructed from your package name and account.LibraryVersion.
-	account.UserAgent = "example-unlock/1.0.0"
+	userAgent := "example-unlock/1.0.0"
 
 	if vin == "" {
 		logger.Printf("Must specify VIN")
@@ -61,7 +61,7 @@ func main() {
 
 	// This example program sends commands over the Internet, which requires a Tesla account login
 	// token. The protocol can also work over BLE; see other programs in the example directory.
-	acct, err := account.New(string(oauthToken))
+	acct, err := account.New(string(oauthToken), userAgent)
 	if err != nil {
 		logger.Printf("Authentication error: %s", err)
 		return

@@ -119,10 +119,8 @@ func SendFleetAPICommand(ctx context.Context, client *http.Client, userAgent, au
 	switch result.StatusCode {
 	case http.StatusOK:
 		return body, nil
-	case http.StatusUnprocessableEntity:
-		if bytes.Contains(body, []byte("vehicle does not support signed commands")) {
-			return nil, protocol.ErrProtocolNotSupported
-		}
+	case http.StatusUnprocessableEntity: // HTTP: 422 on commands endpoint means protocol is not supported (fallback to regular commands)
+		return nil, protocol.ErrProtocolNotSupported
 	case http.StatusServiceUnavailable:
 		return nil, ErrVehicleNotAwake
 	case http.StatusRequestTimeout:

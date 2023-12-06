@@ -421,7 +421,7 @@ func (c *Config) Account() (*account.Account, error) {
 	if err != nil {
 		return nil, err
 	}
-	return account.New(token)
+	return account.New(token, "")
 }
 
 // SavePrivateKey writes skey to the system keyring or file, depending on what options are

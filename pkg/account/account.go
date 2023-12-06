@@ -24,13 +24,9 @@ import (
 var (
 	//go:embed version.txt
 	libraryVersion string
-	// UserAgent is sent in HTTP requests.
-	//
-	// The default value is "<main package name>/<commit hash> tesla-sdk/<version>".
-	UserAgent = buildUserAgent()
 )
 
-func buildUserAgent() string {
+func buildUserAgent(app string) string {
 	library := strings.TrimSpace("tesla-sdk/" + libraryVersion)
 	build, ok := debug.ReadBuildInfo()
 	if !ok {
@@ -40,26 +36,29 @@ func buildUserAgent() string {
 	if len(path) == 0 {
 		return library
 	}
-	app := path[len(path)-1]
 
-	var version string
-	if build.Main.Version != "(devel)" && build.Main.Version != "" {
-		version = build.Main.Version
-	} else {
-		for _, info := range build.Settings {
-			if info.Key == "vcs.revision" {
-				if len(info.Value) > 8 {
-					version = info.Value[0:8]
+	if app == "" {
+		app = path[len(path)-1]
+		var version string
+		if build.Main.Version != "(devel)" && build.Main.Version != "" {
+			version = build.Main.Version
+		} else {
+			for _, info := range build.Settings {
+				if info.Key == "vcs.revision" {
+					if len(info.Value) > 8 {
+						version = info.Value[0:8]
+					}
+					break
 				}
-				break
 			}
+		}
+
+		if version != "" {
+			app = fmt.Sprintf("%s/%s", app, version)
 		}
 	}
 
-	if version == "" {
-		return fmt.Sprintf("%s %s", app, library)
-	}
-	return fmt.Sprintf("%s/%s %s", app, version, library)
+	return fmt.Sprintf("%s %s", app, library)
 }
 
 // Account allows interaction with a Tesla account.
@@ -114,7 +113,8 @@ func (p *oauthPayload) domain() string {
 }
 
 // New returns an [Account] that can be used to fetch a [vehicle.Vehicle].
-func New(oauthToken string) (*Account, error) {
+// Optional userAgent can be passed in - otherwise it will be generated from code
+func New(oauthToken, userAgent string) (*Account, error) {
 	parts := strings.Split(oauthToken, ".")
 	if len(parts) != 3 {
 		return nil, fmt.Errorf("client provided malformed OAuth token")
@@ -133,7 +133,7 @@ func New(oauthToken string) (*Account, error) {
 		return nil, fmt.Errorf("client provided OAuth token with invalid audiences")
 	}
 	return &Account{
-		UserAgent:  UserAgent,
+		UserAgent:  buildUserAgent(userAgent),
 		authHeader: "Bearer " + strings.TrimSpace(oauthToken),
 		Host:       domain,
 	}, nil
