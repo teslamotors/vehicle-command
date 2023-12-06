@@ -3,17 +3,15 @@ all: build
 format:
 	git describe --tags --abbrev=0 | sed 's/v//' > pkg/account/version.txt
 	go fmt ./...
-.PHONY: format
 
-test: format
-	go test ./...
+test: 
+	go test -cover ./...
 	go vet ./...
-.PHONY: test
 
-build: test
+build: format test
 	go build ./...
-.PHONY: build
 
-install: test
+install: format test
 	go install ./cmd/...
-.PHONY: install
+
+.PHONY: install build test format
