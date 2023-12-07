@@ -112,10 +112,6 @@ func (c *Connection) Send(ctx context.Context, buffer []byte) error {
 	return nil
 }
 
-func (c *Connection) Recieve() <-chan []byte {
-	return c.inbox
-}
-
 func (c *Connection) VIN() string {
 	return c.vin
 }

@@ -770,7 +770,7 @@ func TestDoNotBlockOnResponder(t *testing.T) {
 	select {
 	case <-rsp2.Recv():
 	case <-ctx.Done():
-		t.Fatalf("Didn't recieve message for second command: %s", err)
+		t.Fatalf("Didn't receive message for second command: %s", err)
 	}
 
 	// Check that responderBufferSize messages (and no more!) arrived at the rsp1.
@@ -778,13 +778,13 @@ func TestDoNotBlockOnResponder(t *testing.T) {
 		select {
 		case <-rsp1.Recv():
 		case <-ctx.Done():
-			t.Fatalf("Didn't recieve message for second command: %s", err)
+			t.Fatalf("Didn't receive message for second command: %s", err)
 		}
 	}
 
 	select {
 	case <-rsp1.Recv():
-		t.Fatalf("Recieved more messages than expected")
+		t.Fatalf("Received more messages than expected")
 	case <-ctx.Done():
 	}
 }
