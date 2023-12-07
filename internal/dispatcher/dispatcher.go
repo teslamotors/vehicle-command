@@ -322,7 +322,7 @@ func (d *Dispatcher) Send(ctx context.Context, message *universal.RoutableMessag
 
 	addr := make([]byte, addressLength)
 	// Message UUIDs are only used for debugging message logs and are not
-	// copied into the recieverKey used to match responses to requests.
+	// copied into the receiverKey used to match responses to requests.
 	uuid := make([]byte, uuidLength)
 	if _, err := rand.Read(uuid); err != nil {
 		return nil, err
