@@ -185,7 +185,9 @@ purposes, you can create a self-signed localhost server certificate using
 OpenSSL:
 
 ```
-openssl req -x509 -nodes -newkey ec -pkeyopt ec_paramgen_curve:secp521r1 \
+openssl req -x509 -nodes -newkey ec \
+    -pkeyopt ec_paramgen_curve:secp521r1 \
+    -pkeyopt ec_param_enc:named_curve  \
     -subj '/CN=localhost' \
     -keyout key.pem -out cert.pem -sha256 -days 3650 \
     -addext "extendedKeyUsage = serverAuth" \
