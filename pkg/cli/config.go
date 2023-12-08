@@ -10,7 +10,10 @@ and OAuth tokens) in an OS-dependent credential store.
 
 	import flag
 
-	config := Config{Flags: FlagAll}
+	config, err := NewConfig(FlagAll)
+	if err != nil {
+		panic(err)
+	}
 	config.RegisterCommandLineFlags() // Adds command-line flags for private keys, OAuth, etc.
 	flag.Parse()
 	config.ReadFromEnvironment()      // Fills in missing fields using environment variables
@@ -34,13 +37,13 @@ Alternatively, you can use a [Flag] mask to control what [Config] fields are pop
 the examples below, config.Flags must be set before calling [flag.Parse] or
 [Config.ReadFromEnvironment]:
 
-	config = Config{Flags: FlagOAuth | FlagPrivateKey | FlagVIN} // config.Connect() will use the Internet, not BLE.
-	config = Config{Flags: FlagBLE | FlagPrivateKey | FlagVIN} // config.Connect() will use BLE, not the Internet.
-	config = Config{Flags: FlagBLE | FlagVIN} // config.Connect() will create an unauthenticated vehicle connection.
+	config, err = NewConfig(FlagOAuth | FlagPrivateKey | FlagVIN) // config.Connect() will use the Internet, not BLE.
+	config, err = NewConfig(FlagBLE | FlagPrivateKey | FlagVIN) // config.Connect() will use BLE, not the Internet.
+	config, err = NewConfig(FlagBLE | FlagVIN) // config.Connect() will create an unauthenticated vehicle connection.
 
 The last option will not attempt to load private keys when calling [Config.Connect], and therefore
 will not result in an error if a private key is defined in the environment but cannot be loaded.
-However, most [vehicle.Vehicle] commands do not work over unauathenticated connections.
+However, most [vehicle.Vehicle] commands do not work over unauthenticated connections.
 */
 package cli
 
