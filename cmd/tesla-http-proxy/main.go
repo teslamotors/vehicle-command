@@ -49,7 +49,7 @@ func main() {
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load credential configuration: %s\n", err)
-		return
+		os.Exit(1)
 	}
 
 	defer func() {
