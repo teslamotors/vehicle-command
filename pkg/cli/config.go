@@ -320,7 +320,7 @@ func (c *Config) PrivateKey() (skey protocol.ECDHPrivateKey, err error) {
 // Connect to vehicle and/or account.
 //
 // If c.TokenFilename is set, the returned account will not be nil and the vehicle will use a
-// connector.inet connection if a VIN was provded. If no token filename is set, c.VIN is required,
+// connector.inet connection if a VIN was provided. If no token filename is set, c.VIN is required,
 // the account will be nil, and the vehicle will use a connector.ble connection.
 func (c *Config) Connect(ctx context.Context) (acct *account.Account, car *vehicle.Vehicle, err error) {
 	if c.VIN == "" && c.KeyringTokenName == "" && c.TokenFilename == "" {

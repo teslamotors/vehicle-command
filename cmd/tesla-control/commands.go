@@ -249,7 +249,7 @@ var commands = map[string]*Command{
 		},
 	},
 	"add-key-request": &Command{
-		help:             "Requset NFC-card approval for a enrolling PUBLIC_KEY with ROLE and FORM_FACTOR",
+		help:             "Request NFC-card approval for a enrolling PUBLIC_KEY with ROLE and FORM_FACTOR",
 		requiresAuth:     false,
 		requiresFleetAPI: false,
 		args: []Argument{
