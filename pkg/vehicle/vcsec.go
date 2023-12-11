@@ -32,7 +32,7 @@ func unmarshalVCSECResponse(message *universal.RoutableMessage) (*vcsec.FromVCSE
 	case nil:
 		return &vcsec.FromVCSECMessage{}, nil
 	default:
-		return nil, protocol.NewError("payload missing from vehicle respone", true, false)
+		return nil, protocol.NewError("payload missing from vehicle response", true, false)
 	}
 	encodedMessage := message.GetProtobufMessageAsBytes()
 
