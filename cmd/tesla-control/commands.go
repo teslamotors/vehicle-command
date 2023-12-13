@@ -42,7 +42,7 @@ func configureFlags(c *cli.Config, commandName string, forceBLE bool) error {
 		return ErrUnknownCommand
 	}
 	c.Flags = cli.FlagBLE
-	if info.requiresAuth {
+	if (forceBLE && commandName == "wake") || info.requiresAuth {
 		c.Flags |= cli.FlagPrivateKey | cli.FlagVIN
 	}
 	if !info.requiresFleetAPI {
