@@ -9,24 +9,37 @@ import (
 	"github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/vcsec"
 )
 
+// OpenTrunk opens the trunk. This method requires either a powered trunk or firmware version
+// 2024.14+. The command silently fails on other vehicles, but ActuateTrunk may be used instead.
+//
+// Note the CloseTrunk method requires a powered trunk. Check for "can_actuate_trunks" under
+// "vehicle_config" in the response from the [Vehicle Data Fleet API endpoint] to determine the
+// vehicle's capabilities.
+//
+// [Vehicle Data Fleet API endpoint]: https://developer.tesla.com/docs/tesla-fleet-api#vehicle_data
+func (v *Vehicle) OpenTrunk(ctx context.Context) error {
+	return v.executeClosureAction(ctx, vcsec.ClosureMoveType_E_CLOSURE_MOVE_TYPE_OPEN, ClosureTrunk)
+}
+
+// ActuateTrunk toggles the trunk between open and closed. Only vehicles with a powered trunk will
+// close.
 func (v *Vehicle) ActuateTrunk(ctx context.Context) error {
 	return v.executeClosureAction(ctx, vcsec.ClosureMoveType_E_CLOSURE_MOVE_TYPE_MOVE, ClosureTrunk)
 }
 
-// OpenTrunk opens the trunk, but note that CloseTrunk is not available on all vehicle types.
-func (v *Vehicle) OpenTrunk(ctx context.Context) error {
-	return v.executeClosureAction(ctx, vcsec.ClosureMoveType_E_CLOSURE_MOVE_TYPE_MOVE, ClosureTrunk)
-}
-
-// CloseTrunk is not available on all vehicle types.
+// CloseTrunk closes the trunk.
+//
+// This method requires a powered trunk. Check for "can_actuate_trunks" under "vehicle_config" in
+// the response from the [Vehicle Data Fleet API endpoint] to determine the vehicle's capabilities.
 func (v *Vehicle) CloseTrunk(ctx context.Context) error {
 	return v.executeClosureAction(ctx, vcsec.ClosureMoveType_E_CLOSURE_MOVE_TYPE_CLOSE, ClosureTrunk)
 }
 
-// OpenTrunk opens the frunk. There is no remote way to close the frunk!
+// OpenFrunk opens the frunk. There is no remote way to close the frunk!
 func (v *Vehicle) OpenFrunk(ctx context.Context) error {
-	return v.executeClosureAction(ctx, vcsec.ClosureMoveType_E_CLOSURE_MOVE_TYPE_MOVE, ClosureFrunk)
+	return v.executeRKEAction(ctx, vcsec.RKEAction_E_RKE_ACTION_OPEN_FRUNK)
 }
+
 func (v *Vehicle) HonkHorn(ctx context.Context) error {
 	return v.executeCarServerAction(ctx,
 		&carserver.Action_VehicleAction{
