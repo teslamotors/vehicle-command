@@ -127,9 +127,6 @@ func (n *NativeECDHKey) Exchange(publicBytes []byte) (Session, error) {
 		return nil, err
 	}
 
-	kdf := hmac.New(sha256.New, session.key)
-	kdf.Write([]byte(labelSessionInfo))
-
 	if session.gcm, err = cipher.NewGCM(block); err != nil {
 		return nil, err
 	}
