@@ -59,4 +59,13 @@ you can also send commands over the Internet:
 tesla-control lock
 ```
 
+
+There is one special consideration when you wake up your car via ble: You need to
+invoke the parameter -domain:vcsec because only part of your vehicle electronics
+is online while the car is asleep:
+```
+tesla-control -domain vcsec -ble wake
+```
+
 Run `tesla-control -h` to see a full list of supported commands.
+
