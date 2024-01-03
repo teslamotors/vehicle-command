@@ -250,3 +250,14 @@ You can read package [documentation on pkg.go.dev](https://pkg.go.dev/github.com
 This repository supports `go mod` and follows [Go version
 semantics](https://go.dev/doc/modules/version-numbers). Note that v0.x.x
 releases do not guarantee API stability.
+
+## FAQ
+
+#### What does it mean when I get "error: vehicle rejected request: your public key has not been paired with the vehicle" ?
+
+Your public key needs to be paired with vehicle first so the commands signed with your private key can be verified on the vehicles. Please refer to [Distributing your public key](#distributing-your-public-key) section for more details.
+
+#### How to resolve "Unauthorized missing scopes" error?
+
+The token that is being provided does not have the required [scopes](https://developer.tesla.com/docs/fleet-api#authorization-scopes) for the current resource. To resolve this issue, you need to ask the user revoke the consent first. After that, you need to ask for a new consent with the right scopes. If previous consent is not revoked, the later consents would not change the scopes.
+Note: If previous consent is not revoked, the later consents would not change the scopes.
