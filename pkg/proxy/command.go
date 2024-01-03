@@ -154,12 +154,12 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 			case "front":
 				return func(v *vehicle.Vehicle) error { return v.OpenFrunk(ctx) }, nil
 			case "rear":
-				return func(v *vehicle.Vehicle) error { return v.OpenTrunk(ctx) }, nil
+				return func(v *vehicle.Vehicle) error { return v.ActuateTrunk(ctx) }, nil
 			default:
 				return nil, &protocol.NominalError{Details: protocol.NewError("invalid_value", false, false)}
 			}
 		}
-		return func(v *vehicle.Vehicle) error { return v.OpenTrunk(ctx) }, nil
+		return func(v *vehicle.Vehicle) error { return v.ActuateTrunk(ctx) }, nil
 	case "charge_port_door_open":
 		return func(v *vehicle.Vehicle) error { return v.ChargePortOpen(ctx) }, nil
 	case "charge_port_door_close":
