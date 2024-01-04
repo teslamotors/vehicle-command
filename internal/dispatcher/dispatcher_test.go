@@ -595,7 +595,7 @@ func TestVehicleUnreachable(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), quiescentDelay)
 	defer cancel()
 
-	if _, err := dispatcher.Send(ctx, testCommand(), connector.AuthMethodNone); err != errTimeout {
+	if _, err := dispatcher.Send(ctx, testCommand(), connector.AuthMethodNone); !errors.Is(err, errTimeout) {
 		t.Errorf("Unexpected error: %s", err)
 	}
 }
@@ -658,7 +658,7 @@ func TestRetrySend(t *testing.T) {
 		conn.EnqueueSendError(&protocol.CommandError{Err: errTimeout, PossibleSuccess: false, PossibleTemporary: true})
 	}
 	errFoo := errors.New("not enough pylons")
-	conn.EnqueueSendError(&protocol.CommandError{Err: errFoo, PossibleSuccess: true, PossibleTemporary: true})
+	conn.EnqueueSendError(&protocol.CommandError{Err: errFoo, PossibleSuccess: true, PossibleTemporary: false})
 
 	req := testCommand()
 	rsp, err := dispatcher.Send(ctx, req, connector.AuthMethodNone)
@@ -667,6 +667,63 @@ func TestRetrySend(t *testing.T) {
 	}
 	if !errors.Is(err, errFoo) {
 		t.Errorf("Unexpected error: %s", err)
+	}
+}
+
+func TestReportPossibleSuccess(t *testing.T) {
+	dispatcher, conn := getTestSetup(t)
+	defer conn.Close()
+
+	const errCount = 3
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	errFoo := errors.New("not enough pylons")
+	conn.EnqueueSendError(&protocol.CommandError{Err: errFoo, PossibleSuccess: true, PossibleTemporary: true})
+
+	for i := 0; i < errCount; i++ {
+		conn.EnqueueSendError(&protocol.CommandError{Err: errTimeout, PossibleSuccess: false, PossibleTemporary: true})
+	}
+
+	conn.EnqueueSendError(&protocol.CommandError{Err: errTimeout, PossibleSuccess: false, PossibleTemporary: false})
+
+	req := testCommand()
+	rsp, err := dispatcher.Send(ctx, req, connector.AuthMethodNone)
+	if err == nil {
+		rsp.Close()
+	}
+	if !errors.Is(err, errTimeout) {
+		t.Errorf("Unexpected error: %s", err)
+	}
+	if !protocol.MayHaveSucceeded(err) {
+		t.Errorf("Dispatcher did not flag possible success: %+v", err)
+	}
+}
+
+func TestReportCertainFailure(t *testing.T) {
+	dispatcher, conn := getTestSetup(t)
+	defer conn.Close()
+
+	const errCount = 3
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	for i := 0; i < errCount; i++ {
+		conn.EnqueueSendError(&protocol.CommandError{Err: errTimeout, PossibleSuccess: false, PossibleTemporary: true})
+	}
+
+	conn.EnqueueSendError(&protocol.CommandError{Err: errTimeout, PossibleSuccess: false, PossibleTemporary: false})
+
+	req := testCommand()
+	rsp, err := dispatcher.Send(ctx, req, connector.AuthMethodNone)
+	if err == nil {
+		rsp.Close()
+	}
+	if !errors.Is(err, errTimeout) {
+		t.Errorf("Unexpected error: %s", err)
+	}
+	if protocol.MayHaveSucceeded(err) {
+		t.Errorf("Dispatcher flagged as possible success: %+v", err)
 	}
 }
 

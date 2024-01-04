@@ -9,16 +9,33 @@ import (
 	"github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/vcsec"
 )
 
+// ActuateTrunk either opens the trunk or toggles the trunk between open and closed, depending on
+// vehicle type.
+//
+// Check for "can_actuate_trunks" under "vehicle_config" in the response from the [Vehicle Data
+// Fleet API endpoint] to determine the vehicle's capabilities.
+//
+// [Vehicle Data Fleet API endpoint]: https://developer.tesla.com/docs/tesla-fleet-api#vehicle_data
 func (v *Vehicle) ActuateTrunk(ctx context.Context) error {
 	return v.executeClosureAction(ctx, vcsec.ClosureMoveType_E_CLOSURE_MOVE_TYPE_MOVE, ClosureTrunk)
 }
 
-// OpenTrunk opens the trunk, but note that CloseTrunk is not available on all vehicle types.
+// OpenTrunk opens the trunk on vehicles with powered trunks. It has no effect on other vehicles.
+//
+// Check for "can_actuate_trunks" under "vehicle_config" in the response from the [Vehicle Data
+// Fleet API endpoint] to determine the vehicle's capabilities.
+//
+// [Vehicle Data Fleet API endpoint]: https://developer.tesla.com/docs/tesla-fleet-api#vehicle_data
 func (v *Vehicle) OpenTrunk(ctx context.Context) error {
-	return v.executeClosureAction(ctx, vcsec.ClosureMoveType_E_CLOSURE_MOVE_TYPE_MOVE, ClosureTrunk)
+	return v.executeClosureAction(ctx, vcsec.ClosureMoveType_E_CLOSURE_MOVE_TYPE_OPEN, ClosureTrunk)
 }
 
-// CloseTrunk is not available on all vehicle types.
+// CloseTrunk closes the trunk on vehicles with powered trunks. It has no effect on other vehicles.
+//
+// Check for "can_actuate_trunks" under "vehicle_config" in the response from the [Vehicle Data
+// Fleet API endpoint] to determine the vehicle's capabilities.
+//
+// [Vehicle Data Fleet API endpoint]: https://developer.tesla.com/docs/tesla-fleet-api#vehicle_data
 func (v *Vehicle) CloseTrunk(ctx context.Context) error {
 	return v.executeClosureAction(ctx, vcsec.ClosureMoveType_E_CLOSURE_MOVE_TYPE_CLOSE, ClosureTrunk)
 }

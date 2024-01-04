@@ -67,15 +67,13 @@ func (e *HttpError) MayHaveSucceeded() bool {
 	if e.Code >= 400 && e.Code < 500 {
 		return false
 	}
-	return e.Code != http.StatusServiceUnavailable
+	return true
 }
 
 func (e *HttpError) Temporary() bool {
-	return e.Code == http.StatusServiceUnavailable ||
-		e.Code == http.StatusGatewayTimeout ||
-		e.Code == http.StatusRequestTimeout ||
-		e.Code == http.StatusMisdirectedRequest ||
-		e.Code == http.StatusTooManyRequests
+	// See https://developer.tesla.com/docs/tesla-fleet-api#response-codes
+	return e.Code == http.StatusServiceUnavailable || // 503 - Did not receive vehicle response
+		e.Code == http.StatusMisdirectedRequest // 421 - Wrong domain (client corrects domain based on server response)
 }
 
 func SendFleetAPICommand(ctx context.Context, client *http.Client, userAgent, authHeader string, url string, command interface{}) ([]byte, error) {

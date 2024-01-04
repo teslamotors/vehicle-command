@@ -367,20 +367,39 @@ func (d *Dispatcher) Send(ctx context.Context, message *universal.RoutableMessag
 		}
 	}()
 
+	possibleSuccess := false
 	for {
 		err = d.conn.Send(ctx, encodedMessage)
 		if err == nil {
 			return resp, nil
 		}
-		if !protocol.ShouldRetry(err) {
-			log.Warning("[%02x] Terminal transmission error: %s", message.GetUuid(), err)
-			return nil, err
+		log.Debug("[%02x] Received error %s", message.GetUuid(), err)
+
+		// The vehicle will de-duplicate exact copies of encodedMessage and re-send the cached
+		// response, so we're free to resend without risk of executing the action multiple times.
+		// However, we need to notify callers higher up on the stack that a command may have
+		// succeeded so that they do not retry with, e.g., a higher counter value.
+		if protocol.MayHaveSucceeded(err) {
+			log.Debug("[%02x] Command may have succeed (vehicle discards duplicates)", message.GetUuid())
+			possibleSuccess = true
 		}
-		log.Debug("[%02x] Retrying transmission after error: %s", message.GetUuid(), err)
+		if !protocol.Temporary(err) {
+			log.Warning("[%02x] Error is terminal", message.GetUuid())
+			return nil, &protocol.CommandError{
+				Err:               err,
+				PossibleSuccess:   possibleSuccess,
+				PossibleTemporary: false,
+			}
+		}
 		select {
 		case <-ctx.Done():
-			return nil, &protocol.CommandError{Err: ctx.Err(), PossibleSuccess: false, PossibleTemporary: true}
+			return nil, &protocol.CommandError{
+				Err:               ctx.Err(),
+				PossibleSuccess:   possibleSuccess,
+				PossibleTemporary: true,
+			}
 		case <-time.After(d.conn.RetryInterval()):
+			log.Debug("[%02x] Retrying transmission", message.GetUuid())
 			continue
 		}
 	}
