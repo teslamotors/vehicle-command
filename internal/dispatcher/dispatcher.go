@@ -3,6 +3,7 @@ package dispatcher
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -110,13 +111,16 @@ func (d *Dispatcher) StartSessions(ctx context.Context, domains []universal.Doma
 			results <- d.StartSession(aggregateContext, dom)
 		}(domain)
 	}
+	var err error
 	for i := 0; i < len(domains); i++ {
-		err := <-results
-		if err != nil {
+		err = <-results
+		// The aggregateContext is canceled if one of the handshakes fails. We don't want to return
+		// the Canceled error if ErrProtocolNotSupported is present.
+		if !errors.Is(err, context.Canceled) {
 			return err
 		}
 	}
-	return nil
+	return err
 }
 
 func (d *Dispatcher) createHandler(key *receiverKey) *receiver {

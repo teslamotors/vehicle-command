@@ -263,7 +263,7 @@ func (p *Proxy) handleVehicleCommand(acct *account.Account, w http.ResponseWrite
 	}
 	defer car.Disconnect()
 
-	if err := car.StartSession(ctx, nil); err == protocol.ErrProtocolNotSupported {
+	if err := car.StartSession(ctx, nil); errors.Is(err, protocol.ErrProtocolNotSupported) {
 		p.markUnsupportedVIN(vin)
 		p.forwardRequest(acct.Host, w, req)
 		return err
