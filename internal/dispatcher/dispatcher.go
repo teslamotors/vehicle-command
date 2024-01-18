@@ -116,7 +116,7 @@ func (d *Dispatcher) StartSessions(ctx context.Context, domains []universal.Doma
 		err = <-results
 		// The aggregateContext is canceled if one of the handshakes fails. We don't want to return
 		// the Canceled error if ErrProtocolNotSupported is present.
-		if !errors.Is(err, context.Canceled) {
+		if err != nil && !errors.Is(err, context.Canceled) {
 			return err
 		}
 	}
