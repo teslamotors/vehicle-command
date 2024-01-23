@@ -243,6 +243,10 @@ curl --cacert cert.pem \
 
 The HTTP proxy implements the [Tesla Fleet API vehicle command endpoints](https://developer.tesla.com/docs/fleet-api#vehicle-commands).
 
+Legacy clients written for Owner API may be using a vehicle's Owner API ID when
+constructing URL paths. The proxy server requires clients to use the VIN
+directly, instead.
+
 ## Using the Golang library
 
 You can read package [documentation on pkg.go.dev](https://pkg.go.dev/github.com/teslamotors/vehicle-command/pkg).
