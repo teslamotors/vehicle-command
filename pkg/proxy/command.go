@@ -49,6 +49,8 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		return func(v *vehicle.Vehicle) error { return v.SetVolume(ctx, float32(volume)) }, nil
 	case "remote_boombox":
 		return nil, ErrCommandNotImplemented
+	case "media_toggle_playback":
+		return func(v *vehicle.Vehicle) error { return v.ToggleMediaPlayback(ctx) }, nil
 	// Climate Controls
 	case "auto_conditioning_start":
 		return func(v *vehicle.Vehicle) error { return v.ClimateOn(ctx) }, nil

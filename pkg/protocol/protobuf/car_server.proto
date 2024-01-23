@@ -31,6 +31,7 @@ message VehicleAction {
         HvacSetPreconditioningMaxAction hvacSetPreconditioningMaxAction = 12;
         HvacSteeringWheelHeaterAction hvacSteeringWheelHeaterAction = 13;
         HvacTemperatureAdjustmentAction hvacTemperatureAdjustmentAction = 14;
+        MediaPlayAction mediaPlayAction = 15;
         MediaUpdateVolume mediaUpdateVolume = 16;
         MediaNextFavorite mediaNextFavorite = 17;
         MediaPreviousFavorite mediaPreviousFavorite = 18;
@@ -256,6 +257,9 @@ message Superchargers {
     int32 max_power_kw = 18;
     int32 out_of_order_stalls_number = 19;
     string out_of_order_stalls_names = 20;
+}
+
+message MediaPlayAction {
 }
 
 message MediaUpdateVolume{
