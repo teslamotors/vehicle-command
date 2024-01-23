@@ -1454,15 +1454,6 @@ type WhitelistOperation_UpdateKeyAndPermissions struct {
 }
 
 type WhitelistOperation_AddImpermanentKey struct {
-	//
-	//   Adds an Impermanent key
-	//
-	//   An impermanent key acts like a normal key, except that it can be batch removed.
-	//   This should be primarily used by fleet sharing. The advantage over individual add/removes
-	//   is that it offers atomic transfer of ownership from a previous impermanent key to a new one
-	//
-	//   E.g: A and her NFC card are added as impermanent keys. They are on the whitelist until B is added.
-	//        A and her NFC card are removed at the same time that B's first key is added
 	AddImpermanentKey *PermissionChange `protobuf:"bytes,8,opt,name=addImpermanentKey,proto3,oneof"`
 }
 

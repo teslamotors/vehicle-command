@@ -88,6 +88,17 @@ func (v *Vehicle) SetVolume(ctx context.Context, volume float32) error {
 		})
 }
 
+func (v *Vehicle) ToggleMediaPlayback(ctx context.Context) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_MediaPlayAction{
+					MediaPlayAction: &carserver.MediaPlayAction{},
+				},
+			},
+		})
+}
+
 func (v *Vehicle) ScheduleSoftwareUpdate(ctx context.Context, delay time.Duration) error {
 	seconds := int32(delay / time.Second)
 	return v.executeCarServerAction(ctx,

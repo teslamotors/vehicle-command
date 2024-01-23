@@ -494,6 +494,15 @@ var commands = map[string]*Command{
 			return car.SetVolume(ctx, float32(volume))
 		},
 	},
+	"media-toggle-playback": &Command{
+		help:             "Toggle between play/pause",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		args:             []Argument{},
+		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			return car.ToggleMediaPlayback(ctx)
+		},
+	},
 	"software-update-start": &Command{
 		help:             "Start software update after DELAY",
 		requiresAuth:     true,
