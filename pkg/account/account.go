@@ -22,10 +22,8 @@ import (
 	"golang.org/x/oauth2"
 )
 
-var (
-	//go:embed version.txt
-	libraryVersion string
-)
+//go:embed version.txt
+var libraryVersion string
 
 func buildUserAgent(app string) string {
 	library := strings.TrimSpace("tesla-sdk/" + libraryVersion)
@@ -115,7 +113,7 @@ func (p *oauthPayload) domain() string {
 }
 
 // New returns an [Account] that can be used to fetch a [vehicle.Vehicle].
-func New(ts oauth2.TokenSource) (*Account, error) {
+func New(ts oauth2.TokenSource, userAgent string) (*Account, error) {
 	oauthToken, err := ts.Token()
 	if err != nil {
 		return nil, err
@@ -143,9 +141,9 @@ func New(ts oauth2.TokenSource) (*Account, error) {
 		Base:   http.DefaultClient.Transport,
 	}
 	return &Account{
-		UserAgent:  buildUserAgent(userAgent),
-		client:     client,
-		Host:       domain,
+		UserAgent: buildUserAgent(userAgent),
+		client:    client,
+		Host:      domain,
 	}, nil
 }
 

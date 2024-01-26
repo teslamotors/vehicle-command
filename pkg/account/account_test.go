@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+
+	"golang.org/x/oauth2"
 )
 
 func b64Encode(payload string) string {
@@ -12,30 +14,33 @@ func b64Encode(payload string) string {
 }
 
 func TestNewAccount(t *testing.T) {
+	ts := func(token string) oauth2.TokenSource {
+		return oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
+	}
 	validDomain := "fleet-api.example.tesla.com"
-	if _, err := New("", ""); err == nil {
+	if _, err := New(ts(""), ""); err == nil {
 		t.Error("Returned success empty JWT")
 	}
-	if _, err := New(b64Encode(validDomain), ""); err == nil {
+	if _, err := New(ts(b64Encode(validDomain)), ""); err == nil {
 		t.Error("Returned success on one-field JWT")
 	}
-	if _, err := New("x."+b64Encode(validDomain), ""); err == nil {
+	if _, err := New(ts("x."+b64Encode(validDomain)), ""); err == nil {
 		t.Error("Returned success on two-field JWT")
 	}
-	if _, err := New("x."+b64Encode(validDomain)+"y.z", ""); err == nil {
+	if _, err := New(ts("x."+b64Encode(validDomain)+"y.z"), ""); err == nil {
 		t.Error("Returned success on four-field JWT")
 	}
-	if _, err := New("x."+validDomain+".y", ""); err == nil {
+	if _, err := New(ts("x."+validDomain+".y"), ""); err == nil {
 		t.Error("Returned success on non-base64 encoded JWT")
 	}
-	if _, err := New("x."+b64Encode("{\"aud\": \"example.com\"}")+".y", ""); err == nil {
+	if _, err := New(ts("x."+b64Encode("{\"aud\": \"example.com\"}")+".y"), ""); err == nil {
 		t.Error("Returned success on untrusted domain")
 	}
-	if _, err := New("x."+b64Encode(fmt.Sprintf("{\"aud\": \"%s\"}", validDomain))+".y", ""); err == nil {
+	if _, err := New(ts("x."+b64Encode(fmt.Sprintf("{\"aud\": \"%s\"}", validDomain))+".y"), ""); err == nil {
 		t.Error("Returned when aud field not a list")
 	}
 
-	acct, err := New("x."+b64Encode(fmt.Sprintf("{\"aud\": [\"%s\"]}", validDomain))+".y", "")
+	acct, err := New(ts("x."+b64Encode(fmt.Sprintf("{\"aud\": [\"%s\"]}", validDomain))+".y"), "")
 	if err != nil {
 		t.Fatalf("Returned error on valid JWT: %s", err)
 	}
