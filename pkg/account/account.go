@@ -19,6 +19,7 @@ import (
 	"github.com/teslamotors/vehicle-command/pkg/connector"
 	"github.com/teslamotors/vehicle-command/pkg/connector/inet"
 	"github.com/teslamotors/vehicle-command/pkg/vehicle"
+	"golang.org/x/oauth2"
 )
 
 var (
@@ -65,10 +66,9 @@ func buildUserAgent() string {
 // Account allows interaction with a Tesla account.
 type Account struct {
 	// The default UserAgent is constructed from the global UserAgent, but can be overridden.
-	UserAgent  string
-	authHeader string
-	Host       string
-	client     http.Client
+	UserAgent string
+	Host      string
+	client    *http.Client
 }
 
 // We don't parse JWTs beyond what's required to extract the API server domain name
@@ -77,8 +77,10 @@ type oauthPayload struct {
 	OUCode    string   `json:"ou_code"`
 }
 
-var domainRegEx = regexp.MustCompile(`^[A-Za-z0-9-.]+$`) // We're mostly interested in stopping paths; the http package handles the rest.
-var remappedDomains = map[string]string{}                // For use during development; populate in an init() function.
+var (
+	domainRegEx     = regexp.MustCompile(`^[A-Za-z0-9-.]+$`) // We're mostly interested in stopping paths; the http package handles the rest.
+	remappedDomains = map[string]string{}                    // For use during development; populate in an init() function.
+)
 
 const defaultDomain = "fleet-api.prd.na.vn.cloud.tesla.com"
 
@@ -114,7 +116,11 @@ func (p *oauthPayload) domain() string {
 }
 
 // New returns an [Account] that can be used to fetch a [vehicle.Vehicle].
-func New(oauthToken string) (*Account, error) {
+func New(ts oauth2.TokenSource) (*Account, error) {
+	oauthToken, err := ts.Token()
+	if err != nil {
+		return nil, err
+	}
 	parts := strings.Split(oauthToken, ".")
 	if len(parts) != 3 {
 		return nil, fmt.Errorf("client provided malformed OAuth token")
@@ -132,10 +138,15 @@ func New(oauthToken string) (*Account, error) {
 	if domain == "" {
 		return nil, fmt.Errorf("client provided OAuth token with invalid audiences")
 	}
+	client := http.DefaultClient
+	client.Transport = &oauth2.Transport{
+		Source: ts,
+		Base:   http.DefaultClient.Transport,
+	}
 	return &Account{
-		UserAgent:  UserAgent,
-		authHeader: "Bearer " + strings.TrimSpace(oauthToken),
-		Host:       domain,
+		UserAgent: UserAgent,
+		client:    client,
+		Host:      domain,
 	}, nil
 }
 
@@ -147,7 +158,7 @@ func New(oauthToken string) (*Account, error) {
 // sessions parameter may also be nil, but providing a cache.SessionCache avoids a round-trip
 // handshake with the Vehicle in subsequent connections.
 func (a *Account) GetVehicle(ctx context.Context, vin string, privateKey authentication.ECDHPrivateKey, sessions *cache.SessionCache) (*vehicle.Vehicle, error) {
-	conn := inet.NewConnection(vin, a.authHeader, a.Host, a.UserAgent)
+	conn := inet.NewConnection(vin, a.client, a.Host, a.UserAgent)
 	car, err := vehicle.NewVehicle(conn, privateKey, sessions)
 	if err != nil {
 		conn.Close()
@@ -168,7 +179,6 @@ func (a *Account) Get(ctx context.Context, endpoint string) ([]byte, error) {
 	log.Debug("Requesting %s...", url)
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("User-Agent", a.UserAgent)
-	request.Header.Set("Authorization", a.authHeader)
 	response, err := a.client.Do(request)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching %s: %w", endpoint, err)
@@ -188,7 +198,7 @@ func (a *Account) Get(ctx context.Context, endpoint string) ([]byte, error) {
 }
 
 func (a *Account) sendFleetAPICommand(ctx context.Context, endpoint string, command interface{}) ([]byte, error) {
-	return inet.SendFleetAPICommand(ctx, &a.client, a.UserAgent, a.authHeader, fmt.Sprintf("https://%s/%s", a.Host, endpoint), command)
+	return inet.SendFleetAPICommand(ctx, a.client, a.UserAgent, fmt.Sprintf("https://%s/%s", a.Host, endpoint), command)
 }
 
 // Post sends an HTTP POST request to endpoint.

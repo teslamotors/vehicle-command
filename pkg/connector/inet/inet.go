@@ -78,7 +78,7 @@ func (e *HttpError) Temporary() bool {
 		e.Code == http.StatusTooManyRequests
 }
 
-func SendFleetAPICommand(ctx context.Context, client *http.Client, userAgent, authHeader string, url string, command interface{}) ([]byte, error) {
+func SendFleetAPICommand(ctx context.Context, client *http.Client, userAgent, url string, command interface{}) ([]byte, error) {
 	var body []byte
 	var ok bool
 	if body, ok = command.([]byte); !ok {
@@ -96,7 +96,6 @@ func SendFleetAPICommand(ctx context.Context, client *http.Client, userAgent, au
 
 	request.Header.Set("User-Agent", userAgent)
 	request.Header.Set("Content-type", "application/json")
-	request.Header.Set("Authorization", authHeader)
 	request.Header.Set("Accept", "*/*")
 
 	result, err := client.Do(request)
@@ -141,7 +140,7 @@ func ValidTeslaDomainSuffix(domain string) bool {
 // response body is not necessarily nil if the error is set.
 func (c *Connection) SendFleetAPICommand(ctx context.Context, endpoint string, command interface{}) ([]byte, error) {
 	url := fmt.Sprintf("https://%s/%s", c.serverURL, endpoint)
-	rsp, err := SendFleetAPICommand(ctx, &c.client, c.UserAgent, c.authHeader, url, command)
+	rsp, err := SendFleetAPICommand(ctx, c.client, c.UserAgent, url, command)
 	if err != nil {
 		var httpErr *HttpError
 		if errors.As(err, &httpErr) && httpErr.Code == http.StatusMisdirectedRequest {
@@ -157,26 +156,24 @@ func (c *Connection) SendFleetAPICommand(ctx context.Context, endpoint string, c
 
 // Connection implements the connector.Connector interface by POSTing commands to a server.
 type Connection struct {
-	UserAgent  string
-	vin        string
-	client     http.Client
-	serverURL  string
-	inbox      chan []byte
-	authHeader string
+	UserAgent string
+	vin       string
+	client    *http.Client
+	serverURL string
+	inbox     chan []byte
 
 	wakeLock sync.Mutex
 	lastPoke time.Time
 }
 
 // NewConnection creates a Connection.
-func NewConnection(vin string, authHeader, serverURL, userAgent string) *Connection {
+func NewConnection(vin string, client *http.Client, serverURL, userAgent string) *Connection {
 	conn := Connection{
-		UserAgent:  userAgent,
-		vin:        vin,
-		client:     http.Client{},
-		serverURL:  serverURL,
-		authHeader: authHeader,
-		inbox:      make(chan []byte, connector.BufferSize),
+		UserAgent: userAgent,
+		vin:       vin,
+		client:    client,
+		serverURL: serverURL,
+		inbox:     make(chan []byte, connector.BufferSize),
 	}
 	return &conn
 }
