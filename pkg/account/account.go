@@ -113,6 +113,7 @@ func (p *oauthPayload) domain() string {
 }
 
 // New returns an [Account] that can be used to fetch a [vehicle.Vehicle].
+// Optional userAgent can be passed in - otherwise it will be generated from code
 func New(ts oauth2.TokenSource, userAgent string) (*Account, error) {
 	oauthToken, err := ts.Token()
 	if err != nil {
