@@ -19,6 +19,7 @@ import (
 )
 
 var errOutboxFull = errors.New("dispatcher: outbox full")
+var errDropMessage = errors.New("dispatcher: simulated dropped message")
 var errTimeout = errors.New("dispatcher: simulated timeout")
 var testPayload = []byte("ack")
 var quiescentDelay = 250 * time.Millisecond
@@ -246,7 +247,11 @@ func (d *dummyConnector) Send(ctx context.Context, buffer []byte) error {
 		err := d.errorQueue[0]
 		d.errorQueue = d.errorQueue[1:]
 		d.lock.Unlock()
-		return err
+		if err == errDropMessage {
+			return nil
+		} else if err != nil {
+			return err
+		}
 	}
 	if err := proto.Unmarshal(buffer, &message); err != nil {
 		return err
@@ -646,6 +651,36 @@ func TestConnect(t *testing.T) {
 	}
 }
 
+func TestWaitForAllSessions(t *testing.T) {
+	conn := newDummyConnector(t)
+	defer conn.Close()
+
+	// Configure the Connector to only respond to the first of two handshakes
+	conn.EnqueueSendError(nil)
+	conn.EnqueueSendError(errDropMessage)
+
+	key, err := authentication.NewECDHPrivateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("Couldn't create private key: %s", err)
+	}
+
+	dispatcher, err := New(conn, key)
+	if err != nil {
+		t.Fatalf("Couldn't initialize dispatcher: %s", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), quiescentDelay)
+	defer cancel()
+
+	if err := dispatcher.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := dispatcher.StartSessions(ctx, nil); err != context.DeadlineExceeded {
+		t.Fatalf("Unexpected error: %s", err)
+	}
+}
+
 func TestRetrySend(t *testing.T) {
 	dispatcher, conn := getTestSetup(t)
 	defer conn.Close()
@@ -770,7 +805,7 @@ func TestDoNotBlockOnResponder(t *testing.T) {
 	select {
 	case <-rsp2.Recv():
 	case <-ctx.Done():
-		t.Fatalf("Didn't recieve message for second command: %s", err)
+		t.Fatalf("Didn't receive message for second command: %s", err)
 	}
 
 	// Check that responderBufferSize messages (and no more!) arrived at the rsp1.
@@ -778,13 +813,13 @@ func TestDoNotBlockOnResponder(t *testing.T) {
 		select {
 		case <-rsp1.Recv():
 		case <-ctx.Done():
-			t.Fatalf("Didn't recieve message for second command: %s", err)
+			t.Fatalf("Didn't receive message for second command: %s", err)
 		}
 	}
 
 	select {
 	case <-rsp1.Recv():
-		t.Fatalf("Recieved more messages than expected")
+		t.Fatalf("Received more messages than expected")
 	case <-ctx.Done():
 	}
 }

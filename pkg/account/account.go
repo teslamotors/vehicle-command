@@ -25,13 +25,9 @@ import (
 var (
 	//go:embed version.txt
 	libraryVersion string
-	// UserAgent is sent in HTTP requests.
-	//
-	// The default value is "<main package name>/<commit hash> tesla-sdk/<version>".
-	UserAgent = buildUserAgent()
 )
 
-func buildUserAgent() string {
+func buildUserAgent(app string) string {
 	library := strings.TrimSpace("tesla-sdk/" + libraryVersion)
 	build, ok := debug.ReadBuildInfo()
 	if !ok {
@@ -41,26 +37,29 @@ func buildUserAgent() string {
 	if len(path) == 0 {
 		return library
 	}
-	app := path[len(path)-1]
 
-	var version string
-	if build.Main.Version != "(devel)" && build.Main.Version != "" {
-		version = build.Main.Version
-	} else {
-		for _, info := range build.Settings {
-			if info.Key == "vcs.revision" {
-				if len(info.Value) > 8 {
-					version = info.Value[0:8]
+	if app == "" {
+		app = path[len(path)-1]
+		var version string
+		if build.Main.Version != "(devel)" && build.Main.Version != "" {
+			version = build.Main.Version
+		} else {
+			for _, info := range build.Settings {
+				if info.Key == "vcs.revision" {
+					if len(info.Value) > 8 {
+						version = info.Value[0:8]
+					}
+					break
 				}
-				break
 			}
+		}
+
+		if version != "" {
+			app = fmt.Sprintf("%s/%s", app, version)
 		}
 	}
 
-	if version == "" {
-		return fmt.Sprintf("%s %s", app, library)
-	}
-	return fmt.Sprintf("%s/%s %s", app, version, library)
+	return fmt.Sprintf("%s %s", app, library)
 }
 
 // Account allows interaction with a Tesla account.
@@ -144,9 +143,9 @@ func New(ts oauth2.TokenSource) (*Account, error) {
 		Base:   http.DefaultClient.Transport,
 	}
 	return &Account{
-		UserAgent: UserAgent,
-		client:    client,
-		Host:      domain,
+		UserAgent:  buildUserAgent(userAgent),
+		client:     client,
+		Host:       domain,
 	}, nil
 }
 

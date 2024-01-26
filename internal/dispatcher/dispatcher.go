@@ -3,6 +3,7 @@ package dispatcher
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -110,13 +111,16 @@ func (d *Dispatcher) StartSessions(ctx context.Context, domains []universal.Doma
 			results <- d.StartSession(aggregateContext, dom)
 		}(domain)
 	}
+	var err error
 	for i := 0; i < len(domains); i++ {
-		err := <-results
-		if err != nil {
+		err = <-results
+		// The aggregateContext is canceled if one of the handshakes fails. We don't want to return
+		// the Canceled error if ErrProtocolNotSupported is present.
+		if err != nil && !errors.Is(err, context.Canceled) {
 			return err
 		}
 	}
-	return nil
+	return err
 }
 
 func (d *Dispatcher) createHandler(key *receiverKey) *receiver {
@@ -322,7 +326,7 @@ func (d *Dispatcher) Send(ctx context.Context, message *universal.RoutableMessag
 
 	addr := make([]byte, addressLength)
 	// Message UUIDs are only used for debugging message logs and are not
-	// copied into the recieverKey used to match responses to requests.
+	// copied into the receiverKey used to match responses to requests.
 	uuid := make([]byte, uuidLength)
 	if _, err := rand.Read(uuid); err != nil {
 		return nil, err

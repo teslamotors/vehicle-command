@@ -44,8 +44,14 @@ func main() {
 		host         string
 		port         int
 	)
-	config := cli.Config{Flags: cli.FlagPrivateKey}
-	var err error
+
+	config, err := cli.NewConfig(cli.FlagPrivateKey)
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to load credential configuration: %s\n", err)
+		os.Exit(1)
+	}
+
 	defer func() {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %s\n", err)

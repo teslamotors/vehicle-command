@@ -18,13 +18,15 @@ import (
 	"github.com/teslamotors/vehicle-command/pkg/cache"
 	"github.com/teslamotors/vehicle-command/pkg/connector/inet"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
+	"github.com/teslamotors/vehicle-command/pkg/vehicle"
 	"golang.org/x/oauth2"
 )
 
 const (
-	defaultTimeout      = 10 * time.Second
-	maxRequestBodyBytes = 512
-	vinLength           = 17
+	defaultTimeout       = 10 * time.Second
+	maxRequestBodyBytes  = 512
+	vinLength            = 17
+	proxyProtocolVersion = "tesla-http-proxy/1.0.0"
 )
 
 func getAccount(req *http.Request) (*account.Account, error) {
@@ -33,7 +35,7 @@ func getAccount(req *http.Request) (*account.Account, error) {
 		return nil, fmt.Errorf("client did not provide an OAuth token")
 	}
 	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
-	return account.New(ts)
+	return account.New(ts, proxyProtocolVersion)
 }
 
 // Proxy exposes an HTTP API for sending vehicle commands.
@@ -230,7 +232,9 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			if p.isNotSupported(vin) {
 				p.forwardRequest(acct.Host, w, req)
 			} else {
-				p.handleVehicleCommand(acct, w, req, command, vin)
+				if err := p.handleVehicleCommand(acct, w, req, command, vin); err == ErrCommandUseRESTAPI {
+					p.forwardRequest(acct.Host, w, req)
+				}
 			}
 			return
 		}
@@ -238,7 +242,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	p.forwardRequest(acct.Host, w, req)
 }
 
-func (p *Proxy) handleVehicleCommand(acct *account.Account, w http.ResponseWriter, req *http.Request, command string, vin string) {
+func (p *Proxy) handleVehicleCommand(acct *account.Account, w http.ResponseWriter, req *http.Request, command, vin string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), p.Timeout)
 	defer cancel()
 
@@ -246,51 +250,82 @@ func (p *Proxy) handleVehicleCommand(acct *account.Account, w http.ResponseWrite
 	// the vehicle.Vehicle object. VCSEC commands fail if they arrive out of order, anyway.
 	if err := p.lockVIN(ctx, vin); err != nil {
 		writeJSONError(w, http.StatusServiceUnavailable, err)
-		return
+		return err
 	}
 	defer p.unlockVIN(vin)
 
-	log.Debug("Executing %s on %s", command, vin)
-	if req.Method != http.MethodPost {
-		writeJSONError(w, http.StatusMethodNotAllowed, nil)
-		return
-	}
-	car, err := acct.GetVehicle(ctx, vin, p.commandKey, p.sessions)
-	if err != nil || car == nil {
-		writeJSONError(w, http.StatusInternalServerError, err)
-		return
+	car, commandToExecuteFunc, err := p.loadVehicleAndCommandFromRequest(ctx, acct, w, req, command, vin)
+	if err != nil {
+		return err
 	}
 
 	if err := car.Connect(ctx); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err)
-		return
+		return err
 	}
 	defer car.Disconnect()
 
-	if err := car.StartSession(ctx, nil); err == protocol.ErrProtocolNotSupported {
+	if err := car.StartSession(ctx, nil); errors.Is(err, protocol.ErrProtocolNotSupported) {
 		p.markUnsupportedVIN(vin)
 		p.forwardRequest(acct.Host, w, req)
-		return
+		return err
 	} else if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err)
-		return
+		return err
 	}
 	defer car.UpdateCachedSessions(p.sessions)
 
-	err = execute(ctx, req, car, command)
-	if err == ErrUseRESTAPI {
-		p.forwardRequest(acct.Host, w, req)
-		return
+	if err = commandToExecuteFunc(car); err == ErrCommandUseRESTAPI {
+		return err
 	}
 	if protocol.IsNominalError(err) {
 		writeJSONError(w, http.StatusOK, err)
-		return
+		return err
 	}
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err)
-		return
+		return err
 	}
 
 	w.Header().Add("Content-Type", "application/json")
 	fmt.Fprintln(w, "{\"response\":{\"result\":true,\"reason\":\"\"}}")
+	return nil
+}
+
+func (p *Proxy) loadVehicleAndCommandFromRequest(ctx context.Context, acct *account.Account, w http.ResponseWriter, req *http.Request,
+	command, vin string) (*vehicle.Vehicle, func(*vehicle.Vehicle) error, error) {
+
+	log.Debug("Executing %s on %s", command, vin)
+	if req.Method != http.MethodPost {
+		writeJSONError(w, http.StatusMethodNotAllowed, nil)
+		return nil, nil, fmt.Errorf("Wrong http method")
+	}
+
+	commandToExecuteFunc, err := extractCommandAction(ctx, req, command)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	car, err := acct.GetVehicle(ctx, vin, p.commandKey, p.sessions)
+	if err != nil || car == nil {
+		writeJSONError(w, http.StatusInternalServerError, err)
+		return nil, nil, err
+	}
+
+	return car, commandToExecuteFunc, err
+}
+
+func extractCommandAction(ctx context.Context, req *http.Request, command string) (func(*vehicle.Vehicle) error, error) {
+	var params RequestParameters
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		return nil, err
+	}
+	if len(body) > 0 {
+		if err := json.Unmarshal(body, &params); err != nil {
+			return nil, &inet.HttpError{Code: http.StatusBadRequest, Message: "invalid JSON: Error occurred while parsing request parameters"}
+		}
+	}
+
+	return ExtractCommandAction(ctx, command, params)
 }

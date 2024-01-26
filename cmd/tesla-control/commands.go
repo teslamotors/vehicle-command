@@ -249,7 +249,7 @@ var commands = map[string]*Command{
 		},
 	},
 	"add-key-request": &Command{
-		help:             "Requset NFC-card approval for a enrolling PUBLIC_KEY with ROLE and FORM_FACTOR",
+		help:             "Request NFC-card approval for a enrolling PUBLIC_KEY with ROLE and FORM_FACTOR",
 		requiresAuth:     false,
 		requiresFleetAPI: false,
 		args: []Argument{
@@ -492,6 +492,15 @@ var commands = map[string]*Command{
 				return fmt.Errorf("failed to parse volume")
 			}
 			return car.SetVolume(ctx, float32(volume))
+		},
+	},
+	"media-toggle-playback": &Command{
+		help:             "Toggle between play/pause",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		args:             []Argument{},
+		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			return car.ToggleMediaPlayback(ctx)
 		},
 	},
 	"software-update-start": &Command{
