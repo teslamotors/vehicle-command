@@ -119,7 +119,7 @@ func New(ts oauth2.TokenSource, userAgent string) (*Account, error) {
 	if err != nil {
 		return nil, err
 	}
-	parts := strings.Split(oauthToken, ".")
+	parts := strings.Split(oauthToken.AccessToken, ".")
 	if len(parts) != 3 {
 		return nil, fmt.Errorf("client provided malformed OAuth token")
 	}

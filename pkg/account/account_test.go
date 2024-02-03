@@ -13,10 +13,11 @@ func b64Encode(payload string) string {
 	return base64.RawStdEncoding.EncodeToString([]byte(payload))
 }
 
+func ts(token string) oauth2.TokenSource {
+	return oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
+}
+
 func TestNewAccount(t *testing.T) {
-	ts := func(token string) oauth2.TokenSource {
-		return oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
-	}
 	validDomain := "fleet-api.example.tesla.com"
 	if _, err := New(ts(""), ""); err == nil {
 		t.Error("Returned success empty JWT")
@@ -54,7 +55,7 @@ func TestDomainDefault(t *testing.T) {
 		Audiences: []string{"https://auth.tesla.com/nts"},
 	}
 
-	acct, err := New(makeTestJWT(payload), "")
+	acct, err := New(ts(makeTestJWT(payload)), "")
 	if err != nil {
 		t.Fatalf("Returned error on valid JWT: %s", err)
 	}
@@ -69,7 +70,7 @@ func TestDomainExtraction(t *testing.T) {
 		OUCode:    "EU",
 	}
 
-	acct, err := New(makeTestJWT(payload), "")
+	acct, err := New(ts(makeTestJWT(payload)), "")
 	if err != nil {
 		t.Fatalf("Returned error on valid JWT: %s", err)
 	}
