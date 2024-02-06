@@ -95,7 +95,7 @@ func main() {
 	switch flag.Arg(0) {
 	case "migrate":
 		if config.KeyFilename == "" || config.KeyringKeyName == "" {
-			writeErr("Must provide path of existing key (-key-file-name) and name of new key (-key-name)")
+			writeErr("Must provide path of existing key (-key-file) and name of new key (-key-name)")
 			return
 		}
 
