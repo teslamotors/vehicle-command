@@ -528,7 +528,7 @@ The client serializes the following metadata values into a string `M`:
 
 | Value | Tag | Description |
 | ----- | --- | ----------- |
-| Signature type | `Signatures.TAG_SIGNATURE_TYPE` | Either `Signatures.SIGNATURE_TYPE_HMAC` or `Signatures.SIGNATURE_TYPE_AES_GCM_PERSONALIZED`. See below. |
+| Signature type | `Signatures.TAG_SIGNATURE_TYPE` | Either `Signatures.SIGNATURE_TYPE_HMAC_PERSONALIZED` or `Signatures.SIGNATURE_TYPE_AES_GCM_PERSONALIZED`. See below. |
 | Domain         | `Signatures.TAG_DOMAIN`         | Typically `UniversalMesasge.DOMAIN_VEHICLE_SECURITY` or `UniversalMessage.DOMAIN_INFOTAINMENT` |
 | VIN            | `Signatures.TAG_PERSONALIZATION`| 17-character vehicle identification number |
 | Epoch          | `Signatures.TAG_EPOCH`          | Copied from `session_info.epoch`           |
