@@ -365,7 +365,7 @@ func (c *Config) Connect(ctx context.Context) (acct *account.Account, car *vehic
 		return nil, nil, err
 	}
 	if skey != nil {
-		log.Info("Securing connction...")
+		log.Info("Securing connection...")
 		domains, err := c.DomainNames.ToDomains()
 		if err != nil {
 			return nil, nil, err
