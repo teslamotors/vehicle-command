@@ -29,30 +29,30 @@ enum OperationStatus_E
 
 enum MessageFault_E
 {
-    MESSAGEFAULT_ERROR_NONE = 0;
-    MESSAGEFAULT_ERROR_BUSY = 1;
-    MESSAGEFAULT_ERROR_TIMEOUT = 2;
-    MESSAGEFAULT_ERROR_UNKNOWN_KEY_ID = 3;
-    MESSAGEFAULT_ERROR_INACTIVE_KEY = 4;
-    MESSAGEFAULT_ERROR_INVALID_SIGNATURE = 5;
-    MESSAGEFAULT_ERROR_INVALID_TOKEN_OR_COUNTER = 6;
-    MESSAGEFAULT_ERROR_INSUFFICIENT_PRIVILEGES = 7;
-    MESSAGEFAULT_ERROR_INVALID_DOMAINS = 8;
-    MESSAGEFAULT_ERROR_INVALID_COMMAND = 9;
-    MESSAGEFAULT_ERROR_DECODING = 10;
-    MESSAGEFAULT_ERROR_INTERNAL = 11;
-    MESSAGEFAULT_ERROR_WRONG_PERSONALIZATION = 12;
-    MESSAGEFAULT_ERROR_BAD_PARAMETER = 13;
-    MESSAGEFAULT_ERROR_KEYCHAIN_IS_FULL = 14;
-    MESSAGEFAULT_ERROR_INCORRECT_EPOCH = 15;
-    MESSAGEFAULT_ERROR_IV_INCORRECT_LENGTH = 16;
-    MESSAGEFAULT_ERROR_TIME_EXPIRED = 17;
-    MESSAGEFAULT_ERROR_NOT_PROVISIONED_WITH_IDENTITY = 18;
-    MESSAGEFAULT_ERROR_COULD_NOT_HASH_METADATA = 19;
-    MESSAGEFAULT_ERROR_TIME_TO_LIVE_TOO_LONG = 20;
-    MESSAGEFAULT_ERROR_REMOTE_ACCESS_DISABLED = 21;
-    MESSAGEFAULT_ERROR_REMOTE_SERVICE_ACCESS_DISABLED = 22;
-    MESSAGEFAULT_ERROR_COMMAND_REQUIRES_ACCOUNT_CREDENTIALS = 23;
+    MESSAGEFAULT_ERROR_NONE = 0; // Request succeeded.
+    MESSAGEFAULT_ERROR_BUSY = 1; // Required vehicle subsystem is busy. Try again.
+    MESSAGEFAULT_ERROR_TIMEOUT = 2; // Vehicle subsystem did not respond. Try again.
+    MESSAGEFAULT_ERROR_UNKNOWN_KEY_ID = 3; // Vehicle did not recognize the key used to authorize command. Make sure your key is paired with the vehicle.
+    MESSAGEFAULT_ERROR_INACTIVE_KEY = 4; // Key used to authorize command has been disabled.
+    MESSAGEFAULT_ERROR_INVALID_SIGNATURE = 5; // Command signature/MAC is incorrect. Use included session info to update session and try again.
+    MESSAGEFAULT_ERROR_INVALID_TOKEN_OR_COUNTER = 6; // Command anti-replay counter has been used before. Use included session info to update session and try again.
+    MESSAGEFAULT_ERROR_INSUFFICIENT_PRIVILEGES = 7; // User is not authorized to execute command. This can be because of the role or because of vehicle state.
+    MESSAGEFAULT_ERROR_INVALID_DOMAINS = 8; // Command was malformed or addressed to an unrecognized vehicle system. May indicate client error or older vehicle firmware.
+    MESSAGEFAULT_ERROR_INVALID_COMMAND = 9; // Unrecognized command. May indicate client error or unsupported vehicle firmware.
+    MESSAGEFAULT_ERROR_DECODING = 10; // Could not parse command. Indicates client error.
+    MESSAGEFAULT_ERROR_INTERNAL = 11; // Internal vehicle error. Try again. Most commonly encountered when the vehicle has not finished booting.
+    MESSAGEFAULT_ERROR_WRONG_PERSONALIZATION = 12; // Command sent to wrong VIN.
+    MESSAGEFAULT_ERROR_BAD_PARAMETER = 13; // Command was malformed or used a deprecated parameter.
+    MESSAGEFAULT_ERROR_KEYCHAIN_IS_FULL = 14; // Vehicle's keychain is full. You must delete a key before you can add another.
+    MESSAGEFAULT_ERROR_INCORRECT_EPOCH = 15; // Session ID mismatch. Use included session info to update session and try again.
+    MESSAGEFAULT_ERROR_IV_INCORRECT_LENGTH = 16; // Initialization Value length is incorrect (AES-GCM must use 12-byte IVs). Indicates a client programming error.
+    MESSAGEFAULT_ERROR_TIME_EXPIRED = 17; // Command expired. Use included session info to determine if clocks have desynchronized and try again.
+    MESSAGEFAULT_ERROR_NOT_PROVISIONED_WITH_IDENTITY = 18; // Vehicle has not been provisioned with a VIN and may require service.
+    MESSAGEFAULT_ERROR_COULD_NOT_HASH_METADATA = 19; // Internal vehicle error.
+    MESSAGEFAULT_ERROR_TIME_TO_LIVE_TOO_LONG = 20; // Vehicle rejected command because its expiration time was too far in the future. This is a security precaution.
+    MESSAGEFAULT_ERROR_REMOTE_ACCESS_DISABLED = 21; // The vehicle owner has disabled Mobile access.
+    MESSAGEFAULT_ERROR_REMOTE_SERVICE_ACCESS_DISABLED = 22; // The command was authorized with a Service key, but the vehicle has not been configured to permit remote service commands.
+    MESSAGEFAULT_ERROR_COMMAND_REQUIRES_ACCOUNT_CREDENTIALS = 23; // The command requires proof of Tesla account credentials but was not sent over a channel that provides this proof. Resend the command using Fleet API.
 }
 
 message MessageStatus
