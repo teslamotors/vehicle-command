@@ -715,6 +715,10 @@ Vehicle responses also RoutableMessages. If a protocol-layer error occurred,
 then the vehicle sets the
 `RoutableMessage.signedMessageStatus.signed_message_fault` field.
 
+Error codes and their remediation are summarized in
+[universal_message.proto](protobuf/universal_message.proto).
+See comments in the `MessageFault_E` definition.
+
 ### Infotainment application-layer responses
 
 If a reply comes from the Infotainment domain, the client should parse the

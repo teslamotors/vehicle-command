@@ -127,30 +127,30 @@ func (OperationStatus_E) EnumDescriptor() ([]byte, []int) {
 type MessageFault_E int32
 
 const (
-	MessageFault_E_MESSAGEFAULT_ERROR_NONE                                 MessageFault_E = 0
-	MessageFault_E_MESSAGEFAULT_ERROR_BUSY                                 MessageFault_E = 1
-	MessageFault_E_MESSAGEFAULT_ERROR_TIMEOUT                              MessageFault_E = 2
-	MessageFault_E_MESSAGEFAULT_ERROR_UNKNOWN_KEY_ID                       MessageFault_E = 3
-	MessageFault_E_MESSAGEFAULT_ERROR_INACTIVE_KEY                         MessageFault_E = 4
-	MessageFault_E_MESSAGEFAULT_ERROR_INVALID_SIGNATURE                    MessageFault_E = 5
-	MessageFault_E_MESSAGEFAULT_ERROR_INVALID_TOKEN_OR_COUNTER             MessageFault_E = 6
-	MessageFault_E_MESSAGEFAULT_ERROR_INSUFFICIENT_PRIVILEGES              MessageFault_E = 7
-	MessageFault_E_MESSAGEFAULT_ERROR_INVALID_DOMAINS                      MessageFault_E = 8
-	MessageFault_E_MESSAGEFAULT_ERROR_INVALID_COMMAND                      MessageFault_E = 9
-	MessageFault_E_MESSAGEFAULT_ERROR_DECODING                             MessageFault_E = 10
-	MessageFault_E_MESSAGEFAULT_ERROR_INTERNAL                             MessageFault_E = 11
-	MessageFault_E_MESSAGEFAULT_ERROR_WRONG_PERSONALIZATION                MessageFault_E = 12
-	MessageFault_E_MESSAGEFAULT_ERROR_BAD_PARAMETER                        MessageFault_E = 13
-	MessageFault_E_MESSAGEFAULT_ERROR_KEYCHAIN_IS_FULL                     MessageFault_E = 14
-	MessageFault_E_MESSAGEFAULT_ERROR_INCORRECT_EPOCH                      MessageFault_E = 15
-	MessageFault_E_MESSAGEFAULT_ERROR_IV_INCORRECT_LENGTH                  MessageFault_E = 16
-	MessageFault_E_MESSAGEFAULT_ERROR_TIME_EXPIRED                         MessageFault_E = 17
-	MessageFault_E_MESSAGEFAULT_ERROR_NOT_PROVISIONED_WITH_IDENTITY        MessageFault_E = 18
-	MessageFault_E_MESSAGEFAULT_ERROR_COULD_NOT_HASH_METADATA              MessageFault_E = 19
-	MessageFault_E_MESSAGEFAULT_ERROR_TIME_TO_LIVE_TOO_LONG                MessageFault_E = 20
-	MessageFault_E_MESSAGEFAULT_ERROR_REMOTE_ACCESS_DISABLED               MessageFault_E = 21
-	MessageFault_E_MESSAGEFAULT_ERROR_REMOTE_SERVICE_ACCESS_DISABLED       MessageFault_E = 22
-	MessageFault_E_MESSAGEFAULT_ERROR_COMMAND_REQUIRES_ACCOUNT_CREDENTIALS MessageFault_E = 23
+	MessageFault_E_MESSAGEFAULT_ERROR_NONE                                 MessageFault_E = 0  // Request succeeded.
+	MessageFault_E_MESSAGEFAULT_ERROR_BUSY                                 MessageFault_E = 1  // Required vehicle subsystem is busy. Try again.
+	MessageFault_E_MESSAGEFAULT_ERROR_TIMEOUT                              MessageFault_E = 2  // Vehicle subsystem did not respond. Try again.
+	MessageFault_E_MESSAGEFAULT_ERROR_UNKNOWN_KEY_ID                       MessageFault_E = 3  // Vehicle did not recognize the key used to authorize command. Make sure your key is paired with the vehicle.
+	MessageFault_E_MESSAGEFAULT_ERROR_INACTIVE_KEY                         MessageFault_E = 4  // Key used to authorize command has been disabled.
+	MessageFault_E_MESSAGEFAULT_ERROR_INVALID_SIGNATURE                    MessageFault_E = 5  // Command signature/MAC is incorrect. Use included session info to update session and try again.
+	MessageFault_E_MESSAGEFAULT_ERROR_INVALID_TOKEN_OR_COUNTER             MessageFault_E = 6  // Command anti-replay counter has been used before. Use included session info to update session and try again.
+	MessageFault_E_MESSAGEFAULT_ERROR_INSUFFICIENT_PRIVILEGES              MessageFault_E = 7  // User is not authorized to execute command. This can be because of the role or because of vehicle state.
+	MessageFault_E_MESSAGEFAULT_ERROR_INVALID_DOMAINS                      MessageFault_E = 8  // Command was malformed or addressed to an unrecognized vehicle system. May indicate client error or older vehicle firmware.
+	MessageFault_E_MESSAGEFAULT_ERROR_INVALID_COMMAND                      MessageFault_E = 9  // Unrecognized command. May indicate client error or unsupported vehicle firmware.
+	MessageFault_E_MESSAGEFAULT_ERROR_DECODING                             MessageFault_E = 10 // Could not parse command. Indicates client error.
+	MessageFault_E_MESSAGEFAULT_ERROR_INTERNAL                             MessageFault_E = 11 // Internal vehicle error. Try again. Most commonly encountered when the vehicle has not finished booting.
+	MessageFault_E_MESSAGEFAULT_ERROR_WRONG_PERSONALIZATION                MessageFault_E = 12 // Command sent to wrong VIN.
+	MessageFault_E_MESSAGEFAULT_ERROR_BAD_PARAMETER                        MessageFault_E = 13 // Command was malformed or used a deprecated parameter.
+	MessageFault_E_MESSAGEFAULT_ERROR_KEYCHAIN_IS_FULL                     MessageFault_E = 14 // Vehicle's keychain is full. You must delete a key before you can add another.
+	MessageFault_E_MESSAGEFAULT_ERROR_INCORRECT_EPOCH                      MessageFault_E = 15 // Session ID mismatch. Use included session info to update session and try again.
+	MessageFault_E_MESSAGEFAULT_ERROR_IV_INCORRECT_LENGTH                  MessageFault_E = 16 // Initialization Value length is incorrect (AES-GCM must use 12-byte IVs). Indicates a client programming error.
+	MessageFault_E_MESSAGEFAULT_ERROR_TIME_EXPIRED                         MessageFault_E = 17 // Command expired. Use included session info to determine if clocks have desynchronized and try again.
+	MessageFault_E_MESSAGEFAULT_ERROR_NOT_PROVISIONED_WITH_IDENTITY        MessageFault_E = 18 // Vehicle has not been provisioned with a VIN and may require service.
+	MessageFault_E_MESSAGEFAULT_ERROR_COULD_NOT_HASH_METADATA              MessageFault_E = 19 // Internal vehicle error.
+	MessageFault_E_MESSAGEFAULT_ERROR_TIME_TO_LIVE_TOO_LONG                MessageFault_E = 20 // Vehicle rejected command because its expiration time was too far in the future. This is a security precaution.
+	MessageFault_E_MESSAGEFAULT_ERROR_REMOTE_ACCESS_DISABLED               MessageFault_E = 21 // The vehicle owner has disabled Mobile access.
+	MessageFault_E_MESSAGEFAULT_ERROR_REMOTE_SERVICE_ACCESS_DISABLED       MessageFault_E = 22 // The command was authorized with a Service key, but the vehicle has not been configured to permit remote service commands.
+	MessageFault_E_MESSAGEFAULT_ERROR_COMMAND_REQUIRES_ACCOUNT_CREDENTIALS MessageFault_E = 23 // The command requires proof of Tesla account credentials but was not sent over a channel that provides this proof. Resend the command using Fleet API.
 )
 
 // Enum value maps for MessageFault_E.
