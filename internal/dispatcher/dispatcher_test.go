@@ -15,6 +15,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/teslamotors/vehicle-command/internal/authentication"
+	"github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/signatures"
 	universal "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/universalmessage"
 )
 
@@ -82,10 +83,12 @@ func testCommand() *universal.RoutableMessage {
 
 type dummyConnector struct {
 	inbox       []*universal.RoutableMessage
+	callback    func(*dummyConnector, *universal.RoutableMessage) ([]byte, bool)
 	outbox      chan []byte
 	replies     chan *universal.RoutableMessage
 	lock        sync.Mutex
 	errorQueue  []error
+	keyLock     sync.Mutex
 	keys        map[universal.Domain]authentication.ECDHPrivateKey
 	dropReplies bool
 	AckRequests bool
@@ -94,6 +97,7 @@ type dummyConnector struct {
 func newDummyConnector(t *testing.T) *dummyConnector {
 	t.Helper()
 	conn := dummyConnector{
+		callback:    handleSessionInfoRequests,
 		outbox:      make(chan []byte, 50),
 		replies:     make(chan *universal.RoutableMessage, 50),
 		keys:        make(map[universal.Domain]authentication.ECDHPrivateKey),
@@ -120,8 +124,8 @@ func (d *dummyConnector) Wake() {
 }
 
 func (d *dummyConnector) domainKey(domain universal.Domain) authentication.ECDHPrivateKey {
-	d.lock.Lock()
-	defer d.lock.Unlock()
+	d.keyLock.Lock()
+	defer d.keyLock.Unlock()
 	if key, ok := d.keys[domain]; ok {
 		return key
 	}
@@ -184,16 +188,19 @@ func (d *dummyConnector) SessionInfoReply(rsp protocol.Receiver, publicKeyBytes 
 	return reply
 }
 
-func (d *dummyConnector) handleAsync(message *universal.RoutableMessage) {
-	d.lock.Lock()
-	d.inbox = append(d.inbox, message)
-	d.lock.Unlock()
+func initReply(message *universal.RoutableMessage) *universal.RoutableMessage {
+	var reply universal.RoutableMessage
+	reply.ToDestination = message.GetFromDestination()
+	reply.FromDestination = message.GetToDestination()
+	reply.RequestUuid = append([]byte{}, message.GetUuid()...)
+	reply.Uuid = testUUID()
+	return &reply
+}
 
-	var reply *universal.RoutableMessage
-
+func handleSessionInfoRequests(d *dummyConnector, message *universal.RoutableMessage) ([]byte, bool) {
 	req := message.GetSessionInfoRequest()
 	if req == nil {
-		return
+		return nil, false
 	}
 
 	domain := message.GetToDestination().GetDomain()
@@ -202,32 +209,33 @@ func (d *dummyConnector) handleAsync(message *universal.RoutableMessage) {
 		panic(err)
 	}
 
-	reply = &universal.RoutableMessage{}
+	reply := initReply(message)
 	if err := verifier.SetSessionInfo(message.GetUuid(), reply); err != nil {
 		panic(err)
 	}
 
-	reply.ToDestination = message.GetFromDestination()
-	reply.FromDestination = message.GetToDestination()
-	reply.RequestUuid = message.GetUuid()
-	reply.Uuid = testUUID()
-
 	encoded, err := proto.Marshal(reply)
-
 	if err != nil {
 		panic(err)
 	}
 
+	return encoded, true
+}
+
+func (d *dummyConnector) handleAsync(message *universal.RoutableMessage) {
 	d.lock.Lock()
 	defer d.lock.Unlock()
-	if d.dropReplies {
+	d.inbox = append(d.inbox, message)
+	if d.dropReplies || d.callback == nil {
 		return
 	}
-	select {
-	case d.outbox <- encoded:
-		return
-	default:
-		panic(errOutboxFull)
+	if responseBytes, shouldSend := d.callback(d, message); shouldSend {
+		select {
+		case d.outbox <- responseBytes:
+			return
+		default:
+			panic(errOutboxFull)
+		}
 	}
 }
 
@@ -449,7 +457,7 @@ func TestVehicleDropsReply(t *testing.T) {
 	defer cancel()
 
 	conn.Sleep()
-	dispatcher.sessions[testDomain] = nil
+	delete(dispatcher.sessions, testDomain)
 	err := dispatcher.StartSession(ctx, testDomain)
 	if err != context.DeadlineExceeded {
 		t.Errorf("Expected timeout but got error: %s", err)
@@ -626,6 +634,7 @@ func TestConnect(t *testing.T) {
 	if err := dispatcher.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
+	defer dispatcher.Stop()
 
 	if err := dispatcher.StartSessions(ctx, nil); err != context.DeadlineExceeded {
 		t.Fatalf("Unexpected error: %s", err)
@@ -635,7 +644,7 @@ func TestConnect(t *testing.T) {
 	defer cancel()
 
 	if _, err := dispatcher.Send(ctx, testCommand(), connector.AuthMethodHMAC); err != protocol.ErrNoSession {
-		t.Errorf("Unexpected error: %s", err)
+		t.Fatalf("Unexpected error: %s", err)
 	}
 
 	ctx, cancel = context.WithTimeout(context.Background(), quiescentDelay)
@@ -836,6 +845,82 @@ func TestRequestSessionWithoutKey(t *testing.T) {
 
 	if _, err := dispatcher.RequestSessionInfo(ctx, testDomain); err != protocol.ErrRequiresKey {
 		t.Errorf("Expected ErrRequiresKey but got %s", err)
+	}
+}
+
+func TestHandshakeWithoutKey(t *testing.T) {
+	conn := newDummyConnector(t)
+	defer conn.Close()
+
+	dispatcher, err := New(conn, nil)
+	if err != nil {
+		t.Fatalf("Couldn't initialize dispatcher: %s", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), quiescentDelay)
+	defer cancel()
+
+	if err := dispatcher.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer dispatcher.Stop()
+
+	if err := dispatcher.StartSession(ctx, testDomain); !errors.Is(err, protocol.ErrRequiresKey) {
+		t.Errorf("Expected no key error but got %s", err)
+	}
+}
+
+func TestNoValidHandshakeResponse(t *testing.T) {
+	conn := newDummyConnector(t)
+	defer conn.Close()
+
+	key, err := authentication.NewECDHPrivateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dispatcher, err := New(conn, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := dispatcher.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer dispatcher.Stop()
+
+	const maxCallbacks = 5
+	callbackCount := 0
+
+	conn.callback = func(d *dummyConnector, message *universal.RoutableMessage) ([]byte, bool) {
+		callbackCount++ // caller holds d.lock
+		reply := initReply(message)
+		reply.Payload = &universal.RoutableMessage_SessionInfo{}
+		reply.SubSigData = &universal.RoutableMessage_SignatureData{
+			SignatureData: &signatures.SignatureData{
+				SigType: &signatures.SignatureData_SessionInfoTag{
+					SessionInfoTag: &signatures.HMAC_Signature_Data{
+						Tag: []byte("swordfish"),
+					},
+				},
+			},
+		}
+		if callbackCount == maxCallbacks {
+			reply.SignedMessageStatus = &universal.MessageStatus{
+				SignedMessageFault: universal.MessageFault_E_MESSAGEFAULT_ERROR_UNKNOWN_KEY_ID,
+			}
+		}
+		encoded, err := proto.Marshal(reply)
+		if err != nil {
+			panic(err)
+		}
+		return encoded, true
+	}
+
+	if err := dispatcher.StartSession(ctx, testDomain); !errors.Is(err, protocol.ErrKeyNotPaired) {
+		t.Errorf("Expected key not paired but got %s", err)
 	}
 }
 
