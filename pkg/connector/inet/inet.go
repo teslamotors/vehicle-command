@@ -18,6 +18,9 @@ import (
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
 )
 
+// MaxLatency is the default maximum latency permitted when updating the vehicle clock estimate.
+var MaxLatency = 10 * time.Second
+
 func readWithContext(ctx context.Context, r io.Reader, p []byte) ([]byte, error) {
 	bytesRead := 0
 	for {
@@ -181,6 +184,10 @@ func NewConnection(vin string, authHeader, serverURL, userAgent string) *Connect
 
 func (c *Connection) PreferredAuthMethod() connector.AuthMethod {
 	return connector.AuthMethodHMAC
+}
+
+func (c *Connection) AllowedLatency() time.Duration {
+	return MaxLatency
 }
 
 func (c *Connection) RetryInterval() time.Duration {

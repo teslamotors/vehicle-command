@@ -52,6 +52,9 @@ type sender interface {
 
 	// Returns the recommended retransmission interval for the Connector
 	RetryInterval() time.Duration
+
+	// Sets the maximum allowed clock error.
+	SetMaxLatency(time.Duration)
 }
 
 // A Vehicle represents a Tesla vehicle.
@@ -59,6 +62,7 @@ type Vehicle struct {
 	dispatcher sender
 	Flags      uint32
 	vin        string
+
 	conn       connector.Connector
 	authMethod connector.AuthMethod
 
@@ -87,6 +91,12 @@ func NewVehicle(conn connector.Connector, privateKey authentication.ECDHPrivateK
 		}
 	}
 	return vehicle, nil
+}
+
+// SetMaxLatency sets the threshold used by the client to discard clock-synchronization messages
+// from the vehicle that take too long to arrive.
+func (v *Vehicle) SetMaxLatency(latency time.Duration) {
+	v.dispatcher.SetMaxLatency(latency)
 }
 
 func (v *Vehicle) VIN() string {

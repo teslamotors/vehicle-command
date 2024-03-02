@@ -18,15 +18,15 @@ import (
 	universal "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/universalmessage"
 )
 
-var sessionInfoRequestTimeout = 5 * time.Second
-var commandTimeout = 5 * time.Second
-
 // Dispatcher objects send (encrypted) messages to a vehicle and route incoming messages to the
 // appropriate receiver object.
 type Dispatcher struct {
 	conn       connector.Connector
 	privateKey authentication.ECDHPrivateKey
 	address    []byte
+
+	latencyLock sync.Mutex
+	maxLatency  time.Duration
 
 	doneLock  sync.Mutex
 	terminate chan struct{}
@@ -43,6 +43,7 @@ type Dispatcher struct {
 func New(conn connector.Connector, privateKey authentication.ECDHPrivateKey) (*Dispatcher, error) {
 	dispatcher := Dispatcher{
 		conn:       conn,
+		maxLatency: conn.AllowedLatency(),
 		address:    make([]byte, addressLength),
 		sessions:   make(map[universal.Domain]*session),
 		handlers:   make(map[receiverKey]*receiver),
@@ -53,6 +54,14 @@ func New(conn connector.Connector, privateKey authentication.ECDHPrivateKey) (*D
 		return nil, err
 	}
 	return &dispatcher, nil
+}
+
+func (d *Dispatcher) SetMaxLatency(latency time.Duration) {
+	if latency > 0 {
+		d.latencyLock.Lock()
+		d.maxLatency = latency
+		d.latencyLock.Unlock()
+	}
 }
 
 // RetryInterval fetches the transport-layer dependent recommended delay between retry attempts.
@@ -167,8 +176,12 @@ func (d *Dispatcher) checkForSessionUpdate(message *universal.RoutableMessage, h
 		return
 	}
 
-	if handler.expired() {
-		log.Warning("[%02x] Discarding session info because it was received more than %s after request", message.GetRequestUuid(), sessionInfoRequestTimeout)
+	d.latencyLock.Lock()
+	maxLatency := d.maxLatency
+	d.latencyLock.Unlock()
+
+	if handler.expired(maxLatency) {
+		log.Warning("[%02x] Discarding session info because it was received more than %s after request", message.GetRequestUuid(), maxLatency)
 		return
 	}
 

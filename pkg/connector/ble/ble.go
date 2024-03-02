@@ -17,7 +17,8 @@ import (
 const maxBLEMessageSize = 1024
 
 var (
-	rxTimeout = time.Second
+	rxTimeout  = time.Second     // Timeout interval between receiving chunks of a mesasge
+	maxLatency = 4 * time.Second // Max allowed error when syncing vehicle clock
 )
 
 var (
@@ -79,6 +80,10 @@ func (c *Connection) flush() bool {
 func (c *Connection) Close() {
 	c.client.ClearSubscriptions()
 	c.client.CancelConnection()
+}
+
+func (c *Connection) AllowedLatency() time.Duration {
+	return maxLatency
 }
 
 func (c *Connection) rx(p []byte) {
