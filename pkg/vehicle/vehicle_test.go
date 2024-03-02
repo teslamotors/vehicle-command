@@ -89,6 +89,8 @@ func (s *testSender) EnqueueResponse(t *testing.T, message *universal.RoutableMe
 	}
 }
 
+func (s *testSender) SetMaxLatency(latency time.Duration) {}
+
 func newTestVehicle() (*Vehicle, *testSender) {
 	dispatch := newTestSender()
 	return &Vehicle{dispatcher: dispatch}, dispatch

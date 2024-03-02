@@ -137,6 +137,10 @@ func (d *dummyConnector) domainKey(domain universal.Domain) authentication.ECDHP
 	return d.keys[domain]
 }
 
+func (d *dummyConnector) AllowedLatency() time.Duration {
+	return time.Second
+}
+
 func (d *dummyConnector) RetryInterval() time.Duration {
 	return time.Millisecond
 }

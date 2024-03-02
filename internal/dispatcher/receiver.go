@@ -49,6 +49,6 @@ func (r *receiver) Close() {
 
 // expired returns true if the request was sent long enough ago that any included session info
 // should be discarded as stale.
-func (r *receiver) expired() bool {
-	return time.Now().After(r.requestSentAt.Add(sessionInfoRequestTimeout))
+func (r *receiver) expired(lifetime time.Duration) bool {
+	return time.Now().After(r.requestSentAt.Add(lifetime))
 }

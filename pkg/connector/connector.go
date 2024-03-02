@@ -34,12 +34,10 @@ type Connector interface {
 
 	// Send sends a buffer to the vehicle.
 	//
-	// Depending on the error, the vehicle may have received and even acted on
-	// the message. For some errors, such as network timeouts, the client will
-	// not be able to determine if this is the case. If the returned error
-	// implements the vehicle.Error interface, then the client may be able
-	// to determine if the message was received by using the appropriate
-	// methods.
+	// Depending on the error, the vehicle may have received and even acted on the message. For some
+	// errors, such as network timeouts, the client will not be able to determine if this is the
+	// case. If the returned error implements the vehicle.Error interface, then the client may be
+	// able to determine if the message was received by using the appropriate methods.
 	//
 	// Implementations must be thread safe.
 	Send(ctx context.Context, buffer []byte) error
@@ -59,6 +57,10 @@ type Connector interface {
 
 	// RetryInterval returns the recommended wait time between transmission attempts.
 	RetryInterval() time.Duration
+
+	// AllowedLatency returns the maximum permitted delay between sending a request and receiving a
+	// response with an updated vehicle clock.
+	AllowedLatency() time.Duration
 }
 
 // FleetAPIConnector is a superset of Connector (which sends datagrams to vehicles) that also allows
