@@ -216,7 +216,7 @@ var commands = map[string]*Command{
 				return fmt.Errorf("failed to parse temperature: format as 22C or 72F")
 			}
 			if unit == "F" || unit == "f" {
-				degrees = (5.0 * degrees / 9.0) + 32.0
+				degrees = (degrees - 32.0) * 5.0 / 9.0
 			} else if unit != "C" && unit != "c" {
 				return fmt.Errorf("temperature units must be C or F")
 			}
