@@ -56,8 +56,8 @@ func Usage() {
 	}
 }
 
-func runCommand(acct *account.Account, car *vehicle.Vehicle, args []string) int {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+func runCommand(acct *account.Account, car *vehicle.Vehicle, args []string, timeout time.Duration) int {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if err := execute(ctx, acct, car, args); err != nil {
@@ -73,7 +73,7 @@ func runCommand(acct *account.Account, car *vehicle.Vehicle, args []string) int 
 	return 0
 }
 
-func runInteractiveShell(acct *account.Account, car *vehicle.Vehicle) int {
+func runInteractiveShell(acct *account.Account, car *vehicle.Vehicle, timeout time.Duration) int {
 	scanner := bufio.NewScanner(os.Stdin)
 	for fmt.Printf("> "); scanner.Scan(); fmt.Printf("> ") {
 		args, err := shlex.Split(scanner.Text())
@@ -87,7 +87,7 @@ func runInteractiveShell(acct *account.Account, car *vehicle.Vehicle) int {
 			writeErr("Invalid command: %s", err)
 			continue
 		}
-		runCommand(acct, car, args)
+		runCommand(acct, car, args, timeout)
 	}
 	if err := scanner.Err(); err != nil {
 		writeErr("Error reading command: %s", err)
@@ -103,8 +103,10 @@ func main() {
 	}()
 
 	var (
-		debug    bool
-		forceBLE bool
+		debug          bool
+		forceBLE       bool
+		commandTimeout time.Duration
+		connTimeout    time.Duration
 	)
 	config, err := cli.NewConfig(cli.FlagAll)
 	if err != nil {
@@ -114,6 +116,8 @@ func main() {
 	flag.Usage = Usage
 	flag.BoolVar(&debug, "debug", false, "Enable verbose debugging messages")
 	flag.BoolVar(&forceBLE, "ble", false, "Force BLE connection even if OAuth environment variables are defined")
+	flag.DurationVar(&commandTimeout, "command-timeout", 5*time.Second, "Set timeout for commands sent to the vehicle.")
+	flag.DurationVar(&connTimeout, "connect-timeout", 20*time.Second, "Set timeout for establishing initial connection.")
 
 	config.RegisterCommandLineFlags()
 	flag.Parse()
@@ -150,7 +154,7 @@ func main() {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), connTimeout)
 	defer cancel()
 
 	acct, car, err := config.Connect(ctx)
@@ -171,8 +175,8 @@ func main() {
 	}
 
 	if flag.NArg() > 0 {
-		status = runCommand(acct, car, flag.Args())
+		status = runCommand(acct, car, flag.Args(), commandTimeout)
 	} else {
-		status = runInteractiveShell(acct, car)
+		status = runInteractiveShell(acct, car, commandTimeout)
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/teslamotors/vehicle-command/internal/log"
 	"github.com/teslamotors/vehicle-command/pkg/cli"
@@ -43,6 +44,7 @@ func main() {
 		verbose      bool
 		host         string
 		port         int
+		timeout      time.Duration
 	)
 
 	config, err := cli.NewConfig(cli.FlagPrivateKey)
@@ -64,6 +66,7 @@ func main() {
 	flag.BoolVar(&verbose, "verbose", false, "Enable verbose logging")
 	flag.StringVar(&host, "host", "localhost", "Proxy server `hostname`")
 	flag.IntVar(&port, "port", defaultPort, "`Port` to listen on")
+	flag.DurationVar(&timeout, "timeout", proxy.DefaultTimeout, "Timeout interval when sending commands")
 	flag.Usage = Usage
 	config.RegisterCommandLineFlags()
 	flag.Parse()
@@ -97,6 +100,7 @@ func main() {
 	if err != nil {
 		return
 	}
+	p.Timeout = timeout
 	addr := fmt.Sprintf("%s:%d", host, port)
 	log.Info("Listening on %s", addr)
 
