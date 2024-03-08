@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	defaultTimeout       = 10 * time.Second
+	DefaultTimeout       = 10 * time.Second
 	maxRequestBodyBytes  = 512
 	vinLength            = 17
 	proxyProtocolVersion = "tesla-http-proxy/1.0.0"
@@ -90,7 +90,7 @@ func (p *Proxy) unlockVIN(vin string) {
 // command-authentication key, not a TLS key.)
 func New(ctx context.Context, skey protocol.ECDHPrivateKey, cacheSize int) (*Proxy, error) {
 	return &Proxy{
-		Timeout:    defaultTimeout,
+		Timeout:    DefaultTimeout,
 		commandKey: skey,
 		sessions:   cache.New(cacheSize),
 	}, nil
