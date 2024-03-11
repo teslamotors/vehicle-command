@@ -301,6 +301,7 @@ func (p *Proxy) loadVehicleAndCommandFromRequest(ctx context.Context, acct *acco
 
 	commandToExecuteFunc, err := extractCommandAction(ctx, req, command)
 	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err)
 		return nil, nil, err
 	}
 
@@ -317,11 +318,11 @@ func extractCommandAction(ctx context.Context, req *http.Request, command string
 	var params RequestParameters
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
-		return nil, err
+		return nil, &inet.HttpError{Code: http.StatusBadRequest, Message: "could not read request body"}
 	}
 	if len(body) > 0 {
 		if err := json.Unmarshal(body, &params); err != nil {
-			return nil, &inet.HttpError{Code: http.StatusBadRequest, Message: "invalid JSON: Error occurred while parsing request parameters"}
+			return nil, &inet.HttpError{Code: http.StatusBadRequest, Message: "error occurred while parsing request parameters"}
 		}
 	}
 
