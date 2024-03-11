@@ -334,6 +334,20 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 	// end-to-end authentication.
 	case "navigation_request":
 		return nil, ErrCommandUseRESTAPI
+	case "window_control":
+		// Latitude and longitude are not required for vehicles that support this protocol.
+		cmd, err := params.getString("command", true)
+		if err != nil {
+			return nil, err
+		}
+		switch cmd {
+		case "vent":
+			return func(v *vehicle.Vehicle) error { return v.VentWindows(ctx) }, nil
+		case "close":
+			return func(v *vehicle.Vehicle) error { return v.CloseWindows(ctx) }, nil
+		default:
+			return nil, errors.New("command must be 'vent' or 'close'")
+		}
 	default:
 		return nil, &inet.HttpError{Code: http.StatusBadRequest, Message: "{\"response\":null,\"error\":\"invalid_command\",\"error_description\":\"\"}"}
 	}
