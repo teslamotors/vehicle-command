@@ -742,4 +742,20 @@ var commands = map[string]*Command{
 			return car.AutoSeatAndClimate(ctx, positions, enabled)
 		},
 	},
+	"windows-vent": &Command{
+		help:             "Vent all windows",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			return car.VentWindows(ctx)
+		},
+	},
+	"windows-close": &Command{
+		help:             "Close all windows",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			return car.CloseWindows(ctx)
+		},
+	},
 }
