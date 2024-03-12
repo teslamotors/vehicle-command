@@ -617,7 +617,7 @@ field of AES-GCM.
 |  `Signatures.TAG_PERSONALIZATION`| `5YJ30123456789ABC`    | 02 11 35594a3330313233343536373839414243  |
 |  `Signatures.TAG_EPOCH`          | `session_info.epoch`   | 03 10 4c463f9cc0d3d26906e982ed224adde6    |
 |  `Signatures.TAG_EXPIRES_AT`     | `t=2655` seconds       | 04 04 00000a5f                            |
-|  `Signatures.TAG_COUNTER`        | `session_info.counter` | 05 07 00000007                            |
+|  `Signatures.TAG_COUNTER`        | `session_info.counter` | 05 04 00000007                            |
 
 Concatenating the above encoded values together with the terminal `0xff` byte gives:
 
