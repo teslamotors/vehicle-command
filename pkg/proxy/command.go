@@ -151,17 +151,15 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		}, nil
 	// vehicle.Vehicle actuation commands
 	case "actuate_trunk":
-		if which, err := params.getString("which_trunk", false); err == nil {
-			switch which {
-			case "front":
-				return func(v *vehicle.Vehicle) error { return v.OpenFrunk(ctx) }, nil
-			case "rear":
-				return func(v *vehicle.Vehicle) error { return v.OpenTrunk(ctx) }, nil
-			default:
-				return nil, &protocol.NominalError{Details: protocol.NewError("invalid_value", false, false)}
-			}
+		which, _ := params.getString("which_trunk", false)
+		switch which {
+		case "front":
+			return func(v *vehicle.Vehicle) error { return v.OpenFrunk(ctx) }, nil
+		case "rear":
+			return func(v *vehicle.Vehicle) error { return v.ActuateTrunk(ctx) }, nil
+		default:
+			return nil, &protocol.NominalError{Details: protocol.NewError("invalid_value", false, false)}
 		}
-		return func(v *vehicle.Vehicle) error { return v.OpenTrunk(ctx) }, nil
 	case "charge_port_door_open":
 		return func(v *vehicle.Vehicle) error { return v.ChargePortOpen(ctx) }, nil
 	case "charge_port_door_close":
