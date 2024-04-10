@@ -123,13 +123,7 @@ func (v *Vehicle) executeWhitelistOperation(ctx context.Context, payload []byte)
 	return err
 }
 
-func addKeyPayload(publicKey *ecdh.PublicKey, isOwner bool, formFactor vcsec.KeyFormFactor) *vcsec.UnsignedMessage {
-	var role keys.Role
-	if isOwner {
-		role = keys.Role_ROLE_OWNER
-	} else {
-		role = keys.Role_ROLE_DRIVER
-	}
+func addKeyPayload(publicKey *ecdh.PublicKey, role keys.Role, formFactor vcsec.KeyFormFactor) *vcsec.UnsignedMessage {
 	return &vcsec.UnsignedMessage{
 		SubMessage: &vcsec.UnsignedMessage_WhitelistOperation{
 			WhitelistOperation: &vcsec.WhitelistOperation{
