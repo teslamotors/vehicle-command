@@ -13,6 +13,7 @@ import (
 	"github.com/teslamotors/vehicle-command/pkg/account"
 	"github.com/teslamotors/vehicle-command/pkg/cli"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
+	"github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/keys"
 	"github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/vcsec"
 	"github.com/teslamotors/vehicle-command/pkg/vehicle"
 )
@@ -229,12 +230,12 @@ var commands = map[string]*Command{
 		requiresFleetAPI: false,
 		args: []Argument{
 			Argument{name: "PUBLIC_KEY", help: "file containing public key (or corresponding private key)"},
-			Argument{name: "ROLE", help: "One of: owner, driver"},
+			Argument{name: "ROLE", help: "One of: owner, driver, fm (fleet manager), vehicle_monitor, charging_manager"},
 			Argument{name: "FORM_FACTOR", help: "One of: nfc_card, ios_device, android_device, cloud_key"},
 		},
 		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			role := strings.ToUpper(args["ROLE"])
-			if role != "OWNER" && role != "DRIVER" {
+			role, ok := keys.Role_value["ROLE_"+strings.ToUpper(args["ROLE"])]
+			if !ok {
 				return fmt.Errorf("%w: invalid ROLE", ErrCommandLineArgs)
 			}
 			formFactor, ok := vcsec.KeyFormFactor_value["KEY_FORM_FACTOR_"+strings.ToUpper(args["FORM_FACTOR"])]
@@ -245,7 +246,7 @@ var commands = map[string]*Command{
 			if err != nil {
 				return fmt.Errorf("invalid public key: %s", err)
 			}
-			return car.AddKey(ctx, publicKey, role == "OWNER", vcsec.KeyFormFactor(formFactor))
+			return car.AddKeyWithRole(ctx, publicKey, keys.Role(role), vcsec.KeyFormFactor(formFactor))
 		},
 	},
 	"add-key-request": &Command{
@@ -254,12 +255,12 @@ var commands = map[string]*Command{
 		requiresFleetAPI: false,
 		args: []Argument{
 			Argument{name: "PUBLIC_KEY", help: "file containing public key (or corresponding private key)"},
-			Argument{name: "ROLE", help: "One of: owner, driver"},
+			Argument{name: "ROLE", help: "One of: owner, driver, fm (fleet manager), vehicle_monitor, charging_manager"},
 			Argument{name: "FORM_FACTOR", help: "One of: nfc_card, ios_device, android_device, cloud_key"},
 		},
 		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			role := strings.ToUpper(args["ROLE"])
-			if role != "OWNER" && role != "DRIVER" {
+			role, ok := keys.Role_value["ROLE_"+strings.ToUpper(args["ROLE"])]
+			if !ok {
 				return fmt.Errorf("%w: invalid ROLE", ErrCommandLineArgs)
 			}
 			formFactor, ok := vcsec.KeyFormFactor_value["KEY_FORM_FACTOR_"+strings.ToUpper(args["FORM_FACTOR"])]
@@ -270,7 +271,7 @@ var commands = map[string]*Command{
 			if err != nil {
 				return fmt.Errorf("invalid public key: %s", err)
 			}
-			if err := car.SendAddKeyRequest(ctx, publicKey, role == "OWNER", vcsec.KeyFormFactor(formFactor)); err != nil {
+			if err := car.SendAddKeyRequestWithRole(ctx, publicKey, keys.Role(role), vcsec.KeyFormFactor(formFactor)); err != nil {
 				return err
 			}
 			fmt.Printf("Sent add-key request to %s. Confirm by tapping NFC card on center console.\n", car.VIN())
