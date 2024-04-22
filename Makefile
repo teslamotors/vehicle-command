@@ -16,4 +16,7 @@ build: set-version test
 install: test
 	go install ./cmd/...
 
-.PHONY: install build test format set-version
+doc-images:
+	docker run -v ./:/data plantuml/plantuml "doc"
+
+.PHONY: install build test format set-version doc-images

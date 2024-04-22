@@ -239,6 +239,14 @@ curl --cacert cert.pem \
     "https://localhost:4443/api/1/vehicles/$VIN/command/flash_lights"
 ```
 
+The flow to obtain `$TESLA_AUTH_TOKEN`:
+
+![](./doc/authorization.png)
+
+A command's flow through the system:
+
+![](./doc/request_diagram.png)
+
 ### REST API documentation
 
 The HTTP proxy implements the [Tesla Fleet API vehicle command endpoints](https://developer.tesla.com/docs/fleet-api#vehicle-commands).
