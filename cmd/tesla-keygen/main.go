@@ -40,7 +40,7 @@ func cliUsage() {
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintf(w, "usage: %s [OPTION...] create|delete|migrate\n", filepath.Base(os.Args[0]))
+	fmt.Fprintf(w, "usage: %s [OPTION...] create|delete|export|migrate\n", filepath.Base(os.Args[0]))
 	fmt.Fprintln(w, usageText)
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "OPTIONS:")
@@ -59,6 +59,19 @@ func printPublicKey(skey protocol.ECDHPrivateKey) bool {
 	}
 	pem.Encode(os.Stdout, &pem.Block{Type: "PUBLIC KEY", Bytes: derPublicKey})
 	return true
+}
+
+func printPrivateKey(skey protocol.ECDHPrivateKey) error {
+	native, ok := skey.(*authentication.NativeECDHKey)
+	if !ok {
+		return fmt.Errorf("private key is not exportable")
+	}
+	derPrivateKey, err := x509.MarshalECPrivateKey(native.PrivateKey)
+	if err != nil {
+		return err
+	}
+	pem.Encode(os.Stdout, &pem.Block{Type: "EC PRIVATE KEY", Bytes: derPrivateKey})
+	return nil
 }
 
 func main() {
@@ -130,6 +143,15 @@ func main() {
 			writeErr("Failed to generate private key: %s", err)
 			return
 		}
+	case "export":
+		skey, err = config.PrivateKey()
+		if err == nil {
+			err = printPrivateKey(skey)
+		}
+		if err != nil {
+			writeErr("Failed to export private key: %s", err)
+		}
+		return
 	default:
 		writeErr("Unrecognized command-line argument.")
 		writeErr("")
