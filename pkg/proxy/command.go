@@ -72,11 +72,13 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 
 		return func(v *vehicle.Vehicle) error { return v.SetSeatHeater(ctx, setting) }, nil
 	case "remote_auto_seat_climate_request":
-		level, seat, err := params.settingForAutoSeatPosition()
+		seat, enabled, err := params.settingForAutoSeatPosition()
 		if err != nil {
 			return nil, err
 		}
-		return func(v *vehicle.Vehicle) error { return v.SetSeatCooler(ctx, level, seat) }, nil
+		return func(v *vehicle.Vehicle) error {
+			return v.AutoSeatAndClimate(ctx, []vehicle.SeatPosition{seat}, enabled)
+		}, nil
 	case "remote_steering_wheel_heater_request":
 		on, err := params.getBool("on", true)
 		if err != nil {
@@ -471,11 +473,15 @@ func (p RequestParameters) settingForCoolerSeatPosition() (vehicle.Level, vehicl
 	return vehicle.Level(level - 1), seat, nil
 }
 
-// Note: The API uses 0-3
-func (p RequestParameters) settingForAutoSeatPosition() (vehicle.Level, vehicle.SeatPosition, error) {
+func (p RequestParameters) settingForAutoSeatPosition() (vehicle.SeatPosition, bool, error) {
 	position, err := p.getNumber("auto_seat_position", true)
 	if err != nil {
-		return 0, 0, err
+		return 0, false, err
+	}
+
+	enabled, err := p.getBool("auto_climate_on", true)
+	if err != nil {
+		return 0, false, err
 	}
 
 	var seat vehicle.SeatPosition
@@ -488,12 +494,7 @@ func (p RequestParameters) settingForAutoSeatPosition() (vehicle.Level, vehicle.
 		seat = vehicle.SeatUnknown
 	}
 
-	level, err := p.getNumber("seat_position", true)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	return vehicle.Level(level - 1), seat, nil
+	return seat, enabled, nil
 }
 
 func missingParamError(key string) error {
