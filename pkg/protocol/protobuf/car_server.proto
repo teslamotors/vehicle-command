@@ -326,7 +326,7 @@ message VehicleControlTriggerHomelinkAction {
 }
 
 message VehicleControlWindowAction {
-    LatLong location = 1;
+    reserved 1; // Location not required for vehicles that support this protocol.
     oneof action {
         Void unknown = 2;
         Void vent = 3;
