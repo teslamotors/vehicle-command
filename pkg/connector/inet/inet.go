@@ -77,8 +77,7 @@ func (e *HttpError) Temporary() bool {
 	return e.Code == http.StatusServiceUnavailable ||
 		e.Code == http.StatusGatewayTimeout ||
 		e.Code == http.StatusRequestTimeout ||
-		e.Code == http.StatusMisdirectedRequest ||
-		e.Code == http.StatusTooManyRequests
+		e.Code == http.StatusMisdirectedRequest
 }
 
 func SendFleetAPICommand(ctx context.Context, client *http.Client, userAgent, authHeader string, url string, command interface{}) ([]byte, error) {
