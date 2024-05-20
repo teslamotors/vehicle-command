@@ -97,12 +97,15 @@ in lieu of command-line flags when using the above applications:
  * `TESLA_VIN` specifies a vehicle identification number. You can find your VIN
    under Controls > Software in your vehicle's UI. (Despite the name, VINs
    contain both letters and numbers).
+ * `TESLA_CACHE_FILE` specifies a file that caches session information. The
+   cache allows programs to skip sending handshake messages to a vehicle.
 
 For example:
 
 ```bash
 export TESLA_KEY_NAME=$(whoami)
 export TESLA_TOKEN_NAME=$(whoami)
+export TESLA_CACHE_FILE=~/.tesla-cache.json
 ```
 
 At this point, you're ready to go use the [the command-line
