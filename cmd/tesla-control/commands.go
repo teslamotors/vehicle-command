@@ -559,6 +559,30 @@ var commands = map[string]*Command{
 			return car.Wakeup(ctx)
 		},
 	},
+	"tonneau-open": &Command{
+		help:             "Open Cybertruck tonneau.",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			return car.OpenTonneau(ctx)
+		},
+	},
+	"tonneau-close": &Command{
+		help:             "Close Cybertruck tonneau.",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			return car.CloseTonneau(ctx)
+		},
+	},
+	"tonneau-stop": &Command{
+		help:             "Stop moving Cybertruck tonneau.",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			return car.StopTonneau(ctx)
+		},
+	},
 	"trunk-open": &Command{
 		help:             "Open vehicle trunk. Note that trunk-close only works on certain vehicle types.",
 		requiresAuth:     true,

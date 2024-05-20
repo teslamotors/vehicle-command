@@ -98,6 +98,7 @@ message ClosureMoveRequest {
     ClosureMoveType_E   rearTrunk = 5;
     ClosureMoveType_E   frontTrunk = 6;
     ClosureMoveType_E   chargePort = 7;
+    ClosureMoveType_E   tonneau = 8;
 }
 
 message PermissionChange {

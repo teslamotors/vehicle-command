@@ -174,6 +174,12 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		return func(v *vehicle.Vehicle) error { return v.HonkHorn(ctx) }, nil
 	case "remote_start_drive":
 		return func(v *vehicle.Vehicle) error { return v.RemoteDrive(ctx) }, nil
+	case "open_tonneau":
+		return func(v *vehicle.Vehicle) error { return v.OpenTonneau(ctx) }, nil
+	case "close_tonneau":
+		return func(v *vehicle.Vehicle) error { return v.CloseTonneau(ctx) }, nil
+	case "stop_tonneau":
+		return func(v *vehicle.Vehicle) error { return v.StopTonneau(ctx) }, nil
 	// Charging controls
 	case "charge_standard":
 		return func(v *vehicle.Vehicle) error { return v.ChargeStandardRange(ctx) }, nil
