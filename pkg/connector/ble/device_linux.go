@@ -6,5 +6,9 @@ import (
 )
 
 func newDevice() (ble.Device, error) {
-	return linux.NewDevice()
+	device, err := linux.NewDevice()
+	if err != nil {
+		return nil, err
+	}
+	return device, nil
 }
