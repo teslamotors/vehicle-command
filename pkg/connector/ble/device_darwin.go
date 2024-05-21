@@ -6,5 +6,9 @@ import (
 )
 
 func newDevice() (ble.Device, error) {
-	return darwin.NewDevice()
+	device, err := darwin.NewDevice()
+	if err != nil {
+		return nil, err
+	}
+	return device, nil
 }
