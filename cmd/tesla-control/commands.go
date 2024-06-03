@@ -43,8 +43,19 @@ func configureFlags(c *cli.Config, commandName string, forceBLE bool) error {
 		return ErrUnknownCommand
 	}
 	c.Flags = cli.FlagBLE
-	if (forceBLE && commandName == "wake") || info.requiresAuth {
+	bleWake := forceBLE && commandName == "wake"
+	if bleWake || info.requiresAuth {
+		// Wake commands are special. When sending a wake command over the Internet, infotainment
+		// cannot authenticate the command because it's asleep. When sending the command over BLE,
+		// VCSEC _does_ authenticate the command before poking infotainment.
 		c.Flags |= cli.FlagPrivateKey | cli.FlagVIN
+	}
+	if bleWake {
+		// Normally, clients send out two handshake messages in parallel in order to reduce latency.
+		// One handshake with VCSEC, one handshake with infotainment. However, if we're sending a
+		// BLE wake command, then infotainment is (presumably) asleep, and so we should only try to
+		// handshake with VCSEC.
+		c.DomainNames = []string{"VCSEC"}
 	}
 	if !info.requiresFleetAPI {
 		c.Flags |= cli.FlagVIN
