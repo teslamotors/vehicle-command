@@ -98,7 +98,10 @@ in lieu of command-line flags when using the above applications:
    under Controls > Software in your vehicle's UI. (Despite the name, VINs
    contain both letters and numbers).
  * `TESLA_CACHE_FILE` specifies a file that caches session information. The
-   cache allows programs to skip sending handshake messages to a vehicle.
+   cache allows programs to skip sending handshake messages to a vehicle. This
+   reduces both latency and the number of Fleet API calls a client makes when
+   reconnecting to a vehicle after restarting. This is particularly helpful
+   when using `tesla-control`, which restarts on each invocation.
 
 For example:
 
