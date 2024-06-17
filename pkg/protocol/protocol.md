@@ -681,6 +681,18 @@ mismatch.
 
 ---
 
+### Caching session state
+
+If a client is not running continuously, it should cache session state to disk,
+along with the time difference between the local clock and the vehicle clock.
+Loading the session from cache removes the need to send session info requests,
+which reduces the latency of the first command and, when using Fleet API,
+reduces the number of Fleet API requests made by the client. If the session
+state is no longer valid, then the client can automatically recover as
+described below. The recovery mechanism is no more expensive than performing
+the handshake in the first place, so clients never incur a penalty by
+optimistically assuming a cache is valid.
+
 ### Recovering from synchronization errors
 
 The vehicle may include up-to-date session state in an error message in cases
