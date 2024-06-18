@@ -224,19 +224,7 @@ func (v *Vehicle) RemoveKey(ctx context.Context, publicKey *ecdh.PublicKey) erro
 }
 
 func (v *Vehicle) KeySummary(ctx context.Context) (*vcsec.WhitelistInfo, error) {
-	payload := vcsec.UnsignedMessage{
-		SubMessage: &vcsec.UnsignedMessage_InformationRequest{
-			InformationRequest: &vcsec.InformationRequest{
-				InformationRequestType: vcsec.InformationRequestType_INFORMATION_REQUEST_TYPE_GET_WHITELIST_INFO,
-			},
-		},
-	}
-	encodedPayload, err := proto.Marshal(&payload)
-	if err != nil {
-		return nil, err
-	}
-	done := func(v *vcsec.FromVCSECMessage) (bool, error) { return true, nil }
-	reply, err := v.getVCSECResult(ctx, encodedPayload, connector.AuthMethodNone, done)
+	reply, err := v.getVCSECInfo(ctx, vcsec.InformationRequestType_INFORMATION_REQUEST_TYPE_GET_WHITELIST_INFO, slotNone)
 	if err != nil {
 		return nil, err
 	}
@@ -244,22 +232,7 @@ func (v *Vehicle) KeySummary(ctx context.Context) (*vcsec.WhitelistInfo, error) 
 }
 
 func (v *Vehicle) KeyInfoBySlot(ctx context.Context, slot uint32) (*vcsec.WhitelistEntryInfo, error) {
-	payload := vcsec.UnsignedMessage{
-		SubMessage: &vcsec.UnsignedMessage_InformationRequest{
-			InformationRequest: &vcsec.InformationRequest{
-				InformationRequestType: vcsec.InformationRequestType_INFORMATION_REQUEST_TYPE_GET_WHITELIST_ENTRY_INFO,
-				Key: &vcsec.InformationRequest_Slot{
-					Slot: slot,
-				},
-			},
-		},
-	}
-	encodedPayload, err := proto.Marshal(&payload)
-	if err != nil {
-		return nil, err
-	}
-	done := func(v *vcsec.FromVCSECMessage) (bool, error) { return true, nil }
-	reply, err := v.getVCSECResult(ctx, encodedPayload, connector.AuthMethodNone, done)
+	reply, err := v.getVCSECInfo(ctx, vcsec.InformationRequestType_INFORMATION_REQUEST_TYPE_GET_WHITELIST_ENTRY_INFO, slot)
 	if err != nil {
 		return nil, err
 	}

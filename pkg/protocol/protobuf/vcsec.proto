@@ -225,9 +225,63 @@ message UnsignedMessage {
     }
 }
 
+enum ClosureState_E {
+    CLOSURESTATE_CLOSED = 0;
+    CLOSURESTATE_OPEN = 1;
+    CLOSURESTATE_AJAR = 2;
+    CLOSURESTATE_UNKNOWN = 3;
+    CLOSURESTATE_FAILED_UNLATCH = 4;
+    CLOSURESTATE_OPENING = 5;
+    CLOSURESTATE_CLOSING = 6;
+}
+
+enum VehicleLockState_E {
+    VEHICLELOCKSTATE_UNLOCKED = 0;
+    VEHICLELOCKSTATE_LOCKED = 1;
+    VEHICLELOCKSTATE_INTERNAL_LOCKED = 2;
+    VEHICLELOCKSTATE_SELECTIVE_UNLOCKED = 3;
+}
+
+message ClosureStatuses
+{
+    ClosureState_E   frontDriverDoor = 1;
+    ClosureState_E   frontPassengerDoor = 2;
+    ClosureState_E   rearDriverDoor = 3;
+    ClosureState_E   rearPassengerDoor = 4;
+    ClosureState_E   rearTrunk = 5;
+    ClosureState_E   frontTrunk = 6;
+    ClosureState_E   chargePort = 7;
+    ClosureState_E   tonneau = 8;
+}
+
+enum VehicleSleepStatus_E {
+    VEHICLE_SLEEP_STATUS_UNKNOWN = 0;
+    VEHICLE_SLEEP_STATUS_AWAKE = 1;
+    VEHICLE_SLEEP_STATUS_ASLEEP = 2;
+}
+
+message DetailedClosureStatus {
+    uint32  tonneauPercentOpen = 1;
+}
+
+enum UserPresence_E {
+    VEHICLE_USER_PRESENCE_UNKNOWN = 0;
+    VEHICLE_USER_PRESENCE_NOT_PRESENT = 1;
+    VEHICLE_USER_PRESENCE_PRESENT = 2;
+}
+
+message VehicleStatus {
+    ClosureStatuses        closureStatuses = 1;
+    VehicleLockState_E     vehicleLockState = 2;
+    VehicleSleepStatus_E   vehicleSleepStatus = 3;
+    UserPresence_E         userPresence = 4;
+    DetailedClosureStatus  detailedClosureStatus = 5;
+}
+
 message FromVCSECMessage {
     reserved 6 to 10;
     oneof sub_message {
+        VehicleStatus               vehicleStatus = 1;
         CommandStatus               commandStatus = 4;
         WhitelistInfo               whitelistInfo = 16;
         WhitelistEntryInfo          whitelistEntryInfo = 17;

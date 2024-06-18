@@ -104,6 +104,31 @@ func (v *Vehicle) getVCSECResult(ctx context.Context, payload []byte, auth conne
 	}
 }
 
+const slotNone = 0xFFFFFFFF
+
+func (v *Vehicle) getVCSECInfo(ctx context.Context, requestType vcsec.InformationRequestType, keySlot uint32) (*vcsec.FromVCSECMessage, error) {
+	payload := vcsec.UnsignedMessage{
+		SubMessage: &vcsec.UnsignedMessage_InformationRequest{
+			InformationRequest: &vcsec.InformationRequest{
+				InformationRequestType: requestType,
+			},
+		},
+	}
+	if keySlot != slotNone {
+		payload.GetInformationRequest().Key = &vcsec.InformationRequest_Slot{
+			Slot: keySlot,
+		}
+	}
+
+	encodedPayload, err := proto.Marshal(&payload)
+	if err != nil {
+		return nil, err
+	}
+
+	done := func(v *vcsec.FromVCSECMessage) (bool, error) { return true, nil }
+	return v.getVCSECResult(ctx, encodedPayload, connector.AuthMethodNone, done)
+}
+
 func isWhitelistOperationComplete(fromVCSEC *vcsec.FromVCSECMessage) (bool, error) {
 	if opStatus := fromVCSEC.GetCommandStatus().GetWhitelistOperationStatus(); opStatus != nil {
 		status := opStatus.GetWhitelistOperationInformation()

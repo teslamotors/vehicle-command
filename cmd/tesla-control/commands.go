@@ -16,6 +16,7 @@ import (
 	"github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/keys"
 	"github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/vcsec"
 	"github.com/teslamotors/vehicle-command/pkg/vehicle"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 var ErrCommandLineArgs = errors.New("invalid command line arguments")
@@ -796,6 +797,26 @@ var commands = map[string]*Command{
 		requiresFleetAPI: false,
 		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
 			return car.CloseWindows(ctx)
+		},
+	},
+	"body-controller-state": &Command{
+		help:             "Fetch limited vehicle state information. Works over BLE when infotainment is asleep.",
+		domain:           protocol.DomainVCSEC,
+		requiresAuth:     false,
+		requiresFleetAPI: false,
+		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			info, err := car.BodyControllerState(ctx)
+			if err != nil {
+				return err
+			}
+			options := protojson.MarshalOptions{
+				Indent:            "\t",
+				UseEnumNumbers:    false,
+				EmitUnpopulated:   false,
+				EmitDefaultValues: true,
+			}
+			fmt.Println(options.Format(info))
+			return nil
 		},
 	},
 }
