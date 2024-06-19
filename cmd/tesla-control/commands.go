@@ -34,6 +34,7 @@ type Command struct {
 	args             []Argument
 	optional         []Argument
 	handler          Handler
+	domain           protocol.Domain
 }
 
 // configureAndVerifyFlags verifies that c contains all the information required to execute a command.
@@ -43,6 +44,9 @@ func configureFlags(c *cli.Config, commandName string, forceBLE bool) error {
 		return ErrUnknownCommand
 	}
 	c.Flags = cli.FlagBLE
+	if info.domain != protocol.DomainNone {
+		c.Domains = cli.DomainList{info.domain}
+	}
 	bleWake := forceBLE && commandName == "wake"
 	if bleWake || info.requiresAuth {
 		// Wake commands are special. When sending a wake command over the Internet, infotainment
@@ -55,7 +59,7 @@ func configureFlags(c *cli.Config, commandName string, forceBLE bool) error {
 		// One handshake with VCSEC, one handshake with infotainment. However, if we're sending a
 		// BLE wake command, then infotainment is (presumably) asleep, and so we should only try to
 		// handshake with VCSEC.
-		c.DomainNames = []string{"VCSEC"}
+		c.Domains = cli.DomainList{protocol.DomainVCSEC}
 	}
 	if !info.requiresFleetAPI {
 		c.Flags |= cli.FlagVIN
