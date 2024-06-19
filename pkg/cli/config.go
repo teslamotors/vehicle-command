@@ -67,34 +67,39 @@ import (
 	"github.com/99designs/keyring"
 )
 
-// domainNames is used to translate domains provided at the command line into native protocol.Domain
-// values.
-type domainNames []string
+var DomainsByName = map[string]protocol.Domain{
+	"VCSEC":        protocol.DomainVCSEC,
+	"INFOTAINMENT": protocol.DomainInfotainment,
+}
 
-func (d *domainNames) Set(value string) error {
-	*d = append(*d, value)
+var DomainNames = map[protocol.Domain]string{
+	protocol.DomainVCSEC:        "VCSEC",
+	protocol.DomainInfotainment: "INFOTAINMENT",
+}
+
+// DomainList is used to translate domains provided at the command line into native protocol.Domain
+// values.
+type DomainList []protocol.Domain
+
+// Set updates a DomainList from a command-line argument.
+func (d *DomainList) Set(value string) error {
+	canonicalName := strings.ToUpper(value)
+	if domain, ok := DomainsByName[canonicalName]; ok {
+		*d = append(*d, domain)
+	} else {
+		return fmt.Errorf("unknown domain '%s'", value)
+	}
 	return nil
 }
 
-func (d *domainNames) String() string {
-	return strings.Join(*d, ",")
-}
-
-func (d *domainNames) ToDomains() ([]protocol.Domain, error) {
-	mapping := map[string]protocol.Domain{
-		"VCSEC":        protocol.DomainVCSEC,
-		"INFOTAINMENT": protocol.DomainInfotainment,
-	}
-	var domains []protocol.Domain
-	for _, name := range *d {
-		canonicalName := strings.ToUpper(name)
-		if domain, ok := mapping[canonicalName]; ok {
-			domains = append(domains, domain)
-		} else {
-			return nil, fmt.Errorf("unknown domain '%s'", name)
+func (d *DomainList) String() string {
+	var names []string
+	for _, domain := range *d {
+		if name, ok := DomainNames[domain]; ok {
+			names = append(names, name)
 		}
 	}
-	return domains, nil
+	return strings.Join(names, ",")
 }
 
 // Environment variable names used are used by [Config.ReadFromEnvironment] to set common parameters.
@@ -145,9 +150,9 @@ type Config struct {
 	BackendType      backendType
 	Debug            bool // Enable keyring debug messages
 
-	// DomainNames can limit a vehicle connection to relevant subsystems, which can reduce
+	// Domains can limit a vehicle connection to relevant subsystems, which can reduce
 	// connection latency and avoid waking up the infotainment system unnecessarily.
-	DomainNames domainNames
+	Domains DomainList
 
 	password   *string
 	sessions   *cache.SessionCache
@@ -183,7 +188,7 @@ func (c *Config) RegisterCommandLineFlags() {
 		flag.StringVar(&c.CacheFilename, "session-cache", "", "Load session info cache from `file`. Defaults to $TESLA_CACHE_FILE.")
 		flag.StringVar(&c.KeyringKeyName, "key-name", "", "System keyring `name` for private key. Defaults to $TESLA_KEY_NAME.")
 		flag.StringVar(&c.KeyFilename, "key-file", "", "A `file` containing private key. Defaults to $TESLA_KEY_FILE.")
-		flag.Var(&c.DomainNames, "domain", "Domains to connect to (can be repeated; omit for all)")
+		flag.Var(&c.Domains, "domain", "Domains to connect to (can be repeated; omit for all)")
 	}
 	if c.Flags.isSet(FlagOAuth) {
 		flag.StringVar(&c.KeyringTokenName, "token-name", "", "System keyring `name` for OAuth token. Defaults to $TESLA_TOKEN_NAME.")
@@ -366,12 +371,7 @@ func (c *Config) Connect(ctx context.Context) (acct *account.Account, car *vehic
 	}
 	if skey != nil {
 		log.Info("Securing connection...")
-		domains, err := c.DomainNames.ToDomains()
-		if err != nil {
-			return nil, nil, err
-		}
-
-		if err := car.StartSession(ctx, domains); err != nil {
+		if err := car.StartSession(ctx, c.Domains); err != nil {
 			return nil, nil, err
 		}
 	}
