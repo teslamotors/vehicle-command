@@ -261,6 +261,8 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		return func(v *vehicle.Vehicle) error { return v.Lock(ctx) }, nil
 	case "door_unlock":
 		return func(v *vehicle.Vehicle) error { return v.Unlock(ctx) }, nil
+	case "erase_user_data":
+		return func(v *vehicle.Vehicle) error { return v.EraseGuestData(ctx) }, nil
 	case "reset_pin_to_drive_pin":
 		return func(v *vehicle.Vehicle) error { return v.ResetPIN(ctx) }, nil
 	case "reset_valet_pin":

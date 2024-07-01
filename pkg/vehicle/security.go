@@ -294,3 +294,14 @@ func (v *Vehicle) SendAddKeyRequestWithRole(ctx context.Context, publicKey *ecdh
 	}
 	return v.conn.Send(ctx, encodedEnvelope)
 }
+
+// EraseGuestData erases user data created while in Guest Mode. This command has no effect unless
+// the vehicle is currently in Guest Mode.
+func (v *Vehicle) EraseGuestData(ctx context.Context) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_EraseUserDataAction{},
+			},
+		})
+}
