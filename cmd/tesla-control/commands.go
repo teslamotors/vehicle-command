@@ -819,4 +819,12 @@ var commands = map[string]*Command{
 			return nil
 		},
 	},
+	"erase-guest-data": &Command{
+		help:             "Erase Guest Mode user data",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			return car.EraseGuestData(ctx)
+		},
+	},
 }
