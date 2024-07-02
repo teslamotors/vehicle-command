@@ -655,7 +655,7 @@ var commands = map[string]*Command{
 	},
 	"session-info": &Command{
 		help:             "Retrieve session info for PUBLIC_KEY from DOMAIN",
-		requiresAuth:     true,
+		requiresAuth:     false,
 		requiresFleetAPI: false,
 		args: []Argument{
 			Argument{name: "PUBLIC_KEY", help: "file containing public key (or corresponding private key)"},
