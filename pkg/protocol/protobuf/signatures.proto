@@ -31,6 +31,7 @@ message KeyIdentity {
     reserved 2;
     oneof identity_type {
         bytes public_key = 1;
+        uint32 handle = 3;
     }
 }
 
@@ -79,4 +80,5 @@ message SessionInfo {
     bytes   epoch              = 3;
     fixed32 clock_time         = 4;
     Session_Info_Status status = 5;
+    uint32  handle             = 6;
 }

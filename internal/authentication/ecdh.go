@@ -14,4 +14,5 @@ const SharedKeySizeBytes = 16
 type ECDHPrivateKey interface {
 	Exchange(remotePublicBytes []byte) (Session, error)
 	PublicBytes() []byte
+	SchnorrSignature(message []byte) ([]byte, error)
 }

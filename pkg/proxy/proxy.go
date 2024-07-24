@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,6 +14,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang-jwt/jwt"
+
+	"github.com/teslamotors/vehicle-command/internal/authentication"
 	"github.com/teslamotors/vehicle-command/internal/log"
 	"github.com/teslamotors/vehicle-command/pkg/account"
 	"github.com/teslamotors/vehicle-command/pkg/cache"
@@ -25,7 +29,7 @@ const (
 	DefaultTimeout       = 10 * time.Second
 	maxRequestBodyBytes  = 512
 	vinLength            = 17
-	proxyProtocolVersion = "tesla-http-proxy/1.0.0"
+	proxyProtocolVersion = "tesla-http-proxy/1.1.0"
 )
 
 func getAccount(req *http.Request) (*account.Account, error) {
@@ -236,8 +240,61 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			}
 			return
 		}
+		if len(path) == 5 && path[4] == "fleet_telemetry_config" {
+			p.handleFleetTelemetryConfig(acct.Host, w, req)
+			return
+		}
 	}
 	p.forwardRequest(acct.Host, w, req)
+}
+
+func (p *Proxy) handleFleetTelemetryConfig(host string, w http.ResponseWriter, req *http.Request) {
+	log.Info("Processing fleet telemetry configuration...")
+	defer req.Body.Close()
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, fmt.Errorf("could not read request body: %s", err))
+		return
+	}
+	var params struct {
+		VINs   []string      `json:"vins"`
+		Config jwt.MapClaims `json:"config"`
+	}
+	if err := json.Unmarshal(body, &params); err != nil {
+		writeJSONError(w, http.StatusBadRequest, fmt.Errorf("could not parse JSON body: %s", err))
+		return
+	}
+
+	// Let the server validate the VINs and config, the proxy just needs to sign
+	if _, ok := params.Config["aud"]; ok {
+		log.Warning("Confuration 'aud' field will be overwritten")
+	}
+	if _, ok := params.Config["iss"]; ok {
+		log.Warning("Configuration 'iss' field will be overwritten")
+	}
+	token, err := authentication.SignMessageForFleet(p.commandKey, "TelemetryClient", params.Config)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Errorf("error signing configuration: %s", err))
+		return
+	}
+
+	// Forward the new request to Tesla's servers
+	jwtRequest := make(map[string]interface{})
+	jwtRequest["vins"] = params.VINs
+	jwtRequest["token"] = token
+	bodyJSON, err := json.Marshal(jwtRequest)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Errorf("error while serializing a request: %s", err))
+		return
+	}
+	req.Body = io.NopCloser(bytes.NewReader(bodyJSON))
+	req.URL, err = req.URL.Parse("/api/1/vehicles/fleet_telemetry_config_jws")
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Errorf("error creating proxied URL: %s", err))
+		return
+	}
+	log.Debug("Posting data to %s: %s", req.URL.String(), bodyJSON)
+	p.forwardRequest(host, w, req)
 }
 
 func (p *Proxy) handleVehicleCommand(acct *account.Account, w http.ResponseWriter, req *http.Request, command, vin string) error {
