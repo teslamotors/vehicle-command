@@ -42,7 +42,7 @@ func NewVerifier(private ECDHPrivateKey, id []byte, domain universal.Domain, sig
 		return nil, ErrMetadataFieldTooLong
 	}
 
-	if err := verifier.rotateEpochIfNeeded(); err != nil {
+	if err := verifier.rotateEpochIfNeeded(false); err != nil {
 		return nil, err
 	}
 	return &verifier, nil
@@ -59,8 +59,8 @@ func (v *Verifier) signatureError(code universal.MessageFault_E, challenge []byt
 	return newError(errCodeInternal, fmt.Sprintf("Error collecting session info after encountering %s", code))
 }
 
-func (v *Verifier) rotateEpochIfNeeded() error {
-	if v.timeZero.IsZero() || v.counter == 0xFFFFFFFF || v.timestamp() > uint32(epochLength/time.Second) {
+func (v *Verifier) rotateEpochIfNeeded(force bool) error {
+	if force || v.timeZero.IsZero() || v.counter == 0xFFFFFFFF || v.timestamp() > uint32(epochLength/time.Second) {
 		if _, err := rand.Read(v.epoch[:]); err != nil {
 			v.counter = 0xFFFFFFFF
 			return newError(errCodeInternal, "RNG failure")
@@ -73,7 +73,7 @@ func (v *Verifier) rotateEpochIfNeeded() error {
 }
 
 func (v *Verifier) sessionInfo() (*signatures.SessionInfo, error) {
-	if err := v.rotateEpochIfNeeded(); err != nil {
+	if err := v.adjustClock(); err != nil {
 		return nil, err
 	}
 	info := &signatures.SessionInfo{
@@ -137,13 +137,53 @@ func (v *Verifier) SetSessionInfo(challenge []byte, message *universal.RoutableM
 	return nil
 }
 
+func (v *Verifier) adjustClock() error {
+	// During process sleep, the monotonic clock may be frozen. This has the effect of causing
+	// commands to expire further in the future then the client may intend. In order to correct, we
+	// check if the wall clock has advanced significantly further than the monotonic clock and
+	// update the monotonic clock accordingly.
+	//
+	// Since the wall clock can be set over UDP, it is not trustworthy; therefore we do not make
+	// corrections in the other direction. This means an attacker who can modify the wall clock
+	// can cause commands to expire prematurely, but cannot extend the expiration time of a command.
+	//
+	// See https://pkg.go.dev/time discussion on wall clocks vs monotonic clock.
+	now := time.Now()
+	wallClock := now.Unix()
+	wallClockStart := v.timeZero.Unix()
+
+	// Check values that would cause an overflow.
+	const yearInSeconds = 365 * 24 * 60 * 60
+	if wallClockStart > wallClock || wallClock-wallClockStart > yearInSeconds {
+		return v.rotateEpochIfNeeded(true)
+	}
+
+	// elapsedWallTime and elapsedProcessTime are how far into the current epoch we are according to
+	// the wall clock and the monotonic clock, respectively.
+	elapsedWallTime := time.Duration(wallClock-wallClockStart) * time.Second
+	elapsedProcessTime := now.Sub(v.timeZero) // Monotonic clock semantics promise this will not be negative, and the implementation uses saturated arithmetic.
+
+	if elapsedWallTime > elapsedProcessTime {
+		sleepDuration := elapsedWallTime - elapsedProcessTime
+		if sleepDuration > time.Second {
+			var t time.Time
+			if t.Add(elapsedWallTime).After(now) {
+				return v.rotateEpochIfNeeded(true)
+			}
+			// The Add(...) method adjusts both the monotonic and wall clocks
+			v.timeZero = now.Add(-elapsedWallTime)
+		}
+	}
+	return v.rotateEpochIfNeeded(false)
+}
+
 // Verify message.
 // If payload is encrypted, returns the plaintext. Otherwise extracts and returns the payload as-is.
 func (v *Verifier) Verify(message *universal.RoutableMessage) (plaintext []byte, err error) {
 	v.lock.Lock()
 	defer v.lock.Unlock()
 
-	if err = v.rotateEpochIfNeeded(); err != nil {
+	if err = v.adjustClock(); err != nil {
 		return nil, err
 	}
 
