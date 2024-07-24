@@ -178,9 +178,11 @@ func (s *Signer) Encrypt(message *universal.RoutableMessage, expiresIn time.Dura
 // AuthorizeHMAC adds an authentication tag to message.
 //
 // This allows the recipient to verify the message has not been tampered with,
-// but the payload is not encrypted. Unencrypted (but authenticated) messages are required for an
-// HTTP API which relays messages to vehicles but needs to state in order to determine when a
-// sequence of replies terminates.
+// but the payload is not encrypted. Unencrypted (but authenticated) messages are required by the
+// HTTP proxy. The proxy needs to inspect commands in order to enforce OAuth scopes and determine
+// when a sequence of replies terminates. If a client is not using the HTTP proxy, it should use
+// Encrypt instead of AuthorizeHMAC.
+//
 // Sensitive data, such as live camera streams, is encrypted on the application layer.
 func (s *Signer) AuthorizeHMAC(message *universal.RoutableMessage, expiresIn time.Duration) error {
 	s.counter++
