@@ -120,7 +120,7 @@ Messages can be sent to vehicles either over a REST API or over BLE.
 ### HTTPS
 
 See [Fleet API
-documentation](https://developer.tesla.com/docs/fleet-api#fleet-api) for
+documentation](https://developer.tesla.com/docs/fleet-api/getting-started/what-is-fleet-api) for
 information on using OAuth authentication.
 
 To send a message to a vehicle, make a POST request to
@@ -136,7 +136,7 @@ a command, just that the server received a response. The `RoutableMessage` may
 contain an error message.
 
 See [online
-documentation](https://developer.tesla.com/docs/tesla-fleet-api#response-codes)
+documentation](https://developer.tesla.com/docs/fleet-api/getting-started/conventions#response-codes)
 for information on other HTTP status codes.
 
 Although communication between clients and Tesla's servers use TLS/TCP, the
@@ -201,7 +201,7 @@ A **Fleet Manager** represents a cloud-based Owner key. In vehicles running
 2023.38 or later, a Fleet Manager cannot add or remove other users' keys from
 the vehicle and cannot send commands over BLE. If a cloud-based service needs
 to manage Owner and Driver access, this should be done at the account level
-using [Fleet API](https://developer.tesla.com/docs/tesla-fleet-api#vehicle-endpoints).
+using [Fleet API](https://developer.tesla.com/docs/fleet-api/endpoints/vehicle-commands).
 
 A **Vehicle Monitor** can read vehicle data, such as location information, but
 cannot authorize commands that change the vehicle's state.

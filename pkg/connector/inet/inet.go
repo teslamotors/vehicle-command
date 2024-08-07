@@ -48,7 +48,7 @@ The regular expression below extracts domains from HTTP bodies:
 
 	{
 	  "response": null,
-	  "error": "user out of region, use base URL: https://fleet-api.prd.na.vn.cloud.tesla.com, see https://developer.tesla.com/docs/fleet-api#regional-requirements",
+	  "error": "user out of region, use base URL: https://fleet-api.prd.na.vn.cloud.tesla.com, see https://...",
 	  "error_description": ""
 	}
 */
