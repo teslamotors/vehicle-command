@@ -3,7 +3,7 @@
 The `tesla-jws` utility can be used to generate JSON Web Signatures (JWSs) for
 [fleet telemetry](https://github.com/teslamotors/fleet-telemetry)
 configurations. These are distinct from the JSON Web Tokens (JWTs) [granted by
-customers](https://developer.tesla.com/docs/fleet-api#third-party-token) to
+customers](https://developer.tesla.com/docs/fleet-api/authentication/third-party-tokens) to
 third parties that allow limited vehicle or account access.
 
 ## Signing a fleet telemetry configuration
@@ -18,9 +18,8 @@ examples.
    `/api/1/vehicles/fleet_telemetry_config`. The proxy will sign the
    configuration and POST the resulting JWS to Fleet API.
 
-Both of these are self-service alternatives to the [`fleet_telemetry_config`
-Fleet API
-endpoint](https://developer.tesla.com/docs/fleet-api#fleet_telemetry_config-create),
+Both of these are self-service alternatives to the `fleet_telemetry_config`
+[Fleet API endpoint](https://developer.tesla.com/docs/fleet-api/endpoints/vehicle-endpoints#fleet-telemetry-config-create),
 which requires Tesla to issue a certificate for your server.
 
 ### Using tesla-jws
@@ -40,14 +39,14 @@ information.
 syntax as a JSON Web Token (JWT), but is not a bearer authorization token.
 
 Next, follow the Fleet API
-[instructions](https://developer.tesla.com/docs/fleet-api#fleet_telemetry_config_jws)
+[instructions](https://developer.tesla.com/docs/fleet-api/endpoints/vehicle-endpoints#fleet-telemetry-config-jws)
 for submitting `signed-config.jws`.
 
 ### Using tesla-http-proxy
 
 The [HTTP proxy server](/README.md#using-the-http-proxy) implements the
 [`fleet_telemetry_config`
-endpoint](https://developer.tesla.com/docs/fleet-api#fleet_telemetry_config-create).
+endpoint](https://developer.tesla.com/docs/fleet-api/endpoints/vehicle-endpoints#fleet-telemetry-config-create).
 
 ```bash
 curl \
