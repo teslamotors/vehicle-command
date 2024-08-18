@@ -3,7 +3,7 @@ package authentication
 import (
 	"testing"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 const testVIN = "0123456789abcdefX"
