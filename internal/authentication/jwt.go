@@ -5,7 +5,7 @@ package authentication
 import (
 	"encoding/base64"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/teslamotors/vehicle-command/internal/schnorr"
 )
 
@@ -21,28 +21,20 @@ func init() {
 	jwt.RegisterSigningMethod(TeslaSchnorrSHA256, func() jwt.SigningMethod { return &tss256 })
 }
 
-func (s *SigningMethodSchnorrP256) Verify(signingString, signature string, key interface{}) error {
+func (s *SigningMethodSchnorrP256) Verify(signingString string, signature []byte, key interface{}) error {
 	pkeyBytes, ok := key.([]byte)
 	if !ok {
 		return jwt.ErrInvalidKeyType
 	}
-	sig, err := jwt.DecodeSegment(signature)
-	if err != nil {
-		return err
-	}
-	return schnorr.Verify(pkeyBytes, []byte(signingString), sig)
+	return schnorr.Verify(pkeyBytes, []byte(signingString), signature)
 }
 
-func (s *SigningMethodSchnorrP256) Sign(signingString string, key interface{}) (string, error) {
+func (s *SigningMethodSchnorrP256) Sign(signingString string, key interface{}) ([]byte, error) {
 	skey, ok := key.(ECDHPrivateKey)
 	if !ok {
-		return "", jwt.ErrInvalidKeyType
+		return nil, jwt.ErrInvalidKeyType
 	}
-	sig, err := skey.SchnorrSignature([]byte(signingString))
-	if err != nil {
-		return "", err
-	}
-	return jwt.EncodeSegment(sig), nil
+	return skey.SchnorrSignature([]byte(signingString))
 }
 
 func (s *SigningMethodSchnorrP256) Alg() string {
