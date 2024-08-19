@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/teslamotors/vehicle-command/pkg/connector/inet"
@@ -31,6 +32,25 @@ var (
 		vehicle.SeatSecondRowRightBack,
 		vehicle.SeatThirdRowLeft,
 		vehicle.SeatThirdRowRight,
+	}
+
+	dayNamesBitMask = map[string]int32{
+		"SUN":       1,
+		"SUNDAY":    1,
+		"MON":       2,
+		"MONDAY":    2,
+		"TUES":      4,
+		"TUESDAY":   4,
+		"WED":       8,
+		"WEDNESDAY": 8,
+		"THURS":     16,
+		"THURSDAY":  16,
+		"FRI":       32,
+		"FRIDAY":    32,
+		"SAT":       64,
+		"SATURDAY":  64,
+		"ALL":       127,
+		"WEEKDAYS":  62,
 	}
 )
 
@@ -238,6 +258,119 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		return func(v *vehicle.Vehicle) error {
 			return v.ScheduleDeparture(ctx, departureTime, endOffPeakTime, preconditionPolicy, offPeakPolicy)
 		}, nil
+	case "add_charge_schedule":
+		lat, err := params.getNumber("lat", true)
+		if err != nil {
+			return nil, err
+		}
+		lon, err := params.getNumber("lon", true)
+		if err != nil {
+			return nil, err
+		}
+		startTime, err := params.getNumber("start_time", false)
+		if err != nil {
+			return nil, err
+		}
+		startEnabled, err := params.getBool("start_enabled", true)
+		if err != nil {
+			return nil, err
+		}
+		endTime, err := params.getNumber("end_time", false)
+		if err != nil {
+			return nil, err
+		}
+		endEnabled, err := params.getBool("end_enabled", true)
+		if err != nil {
+			return nil, err
+		}
+		daysOfWeek, err := params.getDays("days_of_week", true)
+		if err != nil {
+			return nil, err
+		}
+		id, err := params.getNumber("id", false)
+		if err != nil {
+			return nil, err
+		}
+		idUint64 := uint64(id)
+		if id == 0 {
+			idUint64 = uint64(time.Now().Unix())
+		}
+		enabled, err := params.getBool("enabled", true)
+		if err != nil {
+			return nil, err
+		}
+		oneTime, err := params.getBool("one_time", false)
+		if err != nil {
+			return nil, err
+		}
+		schedule := vehicle.ChargeSchedule{
+			DaysOfWeek:   daysOfWeek,
+			Latitude:     float32(lat),
+			Longitude:    float32(lon),
+			Id:           idUint64,
+			StartTime:    int32(startTime),
+			EndTime:      int32(endTime),
+			StartEnabled: startEnabled,
+			EndEnabled:   endEnabled,
+			Enabled:      enabled,
+			OneTime:      oneTime,
+		}
+		return func(v *vehicle.Vehicle) error { return v.AddChargeSchedule(ctx, &schedule) }, nil
+	case "add_precondition_schedule":
+		lat, err := params.getNumber("lat", true)
+		if err != nil {
+			return nil, err
+		}
+		lon, err := params.getNumber("lon", true)
+		if err != nil {
+			return nil, err
+		}
+		preconditionTime, err := params.getNumber("precondition_time", true)
+		if err != nil {
+			return nil, err
+		}
+		oneTime, err := params.getBool("one_time", false)
+		if err != nil {
+			return nil, err
+		}
+		daysOfWeek, err := params.getDays("days_of_week", true)
+		if err != nil {
+			return nil, err
+		}
+		id, err := params.getNumber("id", false)
+		if err != nil {
+			return nil, err
+		}
+		idUint64 := uint64(id)
+		if id == 0 {
+			idUint64 = uint64(time.Now().Unix())
+		}
+		enabled, err := params.getBool("enabled", true)
+		if err != nil {
+			return nil, err
+		}
+		schedule := vehicle.PreconditionSchedule{
+			DaysOfWeek:       daysOfWeek,
+			Latitude:         float32(lat),
+			Longitude:        float32(lon),
+			Id:               idUint64,
+			PreconditionTime: int32(preconditionTime),
+			OneTime:          oneTime,
+			Enabled:          enabled,
+		}
+		return func(v *vehicle.Vehicle) error { return v.AddPreconditionSchedule(ctx, &schedule) }, nil
+	case "remove_charge_schedule":
+		id, err := params.getNumber("id", true)
+		if err != nil {
+			return nil, err
+		}
+		return func(v *vehicle.Vehicle) error { return v.RemoveChargeSchedule(ctx, uint64(id)) }, nil
+	case "remove_precondition_schedule":
+		id, err := params.getNumber("id", true)
+		if err != nil {
+			return nil, err
+		}
+		return func(v *vehicle.Vehicle) error { return v.RemovePreconditionSchedule(ctx, uint64(id)) }, nil
 	case "set_managed_charge_current_request":
 		return nil, ErrCommandUseRESTAPI
 	case "set_managed_charger_location":
@@ -410,6 +543,23 @@ func (p RequestParameters) getNumber(key string, required bool) (float64, error)
 	}
 
 	return 0, missingParamError(key)
+}
+
+func (p RequestParameters) getDays(key string, required bool) (int32, error) {
+	daysStr, err := p.getString(key, required)
+	if err != nil {
+		return 0, err
+	}
+
+	var mask int32
+	for _, d := range strings.Split(daysStr, ",") {
+		if v, ok := dayNamesBitMask[strings.TrimSpace(strings.ToUpper(d))]; ok {
+			mask |= v
+		} else {
+			return 0, fmt.Errorf("unrecognized day name: %v", d)
+		}
+	}
+	return mask, nil
 }
 
 func (p RequestParameters) getPolicy(enabledKey string, weekdaysOnlyKey string) (vehicle.ChargingPolicy, error) {
