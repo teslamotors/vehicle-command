@@ -29,3 +29,28 @@ message OffPeakChargingTimes {
         Void weekdays = 2;
     }
 }
+
+message ChargeSchedule {
+    uint64                      id                      = 1; // datetime in epoch time
+    string                      name                    = 2;
+    int32                       days_of_week            = 3;
+    bool                        start_enabled           = 4;
+    int32                       start_time              = 5; // 24h in minutes
+    bool                        end_enabled             = 6;
+    int32                       end_time                = 7; // 24h in minutes
+    bool                        one_time                = 8;
+    bool                        enabled                 = 9;
+    float                       latitude                = 10;
+    float                       longitude               = 11;
+}
+
+message PreconditionSchedule {
+    uint64                      id                      = 1; // datetime in epoch time
+    string                      name                    = 2;
+    int32                       days_of_week            = 3;
+    int32                       precondition_time       = 4; // 24h in minutes
+    bool                        one_time                = 5;
+    bool                        enabled                 = 6;
+    float                       latitude                = 7;
+    float                       longitude               = 8;
+}

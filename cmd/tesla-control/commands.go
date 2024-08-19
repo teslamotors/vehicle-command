@@ -19,7 +19,10 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
-var ErrCommandLineArgs = errors.New("invalid command line arguments")
+var (
+	ErrCommandLineArgs = errors.New("invalid command line arguments")
+	ErrInvalidTime     = errors.New("invalid time")
+)
 
 type Argument struct {
 	name string
@@ -36,6 +39,85 @@ type Command struct {
 	optional         []Argument
 	handler          Handler
 	domain           protocol.Domain
+}
+
+func GetDegree(degStr string) (float32, error) {
+	deg, err := strconv.ParseFloat(degStr, 32)
+	if err != nil {
+		return 0.0, err
+	}
+	if deg < -180 || deg > 180 {
+		return 0.0, errors.New("latitude and longitude must both be in the range [-180, 180]")
+	}
+	return float32(deg), nil
+}
+
+func GetDays(days string) (int32, error) {
+	names := map[string]int32{
+		"SUN":       1,
+		"SUNDAY":    1,
+		"MON":       2,
+		"MONDAY":    2,
+		"TUES":      4,
+		"TUESDAY":   4,
+		"WED":       8,
+		"WEDNESDAY": 8,
+		"THURS":     16,
+		"THURSDAY":  16,
+		"FRI":       32,
+		"FRIDAY":    32,
+		"SAT":       64,
+		"SATURDAY":  64,
+		"ALL":       127,
+		"WEEKDAYS":  62,
+	}
+	var mask int32
+	for _, d := range strings.Split(days, ",") {
+		if v, ok := names[strings.TrimSpace(strings.ToUpper(d))]; ok {
+			mask |= v
+		} else {
+			return 0, fmt.Errorf("unrecognized day name: %v", d)
+		}
+	}
+	return mask, nil
+}
+
+func TimeRange(rangeStr string) (int32, int32, error) {
+	r := strings.Split(rangeStr, "-")
+	if len(r) != 2 {
+		return 0, 0, errors.New("invalid time range")
+	}
+	var err error
+	var start, stop int32
+	start, err = MinutesAfterMidnight(r[0])
+	if err != nil {
+		return 0, 0, err
+	}
+	stop, err = MinutesAfterMidnight(r[1])
+	if err != nil {
+		return 0, 0, err
+	}
+	return start, stop, nil
+}
+
+func MinutesAfterMidnight(hoursAndMinutes string) (int32, error) {
+	components := strings.Split(hoursAndMinutes, ":")
+	if len(components) != 2 {
+		return 0, fmt.Errorf("%w: expected HH:MM", ErrInvalidTime)
+	}
+	hours, err := strconv.Atoi(components[0])
+	if err != nil {
+		return 0, fmt.Errorf("%w: %s", ErrInvalidTime, err)
+	}
+	minutes, err := strconv.Atoi(components[1])
+	if err != nil {
+		return 0, fmt.Errorf("%w: %s", ErrInvalidTime, err)
+	}
+
+	if hours > 23 || hours < 0 || minutes > 59 || minutes < 0 {
+		return 0, fmt.Errorf("%w: hours or minutes outside valid range", ErrInvalidTime)
+	}
+	return int32(60*hours + minutes), nil
 }
 
 // configureAndVerifyFlags verifies that c contains all the information required to execute a command.
@@ -825,6 +907,108 @@ var commands = map[string]*Command{
 		requiresFleetAPI: false,
 		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
 			return car.EraseGuestData(ctx)
+		},
+	},
+	"charging-schedule-add": &Command{
+		help:             "Schedule charge NAME for DAYS START_TIME-END_TIME at LATITUDE LONGITUDE. The END_TIME may be on the following day.",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		args: []Argument{
+			Argument{name: "DAYS", help: "Comma-separated list of any of Sun, Mon, Tues, Wed, Thurs, Fri, Sat OR all OR weekdays"},
+			Argument{name: "TIME", help: "Time interval to charge (24-hour clock). Examples: '22:00-6:00', '-6:00', '20:32-"},
+			Argument{name: "LATITUDE", help: "Latitude of charging site"},
+			Argument{name: "LONGITUDE", help: "Longitude of charging site"},
+		},
+		optional: []Argument{
+			Argument{name: "REPEAT", help: "Set to 'once' or omit to repeat weekly"},
+		},
+		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			var err error
+			schedule := vehicle.ChargeSchedule{
+				Id:      uint64(time.Now().Unix()),
+				Enabled: true,
+			}
+
+			schedule.DaysOfWeek, err = GetDays(args["DAYS"])
+			if err != nil {
+				return err
+			}
+
+			r := strings.Split(args["TIME"], "-")
+			if len(r) != 2 {
+				return errors.New("invalid time range")
+			}
+
+			if r[0] != "" {
+				schedule.StartTime, err = MinutesAfterMidnight(r[0])
+				schedule.StartEnabled = true
+				if err != nil {
+					return err
+				}
+			}
+
+			if r[1] != "" {
+				schedule.EndTime, err = MinutesAfterMidnight(r[1])
+				schedule.EndEnabled = true
+				if err != nil {
+					return err
+				}
+			}
+
+			schedule.Latitude, err = GetDegree(args["LATITUDE"])
+			if err != nil {
+				return err
+			}
+
+			schedule.Longitude, err = GetDegree(args["LONGITUDE"])
+			if err != nil {
+				return err
+			}
+
+			if repeatPolicy, ok := args["REPEAT"]; ok && repeatPolicy == "once" {
+				schedule.OneTime = true
+			}
+
+			if err := car.AddChargeSchedule(ctx, &schedule); err != nil {
+				return err
+			}
+			fmt.Printf("%d\n", schedule.Id)
+			return nil
+		},
+	},
+	"charging-schedule-remove": {
+		help:             "Removes charging schedule of TYPE [ID]",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		args: []Argument{
+			Argument{name: "TYPE", help: "home|work|other|id"},
+		},
+		optional: []Argument{
+			Argument{name: "ID", help: "numeric ID of schedule to remove when TYPE set to id"},
+		},
+		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			var home, work, other bool
+			switch strings.ToUpper(args["TYPE"]) {
+			case "ID":
+				if idStr, ok := args["ID"]; ok {
+					id, err := strconv.ParseUint(idStr, 10, 64)
+					if err != nil {
+						return errors.New("expected numeric ID")
+					}
+					return car.RemoveChargeSchedule(ctx, id)
+				} else {
+					return errors.New("missing schedule ID")
+				}
+			case "HOME":
+				home = true
+			case "WORK":
+				work = true
+			case "OTHER":
+				other = true
+			default:
+				return errors.New("TYPE must be home|work|other|id")
+			}
+			return car.BatchRemoveChargeSchedules(ctx, home, work, other)
 		},
 	},
 }
