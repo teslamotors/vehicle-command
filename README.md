@@ -55,6 +55,8 @@ curl --cacert cert.pem \
 
 ## Installation and configuration
 
+### Installing locally
+
 Requirements:
 
  * You've [installed Golang](https://go.dev/doc/install). The package was
@@ -80,10 +82,30 @@ The final command installs the following utilities:
    utility does not fetch tokens. Read the [Fleet API documentation](https://developer.tesla.com/docs/fleet-api/authentication/third-party-tokens)
    for information on fetching OAuth tokens.
 
-Configure environment variables (optional):
+### Installing with Docker
 
-For convenience, you can define the following environment variables to be used
-in lieu of command-line flags when using the above applications:
+A Docker image is available for running these tools. The image defaults to
+running the HTTP proxy, but the `--entrypoint` flag changes the tool to be used.
+
+Run the image from Docker hub:
+
+```bash
+docker pull tesla/vehicle-command:latest
+docker run tesla/vehicle-command:latest --help
+
+# running a different tool
+docker run --entrypoint tesla-control tesla/vehicle-command:latest --help
+```
+
+An example [docker-compose.yml](./docker-compose.yml) file is also provided.
+
+```bash
+docker compose up
+```
+
+### Configuration
+
+The following environment variables can used in lieu of command-line flags.
 
  * `TESLA_KEY_NAME` used to derive the entry name for your command
    authentication private key in your system keyring.
@@ -102,6 +124,14 @@ in lieu of command-line flags when using the above applications:
    reduces both latency and the number of Fleet API calls a client makes when
    reconnecting to a vehicle after restarting. This is particularly helpful
    when using `tesla-control`, which restarts on each invocation.
+ * `TESLA_HTTP_PROXY_TLS_CERT` specifies a TLS certificate file for the HTTP proxy.
+ * `TESLA_HTTP_PROXY_TLS_KEY` specifies a TLS key file for the HTTP proxy.
+ * `TESLA_HTTP_PROXY_HOST` specifies the host for the HTTP proxy.
+ * `TESLA_HTTP_PROXY_PORT` specifies the port for the HTTP proxy.
+ * `TESLA_HTTP_PROXY_TIMEOUT` specifies the timeout for the HTTP proxy to use when
+   contacting Tesla servers.
+ * `TESLA_VERBOSE` enables verbose logging. Supported by `tesla-control` and
+   `tesla-http-proxy`.
 
 For example:
 
@@ -191,23 +221,35 @@ purposes, you can create a self-signed localhost server certificate using
 OpenSSL:
 
 ```
+mkdir config
 openssl req -x509 -nodes -newkey ec \
     -pkeyopt ec_paramgen_curve:secp521r1 \
     -pkeyopt ec_param_enc:named_curve  \
     -subj '/CN=localhost' \
-    -keyout key.pem -out cert.pem -sha256 -days 3650 \
+    -keyout config/tls-key.pem -out config/tls-cert.pem -sha256 -days 3650 \
     -addext "extendedKeyUsage = serverAuth" \
     -addext "keyUsage = digitalSignature, keyCertSign, keyAgreement"
 ```
 
-This command creates an unencrypted private key, `key.pem`.
+This command creates an unencrypted private key, `config/tls-key.pem`.
 
 ### Running the proxy server
 
-You can start the proxy server using the following command:
+The proxy server can be run using the following command:
 
 ```bash
-tesla-http-proxy -tls-key key.pem -cert cert.pem -port 4443
+tesla-http-proxy -tls-key config/tls-key.pem -cert config/tls-cert.pem -key-file config/fleet-key.pem -port 4443
+```
+
+It can also be run using Docker:
+
+```bash
+# option 1: using docker run
+docker pull tesla/vehicle-command:latest
+docker run -v ./config:/config -p 127.0.0.1:4433:4433 tesla/vehicle-command:latest -tls-key /config/tls-key.pem -cert /config/tls-cert.pem -key-file /config/fleet-key.pem -host 0.0.0.0 -port 4443
+
+# option 2: using docker compose
+docker compose up
 ```
 
 *Note:* In production, you'll likely want to omit the `-port 4443` and listen on
