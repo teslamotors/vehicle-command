@@ -36,6 +36,10 @@ var (
 	mu     sync.Mutex
 )
 
+func SetDebugLog() {
+	log.SetLevel(log.LevelDebug)
+}
+
 type Connection struct {
 	vin         string
 	inbox       chan []byte
