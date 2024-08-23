@@ -1,0 +1,49 @@
+name: Publish Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'pkg/account/version.txt'
+
+jobs:  
+  release:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - id: get-version
+        name: Get Version
+        run: |
+          echo "version=$(cat pkg/account/version.txt | tr -d '\n')" >> $GITHUB_OUTPUT
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.get-version.outputs.version }}
+          name: v${{ steps.get-version.outputs.version }}
+          generate_release_notes: true
+          make_latest: true
+
+      - name: Build and push
+        uses: docker/build-push-action@v4
+        with:
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: tesla/vehicle-command:latest,tesla/vehicle-command:${{ steps.get-version.outputs.version }}

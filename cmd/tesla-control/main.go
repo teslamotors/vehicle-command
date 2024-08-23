@@ -121,6 +121,11 @@ func main() {
 
 	config.RegisterCommandLineFlags()
 	flag.Parse()
+	if !debug {
+		if debugEnv, ok := os.LookupEnv("TESLA_VERBOSE"); ok {
+			debug = debugEnv != "false" && debugEnv != "0"
+		}
+	}
 	if debug {
 		log.SetLevel(log.LevelDebug)
 	}
