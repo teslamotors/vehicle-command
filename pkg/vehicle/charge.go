@@ -18,6 +18,47 @@ const (
 	ChargingPolicyWeekdays
 )
 
+type ChargeSchedule = carserver.ChargeSchedule
+
+func (v *Vehicle) AddChargeSchedule(ctx context.Context, schedule *ChargeSchedule) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_AddChargeScheduleAction{
+					AddChargeScheduleAction: schedule,
+				},
+			},
+		})
+}
+
+func (v *Vehicle) RemoveChargeSchedule(ctx context.Context, id uint64) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_RemoveChargeScheduleAction{
+					RemoveChargeScheduleAction: &carserver.RemoveChargeScheduleAction{
+						Id: id,
+					},
+				},
+			},
+		})
+}
+
+func (v *Vehicle) BatchRemoveChargeSchedules(ctx context.Context, home, work, other bool) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_BatchRemoveChargeSchedulesAction{
+					BatchRemoveChargeSchedulesAction: &carserver.BatchRemoveChargeSchedulesAction{
+						Home:  home,
+						Work:  work,
+						Other: other,
+					},
+				},
+			},
+		})
+}
+
 func (v *Vehicle) ChangeChargeLimit(ctx context.Context, chargeLimitPercent int32) error {
 	return v.executeCarServerAction(ctx,
 		&carserver.Action_VehicleAction{

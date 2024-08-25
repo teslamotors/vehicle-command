@@ -66,6 +66,9 @@ message VehicleAction {
         EraseUserDataAction eraseUserDataAction = 72;
         VehicleControlSetPinToDriveAction vehicleControlSetPinToDriveAction = 77;
         VehicleControlResetPinToDriveAction vehicleControlResetPinToDriveAction = 78;
+        ChargeSchedule addChargeScheduleAction = 97;
+        RemoveChargeScheduleAction removeChargeScheduleAction = 98;
+        BatchRemoveChargeSchedulesAction batchRemoveChargeSchedulesAction = 108;
     }
 }
 
@@ -387,6 +390,16 @@ message HvacClimateKeeperAction {
 
 message SetChargingAmpsAction {
     int32 charging_amps = 1;
+}
+
+message RemoveChargeScheduleAction {
+    uint64                      id                      = 1; // datetime in epoch time
+}
+
+message BatchRemoveChargeSchedulesAction {
+    bool                        home                    = 1;
+    bool                        work                    = 2;
+    bool                        other                   = 3; // Delete non-home and non-work charge schedules
 }
 
 message SetCabinOverheatProtectionAction {
