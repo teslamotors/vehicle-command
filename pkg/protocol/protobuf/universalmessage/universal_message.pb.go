@@ -280,6 +280,7 @@ type Destination struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to SubDestination:
+	//
 	//	*Destination_Domain
 	//	*Destination_RoutingAddress
 	SubDestination isDestination_SubDestination `protobuf_oneof:"sub_destination"`
@@ -472,11 +473,13 @@ type RoutableMessage struct {
 	ToDestination   *Destination `protobuf:"bytes,6,opt,name=to_destination,json=toDestination,proto3" json:"to_destination,omitempty"`
 	FromDestination *Destination `protobuf:"bytes,7,opt,name=from_destination,json=fromDestination,proto3" json:"from_destination,omitempty"`
 	// Types that are assignable to Payload:
+	//
 	//	*RoutableMessage_ProtobufMessageAsBytes
 	//	*RoutableMessage_SessionInfoRequest
 	//	*RoutableMessage_SessionInfo
 	Payload isRoutableMessage_Payload `protobuf_oneof:"payload"`
 	// Types that are assignable to SubSigData:
+	//
 	//	*RoutableMessage_SignatureData
 	SubSigData          isRoutableMessage_SubSigData `protobuf_oneof:"sub_sigData"`
 	SignedMessageStatus *MessageStatus               `protobuf:"bytes,12,opt,name=signedMessageStatus,proto3" json:"signedMessageStatus,omitempty"`

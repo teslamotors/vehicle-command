@@ -191,6 +191,7 @@ type KeyIdentity struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to IdentityType:
+	//
 	//	*KeyIdentity_PublicKey
 	//	*KeyIdentity_Handle
 	IdentityType isKeyIdentity_IdentityType `protobuf_oneof:"identity_type"`
@@ -469,6 +470,7 @@ type SignatureData struct {
 
 	SignerIdentity *KeyIdentity `protobuf:"bytes,1,opt,name=signer_identity,json=signerIdentity,proto3" json:"signer_identity,omitempty"`
 	// Types that are assignable to SigType:
+	//
 	//	*SignatureData_AES_GCM_PersonalizedData
 	//	*SignatureData_SessionInfoTag
 	//	*SignatureData_HMAC_PersonalizedData
