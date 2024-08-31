@@ -11,11 +11,14 @@ import (
 	"time"
 
 	"github.com/teslamotors/vehicle-command/pkg/account"
+	"github.com/teslamotors/vehicle-command/pkg/action"
 	"github.com/teslamotors/vehicle-command/pkg/cli"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
+	"github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/carserver"
 	"github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/keys"
 	"github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/vcsec"
 	"github.com/teslamotors/vehicle-command/pkg/vehicle"
+
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -40,6 +43,21 @@ var (
 		"ALL":       127,
 		"WEEKDAYS":  62,
 	}
+	seats = map[string]action.SeatPosition{
+		"front-left":     action.SeatFrontLeft,
+		"front-right":    action.SeatFrontRight,
+		"2nd-row-left":   action.SeatSecondRowLeft,
+		"2nd-row-center": action.SeatSecondRowCenter,
+		"2nd-row-right":  action.SeatSecondRowRight,
+		"3rd-row-left":   action.SeatThirdRowLeft,
+		"3rd-row-right":  action.SeatThirdRowRight,
+	}
+	levels = map[string]action.Level{
+		"off":    action.LevelOff,
+		"low":    action.LevelLow,
+		"medium": action.LevelMed,
+		"high":   action.LevelHigh,
+	}
 )
 
 type Argument struct {
@@ -47,7 +65,7 @@ type Argument struct {
 	help string
 }
 
-type Handler func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error
+type Handler func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error
 
 type Command struct {
 	help             string
@@ -175,12 +193,12 @@ func checkReadiness(commandName string, havePrivateKey, haveOAuth, haveVIN bool)
 	return info, nil
 }
 
-func execute(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args []string) error {
+func execute(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args []string) error {
 	if len(args) == 0 {
 		return errors.New("missing COMMAND")
 	}
 
-	info, err := checkReadiness(args[0], car != nil && car.PrivateKeyAvailable(), acct != nil, car != nil)
+	info, err := checkReadiness(args[0], vehicle != nil && vehicle.PrivateKeyAvailable(), acct != nil, vehicle != nil)
 	if err != nil {
 		return err
 	}
@@ -201,7 +219,7 @@ func execute(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, a
 			keywords[argInfo.name] = args[index]
 			index++
 		}
-		err = info.handler(ctx, acct, car, keywords)
+		err = info.handler(ctx, acct, vehicle, keywords)
 	}
 
 	// Print command-specific help
@@ -247,40 +265,40 @@ var commands = map[string]*Command{
 		help:             "Unlock vehicle",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			return car.Unlock(ctx)
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
+			return vehicle.ExecuteAction(ctx, action.Unlock())
 		},
 	},
 	"lock": &Command{
 		help:             "Lock vehicle",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			return car.Lock(ctx)
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
+			return vehicle.ExecuteAction(ctx, action.Lock())
 		},
 	},
 	"drive": &Command{
 		help:             "Remote start vehicle",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			return car.RemoteDrive(ctx)
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
+			return vehicle.ExecuteAction(ctx, action.RemoteDrive())
 		},
 	},
 	"climate-on": &Command{
 		help:             "Turn on climate control",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			return car.ClimateOn(ctx)
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
+			return vehicle.ExecuteAction(ctx, action.ClimateOn())
 		},
 	},
 	"climate-off": &Command{
 		help:             "Turn off climate control",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			return car.ClimateOff(ctx)
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
+			return vehicle.ExecuteAction(ctx, action.ClimateOff())
 		},
 	},
 	"climate-set-temp": &Command{
@@ -290,7 +308,7 @@ var commands = map[string]*Command{
 		args: []Argument{
 			Argument{name: "TEMP", help: "Desired temperature (e.g., 70f or 21c; defaults to Celsius)"},
 		},
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
 			var degrees float32
 			var unit string
 			if _, err := fmt.Sscanf(args["TEMP"], "%f%s", &degrees, &unit); err != nil {
@@ -301,7 +319,7 @@ var commands = map[string]*Command{
 			} else if unit != "C" && unit != "c" {
 				return fmt.Errorf("temperature units must be C or F")
 			}
-			return car.ChangeClimateTemp(ctx, degrees, degrees)
+			return vehicle.ExecuteAction(ctx, action.ChangeClimateTemp(degrees, degrees))
 		},
 	},
 	"add-key": &Command{
@@ -313,7 +331,7 @@ var commands = map[string]*Command{
 			Argument{name: "ROLE", help: "One of: owner, driver, fm (fleet manager), vehicle_monitor, charging_manager"},
 			Argument{name: "FORM_FACTOR", help: "One of: nfc_card, ios_device, android_device, cloud_key"},
 		},
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
 			role, ok := keys.Role_value["ROLE_"+strings.ToUpper(args["ROLE"])]
 			if !ok {
 				return fmt.Errorf("%w: invalid ROLE", ErrCommandLineArgs)
@@ -326,7 +344,7 @@ var commands = map[string]*Command{
 			if err != nil {
 				return fmt.Errorf("invalid public key: %s", err)
 			}
-			return car.AddKeyWithRole(ctx, publicKey, keys.Role(role), vcsec.KeyFormFactor(formFactor))
+			return vehicle.AddKeyWithRole(ctx, publicKey, keys.Role(role), vcsec.KeyFormFactor(formFactor))
 		},
 	},
 	"add-key-request": &Command{
@@ -338,7 +356,7 @@ var commands = map[string]*Command{
 			Argument{name: "ROLE", help: "One of: owner, driver, fm (fleet manager), vehicle_monitor, charging_manager"},
 			Argument{name: "FORM_FACTOR", help: "One of: nfc_card, ios_device, android_device, cloud_key"},
 		},
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
 			role, ok := keys.Role_value["ROLE_"+strings.ToUpper(args["ROLE"])]
 			if !ok {
 				return fmt.Errorf("%w: invalid ROLE", ErrCommandLineArgs)
@@ -351,10 +369,10 @@ var commands = map[string]*Command{
 			if err != nil {
 				return fmt.Errorf("invalid public key: %s", err)
 			}
-			if err := car.SendAddKeyRequestWithRole(ctx, publicKey, keys.Role(role), vcsec.KeyFormFactor(formFactor)); err != nil {
+			if err := vehicle.SendAddKeyRequestWithRole(ctx, publicKey, keys.Role(role), vcsec.KeyFormFactor(formFactor)); err != nil {
 				return err
 			}
-			fmt.Printf("Sent add-key request to %s. Confirm by tapping NFC card on center console.\n", car.VIN())
+			fmt.Printf("Sent add-key request to %s. Confirm by tapping NFC card on center console.\n", vehicle.VIN())
 			return nil
 		},
 	},
@@ -365,12 +383,12 @@ var commands = map[string]*Command{
 		args: []Argument{
 			Argument{name: "PUBLIC_KEY", help: "file containing public key (or corresponding private key)"},
 		},
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
 			publicKey, err := protocol.LoadPublicKey(args["PUBLIC_KEY"])
 			if err != nil {
 				return fmt.Errorf("invalid public key: %s", err)
 			}
-			return car.RemoveKey(ctx, publicKey)
+			return vehicle.RemoveKey(ctx, publicKey)
 		},
 	},
 	"rename-key": &Command{
@@ -381,7 +399,7 @@ var commands = map[string]*Command{
 			Argument{name: "PUBLIC_KEY", help: "file containing public key (or corresponding private key)"},
 			Argument{name: "NAME", help: "New human-readable name for the public key (e.g., Dave's Phone)"},
 		},
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
 			publicKey, err := protocol.LoadPublicKey(args["PUBLIC_KEY"])
 			if err != nil {
 				return fmt.Errorf("invalid public key: %s", err)
@@ -396,7 +414,7 @@ var commands = map[string]*Command{
 		args: []Argument{
 			Argument{name: "ENDPOINT", help: "Fleet API endpoint"},
 		},
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
 			reply, err := acct.Get(ctx, args["ENDPOINT"])
 			if err != nil {
 				return err
@@ -415,7 +433,7 @@ var commands = map[string]*Command{
 		optional: []Argument{
 			Argument{name: "FILE", help: "JSON file to POST"},
 		},
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
 			var jsonBytes []byte
 			var err error
 			if filename, ok := args["FILE"]; ok {
@@ -441,8 +459,8 @@ var commands = map[string]*Command{
 		help:             "List public keys enrolled on vehicle",
 		requiresAuth:     false,
 		requiresFleetAPI: false,
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			summary, err := car.KeySummary(ctx)
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
+			summary, err := vehicle.KeySummary(ctx)
 			if err != nil {
 				return err
 			}
@@ -450,7 +468,7 @@ var commands = map[string]*Command{
 			var details *vcsec.WhitelistEntryInfo
 			for mask := summary.GetSlotMask(); mask > 0; mask >>= 1 {
 				if mask&1 == 1 {
-					details, err = car.KeyInfoBySlot(ctx, slot)
+					details, err = vehicle.KeyInfoBySlot(ctx, slot)
 					if err != nil {
 						writeErr("Error fetching slot %d: %s", slot, err)
 						if errors.Is(err, context.DeadlineExceeded) {
@@ -470,23 +488,23 @@ var commands = map[string]*Command{
 		help:             "Honk horn",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			return car.HonkHorn(ctx)
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
+			return vehicle.ExecuteAction(ctx, action.HonkHorn())
 		},
 	},
 	"ping": &Command{
 		help:             "Ping vehicle",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			return car.Ping(ctx)
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
+			return vehicle.ExecuteAction(ctx, action.Ping())
 		},
 	},
 	"flash-lights": &Command{
 		help:         "Flash lights",
 		requiresAuth: true,
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			return car.FlashLights(ctx)
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
+			return vehicle.ExecuteAction(ctx, action.FlashLights())
 		},
 	},
 	"charging-set-limit": &Command{
@@ -496,12 +514,12 @@ var commands = map[string]*Command{
 		args: []Argument{
 			Argument{name: "PERCENT", help: "Charging limit"},
 		},
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
 			limit, err := strconv.Atoi(args["PERCENT"])
 			if err != nil {
 				return fmt.Errorf("error parsing PERCENT")
 			}
-			return car.ChangeChargeLimit(ctx, int32(limit))
+			return vehicle.ExecuteAction(ctx, action.ChangeChargeLimit(int32(limit)))
 		},
 	},
 	"charging-set-amps": &Command{
@@ -511,28 +529,28 @@ var commands = map[string]*Command{
 		args: []Argument{
 			Argument{name: "AMPS", help: "Charging current"},
 		},
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
 			limit, err := strconv.Atoi(args["AMPS"])
 			if err != nil {
 				return fmt.Errorf("error parsing AMPS")
 			}
-			return car.SetChargingAmps(ctx, int32(limit))
+			return vehicle.ExecuteAction(ctx, action.SetChargingAmps(int32(limit)))
 		},
 	},
 	"charging-start": &Command{
 		help:             "Start charging",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			return car.ChargeStart(ctx)
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
+			return vehicle.ExecuteAction(ctx, action.ChargeStart())
 		},
 	},
 	"charging-stop": &Command{
 		help:             "Stop charging",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			return car.ChargeStop(ctx)
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
+			return vehicle.ExecuteAction(ctx, action.ChargeStop())
 		},
 	},
 	"charging-schedule": &Command{
@@ -542,22 +560,22 @@ var commands = map[string]*Command{
 		args: []Argument{
 			Argument{name: "MINS", help: "Time after midnight in minutes"},
 		},
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
 			minutesAfterMidnight, err := strconv.Atoi(args["MINS"])
 			if err != nil {
 				return fmt.Errorf("error parsing minutes")
 			}
 			// Convert minutes to a time.Duration
 			chargingTime := time.Duration(minutesAfterMidnight) * time.Minute
-			return car.ScheduleCharging(ctx, true, chargingTime)
+			return vehicle.ExecuteAction(ctx, action.ScheduleCharging(true, chargingTime))
 		},
 	},
 	"charging-schedule-cancel": &Command{
 		help:             "Cancel scheduled charge start",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			return car.ScheduleCharging(ctx, false, 0*time.Hour)
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
+			return vehicle.ExecuteAction(ctx, action.ScheduleCharging(false, 0*time.Hour))
 		},
 	},
 	"media-set-volume": &Command{
@@ -567,12 +585,16 @@ var commands = map[string]*Command{
 		args: []Argument{
 			Argument{name: "VOLUME", help: "Set volume (0.0-10.0"},
 		},
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
 			volume, err := strconv.ParseFloat(args["VOLUME"], 32)
 			if err != nil {
 				return fmt.Errorf("failed to parse volume")
 			}
-			return car.SetVolume(ctx, float32(volume))
+			setVolumeAction, err := action.SetVolume(float32(volume))
+			if err != nil {
+				return err
+			}
+			return vehicle.ExecuteAction(ctx, setVolumeAction)
 		},
 	},
 	"media-toggle-playback": &Command{
@@ -580,8 +602,8 @@ var commands = map[string]*Command{
 		requiresAuth:     true,
 		requiresFleetAPI: false,
 		args:             []Argument{},
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			return car.ToggleMediaPlayback(ctx)
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
+			return vehicle.ExecuteAction(ctx, action.ToggleMediaPlayback())
 		},
 	},
 	"software-update-start": &Command{
@@ -594,21 +616,21 @@ var commands = map[string]*Command{
 				help: "Time to wait before starting update. Examples: 2h, 10m.",
 			},
 		},
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
 			delay, err := time.ParseDuration(args["DELAY"])
 			if err != nil {
 				return fmt.Errorf("error parsing DELAY. Valid times are <n><unit>, where <n> is a number (decimals are allowed) and <unit> is 's, 'm', or 'h'")
 				// ...or 'ns'/'µs' if that's your cup of tea.
 			}
-			return car.ScheduleSoftwareUpdate(ctx, delay)
+			return vehicle.ExecuteAction(ctx, action.ScheduleSoftwareUpdate(delay))
 		},
 	},
 	"software-update-cancel": &Command{
 		help:             "Cancel a pending software update",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			return car.CancelSoftwareUpdate(ctx)
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
+			return vehicle.ExecuteAction(ctx, action.CancelSoftwareUpdate())
 		},
 	},
 	"sentry-mode": &Command{
@@ -618,7 +640,7 @@ var commands = map[string]*Command{
 		args: []Argument{
 			Argument{name: "STATE", help: "'on' or 'off'"},
 		},
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
 			var state bool
 			switch args["STATE"] {
 			case "on":
@@ -628,93 +650,93 @@ var commands = map[string]*Command{
 			default:
 				return fmt.Errorf("sentry mode state must be 'on' or 'off'")
 			}
-			return car.SetSentryMode(ctx, state)
+			return vehicle.ExecuteAction(ctx, action.SetSentryMode(state))
 		},
 	},
 	"wake": &Command{
 		help:             "Wake up vehicle",
 		requiresAuth:     false,
 		requiresFleetAPI: false,
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			return car.Wakeup(ctx)
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
+			return vehicle.Wakeup(ctx)
 		},
 	},
 	"tonneau-open": &Command{
 		help:             "Open Cybertruck tonneau.",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			return car.OpenTonneau(ctx)
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
+			return vehicle.ExecuteAction(ctx, action.OpenTonneau())
 		},
 	},
 	"tonneau-close": &Command{
 		help:             "Close Cybertruck tonneau.",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			return car.CloseTonneau(ctx)
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
+			return vehicle.ExecuteAction(ctx, action.CloseTonneau())
 		},
 	},
 	"tonneau-stop": &Command{
 		help:             "Stop moving Cybertruck tonneau.",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			return car.StopTonneau(ctx)
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
+			return vehicle.ExecuteAction(ctx, action.StopTonneau())
 		},
 	},
 	"trunk-open": &Command{
 		help:             "Open vehicle trunk. Note that trunk-close only works on certain vehicle types.",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			return car.OpenTrunk(ctx)
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
+			return vehicle.ExecuteAction(ctx, action.OpenTrunk())
 		},
 	},
 	"trunk-move": &Command{
 		help:             "Toggle trunk open/closed. Closing is only available on certain vehicle types.",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			return car.ActuateTrunk(ctx)
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
+			return vehicle.ExecuteAction(ctx, action.ActuateTrunk())
 		},
 	},
 	"trunk-close": &Command{
 		help:             "Closes vehicle trunk. Only available on certain vehicle types.",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			return car.CloseTrunk(ctx)
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
+			return vehicle.ExecuteAction(ctx, action.CloseTrunk())
 		},
 	},
 	"frunk-open": &Command{
 		help:             "Open vehicle frunk. Note that there's no frunk-close command!",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			return car.OpenFrunk(ctx)
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
+			return vehicle.ExecuteAction(ctx, action.OpenFrunk())
 		},
 	},
 	"charge-port-open": &Command{
 		help:             "Open charge port",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			return car.OpenChargePort(ctx)
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
+			return vehicle.ExecuteAction(ctx, action.OpenChargePort())
 		},
 	},
 	"charge-port-close": &Command{
 		help:             "Close charge port",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			return car.CloseChargePort(ctx)
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
+			return vehicle.ExecuteAction(ctx, action.CloseChargePort())
 		},
 	},
 	"autosecure-modelx": &Command{
 		help: "Close falcon-wing doors and lock vehicle. Model X only.",
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			return car.AutoSecureVehicle(ctx)
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
+			return vehicle.ExecuteAction(ctx, action.AutoSecureVehicle())
 		},
 	},
 	"session-info": &Command{
@@ -725,7 +747,7 @@ var commands = map[string]*Command{
 			Argument{name: "PUBLIC_KEY", help: "file containing public key (or corresponding private key)"},
 			Argument{name: "DOMAIN", help: "'vcsec' or 'infotainment'"},
 		},
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
 			// See SeatPosition definition for controlling backrest heaters (limited models).
 			domains := map[string]protocol.Domain{
 				"vcsec":        protocol.DomainVCSEC,
@@ -739,7 +761,7 @@ var commands = map[string]*Command{
 			if err != nil {
 				return fmt.Errorf("invalid public key: %s", err)
 			}
-			info, err := car.SessionInfo(ctx, publicKey, domain)
+			info, err := vehicle.SessionInfo(ctx, publicKey, domain)
 			if err != nil {
 				return err
 			}
@@ -755,35 +777,20 @@ var commands = map[string]*Command{
 			Argument{name: "SEAT", help: "<front|2nd-row|3rd-row>-<left|center|right> (e.g., 2nd-row-left)"},
 			Argument{name: "LEVEL", help: "off, low, medium, or high"},
 		},
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
 			// See SeatPosition definition for controlling backrest heaters (limited models).
-			seats := map[string]vehicle.SeatPosition{
-				"front-left":     vehicle.SeatFrontLeft,
-				"front-right":    vehicle.SeatFrontRight,
-				"2nd-row-left":   vehicle.SeatSecondRowLeft,
-				"2nd-row-center": vehicle.SeatSecondRowCenter,
-				"2nd-row-right":  vehicle.SeatSecondRowRight,
-				"3rd-row-left":   vehicle.SeatThirdRowLeft,
-				"3rd-row-right":  vehicle.SeatThirdRowRight,
-			}
 			position, ok := seats[args["SEAT"]]
 			if !ok {
 				return fmt.Errorf("invalid seat position")
-			}
-			levels := map[string]vehicle.Level{
-				"off":    vehicle.LevelOff,
-				"low":    vehicle.LevelLow,
-				"medium": vehicle.LevelMed,
-				"high":   vehicle.LevelHigh,
 			}
 			level, ok := levels[args["LEVEL"]]
 			if !ok {
 				return fmt.Errorf("invalid seat heater level")
 			}
-			spec := map[vehicle.SeatPosition]vehicle.Level{
+			spec := map[action.SeatPosition]action.Level{
 				position: level,
 			}
-			return car.SetSeatHeater(ctx, spec)
+			return vehicle.ExecuteAction(ctx, action.SetSeatHeater(spec))
 		},
 	},
 	"steering-wheel-heater": &Command{
@@ -793,7 +800,7 @@ var commands = map[string]*Command{
 		args: []Argument{
 			Argument{name: "STATE", help: "'on' or 'off'"},
 		},
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
 			var state bool
 			switch args["STATE"] {
 			case "on":
@@ -803,14 +810,14 @@ var commands = map[string]*Command{
 			default:
 				return fmt.Errorf("steering wheel state must be 'on' or 'off'")
 			}
-			return car.SetSteeringWheelHeater(ctx, state)
+			return vehicle.ExecuteAction(ctx, action.SetSteeringWheelHeater(state))
 		},
 	},
 	"product-info": &Command{
 		help:             "Print JSON product info",
 		requiresAuth:     false,
 		requiresFleetAPI: true,
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
 			productsJSON, err := acct.Get(ctx, "api/1/products")
 			if err != nil {
 				return err
@@ -829,13 +836,13 @@ var commands = map[string]*Command{
 		optional: []Argument{
 			Argument{name: "STATE", help: "'on' (default) or 'off'"},
 		},
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			var positions []vehicle.SeatPosition
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
+			var positions []action.SeatPosition
 			if strings.Contains(args["POSITIONS"], "L") {
-				positions = append(positions, vehicle.SeatFrontLeft)
+				positions = append(positions, action.SeatFrontLeft)
 			}
 			if strings.Contains(args["POSITIONS"], "R") {
-				positions = append(positions, vehicle.SeatFrontRight)
+				positions = append(positions, action.SeatFrontRight)
 			}
 			if len(positions) != len(args["POSITIONS"]) {
 				return fmt.Errorf("invalid seat position")
@@ -844,23 +851,23 @@ var commands = map[string]*Command{
 			if state, ok := args["STATE"]; ok && strings.ToUpper(state) == "OFF" {
 				enabled = false
 			}
-			return car.AutoSeatAndClimate(ctx, positions, enabled)
+			return vehicle.ExecuteAction(ctx, action.AutoSeatAndClimate(positions, enabled))
 		},
 	},
 	"windows-vent": &Command{
 		help:             "Vent all windows",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			return car.VentWindows(ctx)
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
+			return vehicle.ExecuteAction(ctx, action.VentWindows())
 		},
 	},
 	"windows-close": &Command{
 		help:             "Close all windows",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			return car.CloseWindows(ctx)
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
+			return vehicle.ExecuteAction(ctx, action.CloseWindows())
 		},
 	},
 	"body-controller-state": &Command{
@@ -868,8 +875,8 @@ var commands = map[string]*Command{
 		domain:           protocol.DomainVCSEC,
 		requiresAuth:     false,
 		requiresFleetAPI: false,
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			info, err := car.BodyControllerState(ctx)
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
+			info, err := vehicle.BodyControllerState(ctx)
 			if err != nil {
 				return err
 			}
@@ -887,8 +894,8 @@ var commands = map[string]*Command{
 		help:             "Erase Guest Mode user data",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			return car.EraseGuestData(ctx)
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
+			return vehicle.ExecuteAction(ctx, action.EraseGuestData())
 		},
 	},
 	"charging-schedule-add": &Command{
@@ -906,9 +913,9 @@ var commands = map[string]*Command{
 			Argument{name: "ID", help: "The ID of the charge schedule to modify. Not required for new schedules."},
 			Argument{name: "ENABLED", help: "Whether the charge schedule is enabled. Expects 'true' or 'false'. Defaults to true."},
 		},
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
 			var err error
-			schedule := vehicle.ChargeSchedule{
+			schedule := carserver.ChargeSchedule{
 				Id:      uint64(time.Now().Unix()),
 				Enabled: true,
 			}
@@ -957,7 +964,7 @@ var commands = map[string]*Command{
 				schedule.OneTime = true
 			}
 
-			if err := car.AddChargeSchedule(ctx, &schedule); err != nil {
+			if err := vehicle.ExecuteAction(ctx, action.AddChargeSchedule(&schedule)); err != nil {
 				return err
 			}
 			fmt.Printf("%d\n", schedule.Id)
@@ -974,7 +981,7 @@ var commands = map[string]*Command{
 		optional: []Argument{
 			Argument{name: "ID", help: "numeric ID of schedule to remove when TYPE set to id"},
 		},
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
 			var home, work, other bool
 			switch strings.ToUpper(args["TYPE"]) {
 			case "ID":
@@ -983,7 +990,7 @@ var commands = map[string]*Command{
 					if err != nil {
 						return errors.New("expected numeric ID")
 					}
-					return car.RemoveChargeSchedule(ctx, id)
+					return vehicle.ExecuteAction(ctx, action.RemoveChargeSchedule(id))
 				} else {
 					return errors.New("missing schedule ID")
 				}
@@ -996,7 +1003,7 @@ var commands = map[string]*Command{
 			default:
 				return errors.New("TYPE must be home|work|other|id")
 			}
-			return car.BatchRemoveChargeSchedules(ctx, home, work, other)
+			return vehicle.ExecuteAction(ctx, action.BatchRemoveChargeSchedules(home, work, other))
 		},
 	},
 	"precondition-schedule-add": &Command{
@@ -1014,9 +1021,9 @@ var commands = map[string]*Command{
 			Argument{name: "ID", help: "The ID of the precondition schedule to modify. Not required for new schedules."},
 			Argument{name: "ENABLED", help: "Whether the precondition schedule is enabled. Expects 'true' or 'false'. Defaults to true."},
 		},
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
 			var err error
-			schedule := vehicle.PreconditionSchedule{
+			schedule := carserver.PreconditionSchedule{
 				Id:      uint64(time.Now().Unix()),
 				Enabled: true,
 			}
@@ -1058,7 +1065,7 @@ var commands = map[string]*Command{
 				schedule.OneTime = true
 			}
 
-			if err := car.AddPreconditionSchedule(ctx, &schedule); err != nil {
+			if err := vehicle.ExecuteAction(ctx, action.AddPreconditionSchedule(&schedule)); err != nil {
 				return err
 			}
 			fmt.Printf("%d\n", schedule.Id)
@@ -1075,7 +1082,7 @@ var commands = map[string]*Command{
 		optional: []Argument{
 			Argument{name: "ID", help: "numeric ID of schedule to remove when TYPE set to id"},
 		},
-		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+		handler: func(ctx context.Context, acct *account.Account, vehicle *vehicle.Vehicle, args map[string]string) error {
 			var home, work, other bool
 			switch strings.ToUpper(args["TYPE"]) {
 			case "ID":
@@ -1084,7 +1091,7 @@ var commands = map[string]*Command{
 					if err != nil {
 						return errors.New("expected numeric ID")
 					}
-					return car.RemoveChargeSchedule(ctx, id)
+					return vehicle.ExecuteAction(ctx, action.RemoveChargeSchedule(id))
 				} else {
 					return errors.New("missing schedule ID")
 				}
@@ -1097,7 +1104,7 @@ var commands = map[string]*Command{
 			default:
 				return errors.New("TYPE must be home|work|other|id")
 			}
-			return car.BatchRemovePreconditionSchedules(ctx, home, work, other)
+			return vehicle.ExecuteAction(ctx, action.BatchRemovePreconditionSchedules(home, work, other))
 		},
 	},
 }

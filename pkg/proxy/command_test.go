@@ -1,7 +1,6 @@
 package proxy_test
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -9,12 +8,12 @@ import (
 
 	"github.com/teslamotors/vehicle-command/pkg/connector/inet"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
+	"github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/carserver"
 	"github.com/teslamotors/vehicle-command/pkg/proxy"
-	"github.com/teslamotors/vehicle-command/pkg/vehicle"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestExtractCommandAction(t *testing.T) {
-	ctx := context.Background()
 	params := proxy.RequestParameters{
 		"volume":        5.0,
 		"on":            true,
@@ -24,27 +23,40 @@ func TestExtractCommandAction(t *testing.T) {
 	}
 
 	tests := []struct {
-		command      string
-		params       proxy.RequestParameters
-		expectedFunc func(*vehicle.Vehicle) error
-		expected     error
+		command        string
+		params         proxy.RequestParameters
+		expectedAction *carserver.Action_VehicleAction
+		expected       error
 	}{
-		{"adjust_volume", params, func(v *vehicle.Vehicle) error { return v.SetVolume(ctx, 0.0) }, nil},
+		{"adjust_volume", params, &carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_MediaUpdateVolume{
+					MediaUpdateVolume: &carserver.MediaUpdateVolume{
+						MediaVolume: &carserver.MediaUpdateVolume_VolumeAbsoluteFloat{
+							VolumeAbsoluteFloat: 5,
+						},
+					},
+				},
+			},
+		}, nil},
 		{"adjust_volume", nil, nil, &protocol.NominalError{Details: fmt.Errorf("missing volume param")}},
 		{"remote_boombox", params, nil, proxy.ErrCommandNotImplemented},
 		{"invalid_command", params, nil, &inet.HttpError{Code: http.StatusBadRequest, Message: "{\"response\":null,\"error\":\"invalid_command\",\"error_description\":\"\"}"}},
 	}
 
 	for _, test := range tests {
-		action, err := proxy.ExtractCommandAction(ctx, test.command, test.params)
+		action, err := proxy.ExtractCommandAction(test.command, test.params)
 
 		if errors.Is(err, test.expected) {
 			if test.expected != nil && action != nil {
-
 				t.Errorf("Expected error %#v but got action %p for command %#v", test.expected, action, test.command)
 			}
 		} else if err != nil && err.Error() != test.expected.Error() {
 			t.Errorf("Unexpected error for command %s: %v", test.command, err)
+		}
+
+		if test.expectedAction != nil && !proto.Equal(test.expectedAction.VehicleAction, action.(*carserver.Action_VehicleAction).VehicleAction) {
+			t.Errorf("expected action %+v not equal to actual %+v", test.expectedAction, action)
 		}
 	}
 }

@@ -10,7 +10,10 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/teslamotors/vehicle-command/internal/authentication"
 	"github.com/teslamotors/vehicle-command/internal/log"
+	"github.com/teslamotors/vehicle-command/pkg/account"
+	"github.com/teslamotors/vehicle-command/pkg/cache"
 	"github.com/teslamotors/vehicle-command/pkg/cli"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
 	"github.com/teslamotors/vehicle-command/pkg/proxy"
@@ -68,6 +71,14 @@ func Usage() {
 	flag.PrintDefaults()
 }
 
+type proxyAccountProvider struct {
+	*account.Account
+}
+
+func (p *proxyAccountProvider) GetVehicle(ctx context.Context, id string, key authentication.ECDHPrivateKey, cache *cache.SessionCache) (proxy.Vehicle, error) {
+	return p.Account.GetVehicle(ctx, id, key, cache)
+}
+
 func main() {
 	config, err := cli.NewConfig(cli.FlagPrivateKey)
 
@@ -113,10 +124,10 @@ func main() {
 	}
 
 	log.Debug("Creating proxy")
-	p, err := proxy.New(context.Background(), skey, cacheSize)
-	if err != nil {
-		return
-	}
+	p := proxy.New(context.Background(), skey, cacheSize, func(oauthToken, userAgent string) (proxy.Account, error) {
+		acct, err := account.New(oauthToken, userAgent)
+		return &proxyAccountProvider{acct}, err
+	})
 	p.Timeout = httpConfig.timeout
 	addr := fmt.Sprintf("%s:%d", httpConfig.host, httpConfig.port)
 	log.Info("Listening on %s", addr)

@@ -1,17 +1,13 @@
 package proxy
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
-	"github.com/teslamotors/vehicle-command/pkg/connector/inet"
+	"github.com/teslamotors/vehicle-command/pkg/action"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
-	"github.com/teslamotors/vehicle-command/pkg/vehicle"
-
 	carserver "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/carserver"
 )
 
@@ -22,16 +18,16 @@ var (
 	// ErrCommandUseRESTAPI indicates vehicle/command is not supported by the protocol
 	ErrCommandUseRESTAPI = errors.New("command requires using the REST API")
 
-	seatPositions = []vehicle.SeatPosition{
-		vehicle.SeatFrontLeft,
-		vehicle.SeatFrontRight,
-		vehicle.SeatSecondRowLeft,
-		vehicle.SeatSecondRowLeftBack,
-		vehicle.SeatSecondRowCenter,
-		vehicle.SeatSecondRowRight,
-		vehicle.SeatSecondRowRightBack,
-		vehicle.SeatThirdRowLeft,
-		vehicle.SeatThirdRowRight,
+	seatPositions = []action.SeatPosition{
+		action.SeatFrontLeft,
+		action.SeatFrontRight,
+		action.SeatSecondRowLeft,
+		action.SeatSecondRowLeftBack,
+		action.SeatSecondRowCenter,
+		action.SeatSecondRowRight,
+		action.SeatSecondRowRightBack,
+		action.SeatThirdRowLeft,
+		action.SeatThirdRowRight,
 	}
 
 	dayNamesBitMask = map[string]int32{
@@ -58,7 +54,7 @@ var (
 type RequestParameters map[string]interface{}
 
 // ExtractCommandAction use command to define which action should be executed.
-func ExtractCommandAction(ctx context.Context, command string, params RequestParameters) (func(*vehicle.Vehicle) error, error) {
+func ExtractCommandAction(command string, params RequestParameters) (interface{}, error) {
 	switch command {
 	// Media controls
 	case "adjust_volume":
@@ -66,45 +62,43 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		if err != nil {
 			return nil, err
 		}
-		return func(v *vehicle.Vehicle) error { return v.SetVolume(ctx, float32(volume)) }, nil
+		return action.SetVolume(float32(volume))
 	case "remote_boombox":
 		return nil, ErrCommandNotImplemented
 	case "media_toggle_playback":
-		return func(v *vehicle.Vehicle) error { return v.ToggleMediaPlayback(ctx) }, nil
+		return action.ToggleMediaPlayback(), nil
 	// Climate Controls
 	case "auto_conditioning_start":
-		return func(v *vehicle.Vehicle) error { return v.ClimateOn(ctx) }, nil
+		return action.ClimateOn(), nil
 	case "auto_conditioning_stop":
-		return func(v *vehicle.Vehicle) error { return v.ClimateOff(ctx) }, nil
+		return action.ClimateOff(), nil
 	case "charge_max_range":
-		return func(v *vehicle.Vehicle) error { return v.ChargeMaxRange(ctx) }, nil
+		return action.ChargeMaxRange(), nil
 	case "remote_seat_cooler_request":
 		level, seat, err := params.settingForCoolerSeatPosition()
 		if err != nil {
 			return nil, err
 		}
-		return func(v *vehicle.Vehicle) error { return v.SetSeatCooler(ctx, level, seat) }, nil
+		return action.SetSeatCooler(level, seat)
 	case "remote_seat_heater_request":
 		setting, err := params.settingForHeatSeatPosition()
 		if err != nil {
 			return nil, err
 		}
 
-		return func(v *vehicle.Vehicle) error { return v.SetSeatHeater(ctx, setting) }, nil
+		return action.SetSeatHeater(setting), nil
 	case "remote_auto_seat_climate_request":
 		seat, enabled, err := params.settingForAutoSeatPosition()
 		if err != nil {
 			return nil, err
 		}
-		return func(v *vehicle.Vehicle) error {
-			return v.AutoSeatAndClimate(ctx, []vehicle.SeatPosition{seat}, enabled)
-		}, nil
+		return action.AutoSeatAndClimate([]action.SeatPosition{seat}, enabled), nil
 	case "remote_steering_wheel_heater_request":
 		on, err := params.getBool("on", true)
 		if err != nil {
 			return nil, err
 		}
-		return func(v *vehicle.Vehicle) error { return v.SetSteeringWheelHeater(ctx, on) }, nil
+		return action.SetSteeringWheelHeater(on), nil
 	case "set_bioweapon_mode":
 		on, err := params.getBool("on", true)
 		if err != nil {
@@ -114,7 +108,7 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		if err != nil {
 			return nil, err
 		}
-		return func(v *vehicle.Vehicle) error { return v.SetBioweaponDefenseMode(ctx, on, override) }, nil
+		return action.SetBioweaponDefenseMode(on, override), nil
 	case "set_cabin_overheat_protection":
 		on, err := params.getBool("on", true)
 		if err != nil {
@@ -124,7 +118,7 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		if err != nil {
 			return nil, err
 		}
-		return func(v *vehicle.Vehicle) error { return v.SetCabinOverheatProtection(ctx, on, fanOnly) }, nil
+		return action.SetCabinOverheatProtection(on, fanOnly), nil
 	case "set_climate_keeper_mode":
 		// 0 : off
 		// 1 : On
@@ -138,17 +132,13 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		if err != nil {
 			return nil, err
 		}
-		return func(v *vehicle.Vehicle) error {
-			return v.SetClimateKeeperMode(ctx, vehicle.ClimateKeeperMode(mode), override)
-		}, nil
+		return action.SetClimateKeeperMode(action.ClimateKeeperMode(mode), override), nil
 	case "set_cop_temp":
 		level, err := params.getNumber("cop_temp", true)
 		if err != nil {
 			return nil, err
 		}
-		return func(v *vehicle.Vehicle) error {
-			return v.SetCabinOverheatProtectionTemperature(ctx, vehicle.Level(level))
-		}, nil
+		return action.SetCabinOverheatProtectionTemperature(action.Level(level)), nil
 	case "set_preconditioning_max":
 		on, err := params.getBool("on", true)
 		if err != nil {
@@ -158,7 +148,7 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		if err != nil {
 			return nil, err
 		}
-		return func(v *vehicle.Vehicle) error { return v.SetPreconditioningMax(ctx, on, override) }, nil
+		return action.SetPreconditioningMax(on, override), nil
 	case "set_temps":
 		driverTemp, err := params.getNumber("driver_temp", false)
 		if err != nil {
@@ -168,51 +158,47 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		if err != nil {
 			return nil, err
 		}
-		return func(v *vehicle.Vehicle) error {
-			return v.ChangeClimateTemp(ctx, float32(driverTemp), float32(passengerTemp))
-		}, nil
+		return action.ChangeClimateTemp(float32(driverTemp), float32(passengerTemp)), nil
 	// vehicle.Vehicle actuation commands
+	case "charge_port_door_open":
+		return action.OpenChargePort(), nil
+	case "charge_port_door_close":
+		return action.CloseChargePort(), nil
+	case "flash_lights":
+		return action.FlashLights(), nil
+	case "honk_horn":
+		return action.HonkHorn(), nil
 	case "actuate_trunk":
 		if which, err := params.getString("which_trunk", false); err == nil {
 			switch which {
 			case "front":
-				return func(v *vehicle.Vehicle) error { return v.OpenFrunk(ctx) }, nil
+				return action.OpenFrunk(), nil
 			case "rear":
-				return func(v *vehicle.Vehicle) error { return v.OpenTrunk(ctx) }, nil
+				return action.OpenTrunk(), nil
 			default:
 				return nil, &protocol.NominalError{Details: protocol.NewError("invalid_value", false, false)}
 			}
 		}
-		return func(v *vehicle.Vehicle) error { return v.OpenTrunk(ctx) }, nil
-	case "charge_port_door_open":
-		return func(v *vehicle.Vehicle) error { return v.ChargePortOpen(ctx) }, nil
-	case "charge_port_door_close":
-		return func(v *vehicle.Vehicle) error { return v.ChargePortClose(ctx) }, nil
-	case "flash_lights":
-		return func(v *vehicle.Vehicle) error { return v.FlashLights(ctx) }, nil
-	case "honk_horn":
-		return func(v *vehicle.Vehicle) error { return v.HonkHorn(ctx) }, nil
-	case "remote_start_drive":
-		return func(v *vehicle.Vehicle) error { return v.RemoteDrive(ctx) }, nil
+		return action.OpenTrunk(), nil
 	case "open_tonneau":
-		return func(v *vehicle.Vehicle) error { return v.OpenTonneau(ctx) }, nil
+		return action.OpenTonneau(), nil
 	case "close_tonneau":
-		return func(v *vehicle.Vehicle) error { return v.CloseTonneau(ctx) }, nil
+		return action.CloseTonneau(), nil
 	case "stop_tonneau":
-		return func(v *vehicle.Vehicle) error { return v.StopTonneau(ctx) }, nil
+		return action.StopTonneau(), nil
 	// Charging controls
 	case "charge_standard":
-		return func(v *vehicle.Vehicle) error { return v.ChargeStandardRange(ctx) }, nil
+		return action.ChargeStandardRange(), nil
 	case "charge_start":
-		return func(v *vehicle.Vehicle) error { return v.ChargeStart(ctx) }, nil
+		return action.ChargeStart(), nil
 	case "charge_stop":
-		return func(v *vehicle.Vehicle) error { return v.ChargeStop(ctx) }, nil
+		return action.ChargeStop(), nil
 	case "set_charging_amps":
 		amps, err := params.getNumber("charging_amps", true)
 		if err != nil {
 			return nil, err
 		}
-		return func(v *vehicle.Vehicle) error { return v.SetChargingAmps(ctx, int32(amps)) }, nil
+		return action.SetChargingAmps(int32(amps)), nil
 	case "set_scheduled_charging":
 		on, err := params.getBool("enable", true)
 		if err != nil {
@@ -222,20 +208,20 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		if err != nil {
 			return nil, err
 		}
-		return func(v *vehicle.Vehicle) error { return v.ScheduleCharging(ctx, on, scheduledTime) }, nil
+		return action.ScheduleCharging(on, scheduledTime), nil
 	case "set_charge_limit":
 		limit, err := params.getNumber("percent", true)
 		if err != nil {
 			return nil, err
 		}
-		return func(v *vehicle.Vehicle) error { return v.ChangeChargeLimit(ctx, int32(limit)) }, nil
+		return action.ChangeChargeLimit(int32(limit)), nil
 	case "set_scheduled_departure":
 		enable, err := params.getBool("enable", true)
 		if err != nil {
 			return nil, err
 		}
 		if !enable {
-			return func(v *vehicle.Vehicle) error { return v.ClearScheduledDeparture(ctx) }, nil
+			return action.ClearScheduledDeparture(), nil
 		}
 
 		offPeakPolicy, err := params.getPolicy("off_peak_charging_enabled", "off_peak_charging_weekdays_only")
@@ -255,9 +241,7 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		if err != nil {
 			return nil, err
 		}
-		return func(v *vehicle.Vehicle) error {
-			return v.ScheduleDeparture(ctx, departureTime, endOffPeakTime, preconditionPolicy, offPeakPolicy)
-		}, nil
+		return action.ScheduleDeparture(departureTime, endOffPeakTime, preconditionPolicy, offPeakPolicy)
 	case "add_charge_schedule":
 		lat, err := params.getNumber("lat", true)
 		if err != nil {
@@ -303,7 +287,7 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		if err != nil {
 			return nil, err
 		}
-		schedule := vehicle.ChargeSchedule{
+		schedule := carserver.ChargeSchedule{
 			DaysOfWeek:   daysOfWeek,
 			Latitude:     float32(lat),
 			Longitude:    float32(lon),
@@ -315,7 +299,7 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 			Enabled:      enabled,
 			OneTime:      oneTime,
 		}
-		return func(v *vehicle.Vehicle) error { return v.AddChargeSchedule(ctx, &schedule) }, nil
+		return action.AddChargeSchedule(&schedule), nil
 	case "add_precondition_schedule":
 		lat, err := params.getNumber("lat", true)
 		if err != nil {
@@ -349,7 +333,7 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		if err != nil {
 			return nil, err
 		}
-		schedule := vehicle.PreconditionSchedule{
+		schedule := carserver.PreconditionSchedule{
 			DaysOfWeek:       daysOfWeek,
 			Latitude:         float32(lat),
 			Longitude:        float32(lon),
@@ -358,19 +342,19 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 			OneTime:          oneTime,
 			Enabled:          enabled,
 		}
-		return func(v *vehicle.Vehicle) error { return v.AddPreconditionSchedule(ctx, &schedule) }, nil
+		return action.AddPreconditionSchedule(&schedule), nil
 	case "remove_charge_schedule":
 		id, err := params.getNumber("id", true)
 		if err != nil {
 			return nil, err
 		}
-		return func(v *vehicle.Vehicle) error { return v.RemoveChargeSchedule(ctx, uint64(id)) }, nil
+		return action.RemoveChargeSchedule(uint64(id)), nil
 	case "remove_precondition_schedule":
 		id, err := params.getNumber("id", true)
 		if err != nil {
 			return nil, err
 		}
-		return func(v *vehicle.Vehicle) error { return v.RemovePreconditionSchedule(ctx, uint64(id)) }, nil
+		return action.RemovePreconditionSchedule(uint64(id)), nil
 	case "set_managed_charge_current_request":
 		return nil, ErrCommandUseRESTAPI
 	case "set_managed_charger_location":
@@ -386,32 +370,32 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		if err != nil {
 			return nil, err
 		}
-		return func(v *vehicle.Vehicle) error { return v.SetPINToDrive(ctx, on, password) }, nil
-	case "wake_up":
-		return func(v *vehicle.Vehicle) error { return v.Wakeup(ctx) }, nil
+		return action.SetPINToDrive(on, password), nil
 	// Security
+	case "remote_start_drive":
+		return action.RemoteDrive(), nil
 	case "door_lock":
-		return func(v *vehicle.Vehicle) error { return v.Lock(ctx) }, nil
+		return action.Lock(), nil
 	case "door_unlock":
-		return func(v *vehicle.Vehicle) error { return v.Unlock(ctx) }, nil
+		return action.Unlock(), nil
 	case "erase_user_data":
-		return func(v *vehicle.Vehicle) error { return v.EraseGuestData(ctx) }, nil
+		return action.EraseGuestData(), nil
 	case "reset_pin_to_drive_pin":
-		return func(v *vehicle.Vehicle) error { return v.ResetPIN(ctx) }, nil
+		return action.ResetPIN(), nil
 	case "reset_valet_pin":
-		return func(v *vehicle.Vehicle) error { return v.ResetValetPin(ctx) }, nil
+		return action.ResetValetPin(), nil
 	case "guest_mode":
 		on, err := params.getBool("enable", true)
 		if err != nil {
 			return nil, err
 		}
-		return func(v *vehicle.Vehicle) error { return v.SetGuestMode(ctx, on) }, nil
+		return action.SetGuestMode(on), nil
 	case "set_sentry_mode":
 		on, err := params.getBool("on", true)
 		if err != nil {
 			return nil, err
 		}
-		return func(v *vehicle.Vehicle) error { return v.SetSentryMode(ctx, on) }, nil
+		return action.SetSentryMode(on), nil
 	case "set_valet_mode":
 		on, err := params.getBool("on", true)
 		if err != nil {
@@ -421,37 +405,37 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		if err != nil {
 			return nil, err
 		}
-		return func(v *vehicle.Vehicle) error { return v.SetValetMode(ctx, on, password) }, nil
+		return action.SetValetMode(on, password), nil
 	case "set_vehicle_name":
 		name, err := params.getString("vehicle_name", true)
 		if err != nil {
 			return nil, err
 		}
-		return func(v *vehicle.Vehicle) error { return v.SetVehicleName(ctx, name) }, nil
+		return action.SetVehicleName(name), nil
 	case "speed_limit_activate":
 		pin, err := params.getString("pin", true)
 		if err != nil {
 			return nil, err
 		}
-		return func(v *vehicle.Vehicle) error { return v.ActivateSpeedLimit(ctx, pin) }, nil
+		return action.ActivateSpeedLimit(pin), nil
 	case "speed_limit_deactivate":
 		pin, err := params.getString("pin", true)
 		if err != nil {
 			return nil, err
 		}
-		return func(v *vehicle.Vehicle) error { return v.DeactivateSpeedLimit(ctx, pin) }, nil
+		return action.DeactivateSpeedLimit(pin), nil
 	case "speed_limit_clear_pin":
 		pin, err := params.getString("pin", true)
 		if err != nil {
 			return nil, err
 		}
-		return func(v *vehicle.Vehicle) error { return v.ClearSpeedLimitPIN(ctx, pin) }, nil
+		return action.ClearSpeedLimitPIN(pin), nil
 	case "speed_limit_set_limit":
 		speedMPH, err := params.getNumber("limit_mph", true)
 		if err != nil {
 			return nil, err
 		}
-		return func(v *vehicle.Vehicle) error { return v.SpeedLimitSetLimitMPH(ctx, speedMPH) }, nil
+		return action.SpeedLimitSetLimitMPH(speedMPH), nil
 	case "trigger_homelink":
 		lat, err := params.getNumber("lat", true)
 		if err != nil {
@@ -461,18 +445,16 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		if err != nil {
 			return nil, err
 		}
-		return func(v *vehicle.Vehicle) error { return v.TriggerHomelink(ctx, float32(lat), float32(lon)) }, nil
+		return action.TriggerHomelink(float32(lat), float32(lon)), nil
 	// Updates
 	case "schedule_software_update":
 		offsetSeconds, err := params.getNumber("offset_sec", true)
 		if err != nil {
 			return nil, err
 		}
-		return func(v *vehicle.Vehicle) error {
-			return v.ScheduleSoftwareUpdate(ctx, time.Duration(offsetSeconds)*time.Second)
-		}, nil
+		return action.ScheduleSoftwareUpdate(time.Duration(offsetSeconds) * time.Second), nil
 	case "cancel_software_update":
-		return func(v *vehicle.Vehicle) error { return v.CancelSoftwareUpdate(ctx) }, nil
+		return action.CancelSoftwareUpdate(), nil
 	// Sharing options. These endpoints often require server-side processing, which prevents strict
 	// end-to-end authentication.
 	case "navigation_request":
@@ -485,14 +467,14 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		}
 		switch cmd {
 		case "vent":
-			return func(v *vehicle.Vehicle) error { return v.VentWindows(ctx) }, nil
+			return action.VentWindows(), nil
 		case "close":
-			return func(v *vehicle.Vehicle) error { return v.CloseWindows(ctx) }, nil
+			return action.CloseWindows(), nil
 		default:
 			return nil, errors.New("command must be 'vent' or 'close'")
 		}
 	default:
-		return nil, &inet.HttpError{Code: http.StatusBadRequest, Message: "{\"response\":null,\"error\":\"invalid_command\",\"error_description\":\"\"}"}
+		return nil, nil
 	}
 }
 
@@ -562,7 +544,7 @@ func (p RequestParameters) getDays(key string, required bool) (int32, error) {
 	return mask, nil
 }
 
-func (p RequestParameters) getPolicy(enabledKey string, weekdaysOnlyKey string) (vehicle.ChargingPolicy, error) {
+func (p RequestParameters) getPolicy(enabledKey string, weekdaysOnlyKey string) (action.ChargingPolicy, error) {
 	enabled, err := p.getBool(enabledKey, false)
 	if err != nil {
 		return 0, err
@@ -572,12 +554,12 @@ func (p RequestParameters) getPolicy(enabledKey string, weekdaysOnlyKey string) 
 		return 0, err
 	}
 	if weekdaysOnly {
-		return vehicle.ChargingPolicyWeekdays, nil
+		return action.ChargingPolicyWeekdays, nil
 	}
 	if enabled {
-		return vehicle.ChargingPolicyAllDays, nil
+		return action.ChargingPolicyAllDays, nil
 	}
-	return vehicle.ChargingPolicyOff, nil
+	return action.ChargingPolicyOff, nil
 }
 
 func (p RequestParameters) getTimeAfterMidnight(key string) (time.Duration, error) {
@@ -589,7 +571,7 @@ func (p RequestParameters) getTimeAfterMidnight(key string) (time.Duration, erro
 	return time.Duration(minutes) * time.Minute, nil
 }
 
-func (p RequestParameters) settingForHeatSeatPosition() (map[vehicle.SeatPosition]vehicle.Level, error) {
+func (p RequestParameters) settingForHeatSeatPosition() (map[action.SeatPosition]action.Level, error) {
 	index, err := p.getNumber("seat_position", true)
 	if err != nil {
 		return nil, err
@@ -603,24 +585,24 @@ func (p RequestParameters) settingForHeatSeatPosition() (map[vehicle.SeatPositio
 		return nil, err
 	}
 
-	return map[vehicle.SeatPosition]vehicle.Level{seatPositions[int(index)]: vehicle.Level(level)}, nil
+	return map[action.SeatPosition]action.Level{seatPositions[int(index)]: action.Level(level)}, nil
 }
 
 // Note: The API uses 0-3
-func (p RequestParameters) settingForCoolerSeatPosition() (vehicle.Level, vehicle.SeatPosition, error) {
+func (p RequestParameters) settingForCoolerSeatPosition() (action.Level, action.SeatPosition, error) {
 	position, err := p.getNumber("seat_position", true)
 	if err != nil {
 		return 0, 0, err
 	}
 
-	var seat vehicle.SeatPosition
+	var seat action.SeatPosition
 	switch carserver.HvacSeatCoolerActions_HvacSeatCoolerPosition_E(position) {
 	case carserver.HvacSeatCoolerActions_HvacSeatCoolerPosition_FrontLeft:
-		seat = vehicle.SeatFrontLeft
+		seat = action.SeatFrontLeft
 	case carserver.HvacSeatCoolerActions_HvacSeatCoolerPosition_FrontRight:
-		seat = vehicle.SeatFrontRight
+		seat = action.SeatFrontRight
 	default:
-		seat = vehicle.SeatUnknown
+		seat = action.SeatUnknown
 	}
 
 	level, err := p.getNumber("seat_cooler_level", true)
@@ -628,10 +610,10 @@ func (p RequestParameters) settingForCoolerSeatPosition() (vehicle.Level, vehicl
 		return 0, 0, err
 	}
 
-	return vehicle.Level(level - 1), seat, nil
+	return action.Level(level - 1), seat, nil
 }
 
-func (p RequestParameters) settingForAutoSeatPosition() (vehicle.SeatPosition, bool, error) {
+func (p RequestParameters) settingForAutoSeatPosition() (action.SeatPosition, bool, error) {
 	position, err := p.getNumber("auto_seat_position", true)
 	if err != nil {
 		return 0, false, err
@@ -642,14 +624,14 @@ func (p RequestParameters) settingForAutoSeatPosition() (vehicle.SeatPosition, b
 		return 0, false, err
 	}
 
-	var seat vehicle.SeatPosition
+	var seat action.SeatPosition
 	switch carserver.AutoSeatClimateAction_AutoSeatPosition_E(position) {
 	case carserver.AutoSeatClimateAction_AutoSeatPosition_FrontLeft:
-		seat = vehicle.SeatFrontLeft
+		seat = action.SeatFrontLeft
 	case carserver.AutoSeatClimateAction_AutoSeatPosition_FrontRight:
-		seat = vehicle.SeatFrontRight
+		seat = action.SeatFrontRight
 	default:
-		seat = vehicle.SeatUnknown
+		seat = action.SeatUnknown
 	}
 
 	return seat, enabled, nil

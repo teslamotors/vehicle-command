@@ -19,4 +19,7 @@ install: test
 doc-images:
 	docker run -v ./:/data plantuml/plantuml "doc"
 
-.PHONY: install build test format set-version doc-images
+generate-mocks:
+	mockgen -source=pkg/proxy/proxy.go -destination mocks/proxy.go -package=mocks -mock_names Vehicle=ProxyVehicle,Account=ProxyAccount
+
+.PHONY: install build test format set-version doc-images generate-mocks
