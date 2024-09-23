@@ -61,7 +61,7 @@ func main() {
 
 	// This example program sends commands over the Internet, which requires a Tesla account login
 	// token. The protocol can also work over BLE; see other programs in the example directory.
-	acct, err := account.New(string(oauthToken), userAgent)
+	acct, err := account.New(string(oauthToken), userAgent, "")
 	if err != nil {
 		logger.Printf("Authentication error: %s", err)
 		return

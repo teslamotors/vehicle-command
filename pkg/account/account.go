@@ -114,7 +114,7 @@ func (p *oauthPayload) domain() string {
 
 // New returns an [Account] that can be used to fetch a [vehicle.Vehicle].
 // Optional userAgent can be passed in - otherwise it will be generated from code
-func New(oauthToken, userAgent string) (*Account, error) {
+func New(oauthToken, userAgent, fleetApiHost string) (*Account, error) {
 	parts := strings.Split(oauthToken, ".")
 	if len(parts) != 3 {
 		return nil, fmt.Errorf("client provided malformed OAuth token")
@@ -128,9 +128,14 @@ func New(oauthToken, userAgent string) (*Account, error) {
 		return nil, fmt.Errorf("client provided malformed OAuth token: %s", err)
 	}
 
-	domain := payload.domain()
-	if domain == "" {
-		return nil, fmt.Errorf("client provided OAuth token with invalid audiences")
+	domain := ""
+	if fleetApiHost != "" {
+		domain, _ = strings.CutPrefix(fleetApiHost, "https://")
+	} else {
+		domain = payload.domain()
+		if domain == "" {
+			return nil, fmt.Errorf("client provided OAuth token with invalid audiences")
+		}
 	}
 	return &Account{
 		UserAgent:  buildUserAgent(userAgent),

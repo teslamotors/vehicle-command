@@ -32,22 +32,28 @@ const (
 	proxyProtocolVersion = "tesla-http-proxy/1.1.0"
 )
 
-func getAccount(req *http.Request) (*account.Account, error) {
+func getAccount(req *http.Request, fleetApiHost string) (*account.Account, error) {
 	token, ok := strings.CutPrefix(req.Header.Get("Authorization"), "Bearer ")
 	if !ok {
 		return nil, fmt.Errorf("client did not provide an OAuth token")
 	}
-	return account.New(token, proxyProtocolVersion)
+	fleetapiHostFromReq := req.Header.Get("Fleetapi-Host")
+	if fleetapiHostFromReq != "" {
+		fleetApiHost = fleetapiHostFromReq
+	}
+
+	return account.New(token, proxyProtocolVersion, fleetApiHost)
 }
 
 // Proxy exposes an HTTP API for sending vehicle commands.
 type Proxy struct {
 	Timeout time.Duration
 
-	commandKey  protocol.ECDHPrivateKey
-	sessions    *cache.SessionCache
-	vinLock     sync.Map
-	unsupported sync.Map
+	commandKey   protocol.ECDHPrivateKey
+	sessions     *cache.SessionCache
+	vinLock      sync.Map
+	unsupported  sync.Map
+	fleetApiHost string
 }
 
 func (p *Proxy) markUnsupportedVIN(vin string) {
@@ -92,11 +98,12 @@ func (p *Proxy) unlockVIN(vin string) {
 //
 // Vehicles must have the public part of skey enrolled on their keychains. (This is a
 // command-authentication key, not a TLS key.)
-func New(ctx context.Context, skey protocol.ECDHPrivateKey, cacheSize int) (*Proxy, error) {
+func New(ctx context.Context, skey protocol.ECDHPrivateKey, cacheSize int, fleetApiHost string) (*Proxy, error) {
 	return &Proxy{
-		Timeout:    DefaultTimeout,
-		commandKey: skey,
-		sessions:   cache.New(cacheSize),
+		Timeout:      DefaultTimeout,
+		commandKey:   skey,
+		sessions:     cache.New(cacheSize),
+		fleetApiHost: fleetApiHost,
 	}, nil
 }
 
@@ -216,7 +223,7 @@ func (p *Proxy) forwardRequest(host string, w http.ResponseWriter, req *http.Req
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	log.Info("Received %s request for %s", req.Method, req.URL.Path)
 
-	acct, err := getAccount(req)
+	acct, err := getAccount(req, p.fleetApiHost)
 	if err != nil {
 		writeJSONError(w, http.StatusForbidden, err)
 		return

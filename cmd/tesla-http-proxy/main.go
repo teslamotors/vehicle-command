@@ -22,12 +22,13 @@ const (
 )
 
 const (
-	EnvTlsCert = "TESLA_HTTP_PROXY_TLS_CERT"
-	EnvTlsKey  = "TESLA_HTTP_PROXY_TLS_KEY"
-	EnvHost    = "TESLA_HTTP_PROXY_HOST"
-	EnvPort    = "TESLA_HTTP_PROXY_PORT"
-	EnvTimeout = "TESLA_HTTP_PROXY_TIMEOUT"
-	EnvVerbose = "TESLA_VERBOSE"
+	EnvTlsCert      = "TESLA_HTTP_PROXY_TLS_CERT"
+	EnvTlsKey       = "TESLA_HTTP_PROXY_TLS_KEY"
+	EnvHost         = "TESLA_HTTP_PROXY_HOST"
+	EnvPort         = "TESLA_HTTP_PROXY_PORT"
+	EnvTimeout      = "TESLA_HTTP_PROXY_TIMEOUT"
+	EnvVerbose      = "TESLA_VERBOSE"
+	EnvFleetapiHost = "TESLA_HTTP_PROXY_FLEETAPI_HOST"
 )
 
 const nonLocalhostWarning = `
@@ -42,6 +43,7 @@ type HttpProxyConfig struct {
 	host         string
 	port         int
 	timeout      time.Duration
+	fleetApiHost string
 }
 
 var (
@@ -55,6 +57,7 @@ func init() {
 	flag.StringVar(&httpConfig.host, "host", "localhost", "Proxy server `hostname`")
 	flag.IntVar(&httpConfig.port, "port", defaultPort, "`Port` to listen on")
 	flag.DurationVar(&httpConfig.timeout, "timeout", proxy.DefaultTimeout, "Timeout interval when sending commands")
+	flag.StringVar(&httpConfig.fleetApiHost, "fleetapi-host", "", "Fleetapi host")
 }
 
 func Usage() {
@@ -113,7 +116,7 @@ func main() {
 	}
 
 	log.Debug("Creating proxy")
-	p, err := proxy.New(context.Background(), skey, cacheSize)
+	p, err := proxy.New(context.Background(), skey, cacheSize, httpConfig.fleetApiHost)
 	if err != nil {
 		return
 	}
@@ -151,6 +154,10 @@ func readFromEnvironment() error {
 		if verbose, ok := os.LookupEnv(EnvVerbose); ok {
 			httpConfig.verbose = verbose != "false" && verbose != "0"
 		}
+	}
+
+	if httpConfig.fleetApiHost == "" {
+		httpConfig.fleetApiHost = os.Getenv(EnvFleetapiHost)
 	}
 
 	var err error

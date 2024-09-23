@@ -33,7 +33,7 @@ func TestNewAccount(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			acct, err := New(test.jwt, "")
+			acct, err := New(test.jwt, "", "")
 			if (err != nil) != test.shouldError {
 				t.Errorf("Unexpected result: err = %v, shouldError = %v", err, test.shouldError)
 			}
@@ -50,7 +50,7 @@ func TestDomainDefault(t *testing.T) {
 		Audiences: []string{"https://auth.tesla.com/nts"},
 	}
 
-	acct, err := New(makeTestJWT(payload), "")
+	acct, err := New(makeTestJWT(payload), "", "")
 	if err != nil {
 		t.Fatalf("Returned error on valid JWT: %s", err)
 	}
@@ -70,11 +70,32 @@ func TestDomainExtraction(t *testing.T) {
 		OUCode: "EU",
 	}
 
-	acct, err := New(makeTestJWT(payload), "")
+	acct, err := New(makeTestJWT(payload), "", "")
 	if err != nil {
 		t.Fatalf("Returned error on valid JWT: %s", err)
 	}
 	expectedHost := "fleet-api.prd.eu.vn.cloud.tesla.com"
+	if acct == nil || acct.Host != expectedHost {
+		t.Errorf("acct = %+v, expected Host = %s", acct, expectedHost)
+	}
+}
+
+// TestDomainExtraction tests the extraction of the correct domain based on OUCode.
+func TestTargetHost(t *testing.T) {
+	payload := &oauthPayload{
+		Audiences: []string{
+			"https://auth.tesla.com/nts",
+			"https://fleet-api.prd.na.vn.cloud.tesla.com",
+			"https://fleet-api.prd.eu.vn.cloud.tesla.com",
+		},
+		OUCode: "EU",
+	}
+
+	acct, err := New(makeTestJWT(payload), "", "https://fleet-api.prd.na.vn.cloud.tesla.com")
+	if err != nil {
+		t.Fatalf("Returned error on valid JWT: %s", err)
+	}
+	expectedHost := "fleet-api.prd.na.vn.cloud.tesla.com"
 	if acct == nil || acct.Host != expectedHost {
 		t.Errorf("acct = %+v, expected Host = %s", acct, expectedHost)
 	}

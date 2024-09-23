@@ -133,6 +133,7 @@ The following environment variables can used in lieu of command-line flags.
  * `TESLA_HTTP_PROXY_PORT` specifies the port for the HTTP proxy.
  * `TESLA_HTTP_PROXY_TIMEOUT` specifies the timeout for the HTTP proxy to use when
    contacting Tesla servers.
+ * `TESLA_HTTP_PROXY_FLEETAPI_HOST` specifies which Fleetapi host the HTTP proxy will forward the requests to.
  * `TESLA_VERBOSE` enables verbose logging. Supported by `tesla-control` and
    `tesla-http-proxy`.
 
@@ -297,6 +298,20 @@ The flow to obtain `$TESLA_AUTH_TOKEN`:
 A command's flow through the system:
 
 ![](./doc/request_diagram.png)
+
+The proxy server now supports specifying fleetapi base url. You can add a custom header `Fleetapi-Host` to the requests to indicate which Fleetapi host you would like the request to be forwarded to. The custom header `Fleetapi-Host` will override the FleetApi host configured by Environment Variable `TESLA_HTTP_PROXY_FLEETAPI_HOST`.
+
+```bash
+export TESLA_AUTH_TOKEN=<access-token>
+export VIN=<vin>
+export FLEETAPI_HOST='fleet-api.prd.na.vn.cloud.tesla.com'
+curl --cacert cert.pem \
+    --header 'Content-Type: application/json' \
+    --header "Authorization: Bearer $TESLA_AUTH_TOKEN" \
+    --header "Fleetapi-Host: $FLEETAPI_HOST" \
+    --data '{}' \
+    "https://localhost:4443/api/1/vehicles/$VIN/command/flash_lights"
+```
 
 ### REST API documentation
 

@@ -57,6 +57,7 @@ func TestParseConfig(t *testing.T) {
 		os.Setenv(EnvPort, "8443")
 		os.Setenv(EnvVerbose, "true")
 		os.Setenv(EnvTimeout, "30s")
+		os.Setenv(EnvFleetapiHost, "fleet-api.prd.na.vn.cloud.tesla.com")
 
 		err := readFromEnvironment()
 		if err != nil {
@@ -68,10 +69,11 @@ func TestParseConfig(t *testing.T) {
 		assertEquals(t, 8443, httpConfig.port, "port")
 		assertEquals(t, 30*time.Second, httpConfig.timeout, "timeout")
 		assertEquals(t, true, httpConfig.verbose, "verbose")
+		assertEquals(t, "fleet-api.prd.na.vn.cloud.tesla.com", httpConfig.fleetApiHost, "fleetApiHost")
 	})
 
 	t.Run("flags override environment variables", func(t *testing.T) {
-		os.Args = []string{"cmd", "-cert", "/flag/cert.pem", "-tls-key", "/flag/key.pem", "-host", "flaghost", "-port", "9090", "-timeout", "60s"}
+		os.Args = []string{"cmd", "-cert", "/flag/cert.pem", "-tls-key", "/flag/key.pem", "-host", "flaghost", "-port", "9090", "-timeout", "60s", "-fleetapi-host", "fleet-api.prd.na.vn.cloud.tesla.com"}
 
 		flag.Parse()
 		err := readFromEnvironment()
@@ -84,5 +86,6 @@ func TestParseConfig(t *testing.T) {
 		assertEquals(t, "flaghost", httpConfig.host, "host")
 		assertEquals(t, 9090, httpConfig.port, "port")
 		assertEquals(t, 60*time.Second, httpConfig.timeout, "timeout")
+		assertEquals(t, "fleet-api.prd.na.vn.cloud.tesla.com", httpConfig.fleetApiHost, "fleetApiHost")
 	})
 }
