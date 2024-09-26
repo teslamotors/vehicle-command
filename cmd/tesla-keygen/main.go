@@ -29,8 +29,9 @@ const usageText = `
 Creates or deletes a private key and saves it in the system keyring, or migrates a key from a
 plaintext file into the system keyring.
 
-The program writes the public key to stdout (except when deleting a key). When using the create
-option, the program will not overwrite an existing unless invoked with -f.
+The program writes the public key to stdout (except when deleting a key or setting the output
+location with -output). When using the create option, the program will not overwrite an existing
+unless invoked with -f.
 
 The type of keyring and name of the key inside that keyring are controlled by the command-line
 options below, or through the corresponding environment variables.`
@@ -47,7 +48,7 @@ func usage(w io.Writer) {
 	flag.PrintDefaults()
 }
 
-func printPublicKey(skey protocol.ECDHPrivateKey) bool {
+func printPublicKey(skey protocol.ECDHPrivateKey, outputFile string) bool {
 	pkey := ecdsa.PublicKey{Curve: elliptic.P256()}
 	pkey.X, pkey.Y = elliptic.Unmarshal(elliptic.P256(), skey.PublicBytes())
 	if pkey.X == nil {
@@ -57,7 +58,20 @@ func printPublicKey(skey protocol.ECDHPrivateKey) bool {
 	if err != nil {
 		return false
 	}
-	pem.Encode(os.Stdout, &pem.Block{Type: "PUBLIC KEY", Bytes: derPublicKey})
+
+	// If outputFile is provided, write to file, else write to stdout
+	var out io.Writer = os.Stdout
+	if outputFile != "" {
+		file, err := os.Create(outputFile)
+		if err != nil {
+			writeErr("Failed to create output file: %s", err)
+			return false
+		}
+		defer file.Close()
+		out = file
+	}
+
+	pem.Encode(out, &pem.Block{Type: "PUBLIC KEY", Bytes: derPublicKey})
 	return true
 }
 
@@ -77,9 +91,10 @@ func printPrivateKey(skey protocol.ECDHPrivateKey) error {
 func main() {
 	// Command-line variables
 	var (
-		overwrite bool
-		skey      protocol.ECDHPrivateKey
-		err       error
+		overwrite  bool
+		outputFile string
+		skey       protocol.ECDHPrivateKey
+		err        error
 	)
 	status := 1
 	defer func() {
@@ -90,7 +105,9 @@ func main() {
 	config.RegisterCommandLineFlags()
 	flag.Usage = cliUsage
 	flag.BoolVar(&overwrite, "f", false, "Overwrite existing key if it exists")
+	flag.StringVar(&outputFile, "output", "", "Save public key to `file`. Defaults to stdout.")
 	flag.Parse()
+
 	if config.Debug {
 		log.SetLevel(log.LevelDebug)
 	}
@@ -130,7 +147,7 @@ func main() {
 			// Print key and exit if it already exists
 			skey, err = config.PrivateKey()
 			if err == nil {
-				if ok := printPublicKey(skey); !ok {
+				if ok := printPublicKey(skey, outputFile); !ok {
 					writeErr("Failed to parse key. The keyring may be corrupted. Run with -f to generate new key.")
 					return
 				}
@@ -164,7 +181,7 @@ func main() {
 		return
 	}
 
-	if ok := printPublicKey(skey); !ok {
+	if ok := printPublicKey(skey, outputFile); !ok {
 		writeErr("Failed to extract public key. Run with -f to generate new key pair.")
 		return
 	}
