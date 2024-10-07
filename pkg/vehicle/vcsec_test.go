@@ -108,7 +108,6 @@ func TestNominalVSCECError(t *testing.T) {
 
 	checkNominalError(t, vehicle.AddKey(ctx, testPublicKey(), true, 0), errCode)
 	checkNominalError(t, vehicle.RemoveKey(ctx, testPublicKey()), errCode)
-	checkNominalError(t, vehicle.Lock(ctx), errCode)
 }
 
 func TestGibberishVCSECResponse(t *testing.T) {
@@ -131,9 +130,6 @@ func TestGibberishVCSECResponse(t *testing.T) {
 		t.Errorf("Unexpected error: %s", err)
 	}
 	if err := vehicle.RemoveKey(ctx, testPublicKey()); !errors.Is(err, protocol.ErrBadResponse) {
-		t.Errorf("Unexpected error: %s", err)
-	}
-	if err := vehicle.Lock(ctx); !errors.Is(err, protocol.ErrBadResponse) {
 		t.Errorf("Unexpected error: %s", err)
 	}
 }

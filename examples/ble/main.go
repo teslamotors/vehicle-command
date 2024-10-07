@@ -12,6 +12,7 @@ import (
 
 	debugger "github.com/teslamotors/vehicle-command/internal/log"
 
+	"github.com/teslamotors/vehicle-command/pkg/action"
 	"github.com/teslamotors/vehicle-command/pkg/connector/ble"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
 	"github.com/teslamotors/vehicle-command/pkg/vehicle"
@@ -86,14 +87,14 @@ func main() {
 	}
 
 	fmt.Println("Unlocking car...")
-	if err := car.Unlock(ctx); err != nil {
+	if err := car.ExecuteAction(ctx, action.Unlock()); err != nil {
 		logger.Printf("Failed to unlock vehicle: %s\n", err)
 		return
 	}
 	fmt.Println("Vehicle unlocked!")
 
 	fmt.Println("Turning on HVAC...")
-	if err := car.ClimateOn(ctx); err != nil {
+	if err := car.ExecuteAction(ctx, action.ClimateOn()); err != nil {
 		logger.Printf("Failed to turn on HVAC: %s\n", err)
 		return
 	}

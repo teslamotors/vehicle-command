@@ -223,3 +223,8 @@ func (a *Account) UpdateKey(ctx context.Context, publicKey *ecdh.PublicKey, name
 	_, err := a.sendFleetAPICommand(ctx, "api/1/users/keys", &params)
 	return err
 }
+
+// GetHost returns the hostname requests should be made to for the account.
+func (a *Account) GetHost() string {
+	return a.Host
+}

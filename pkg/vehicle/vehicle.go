@@ -10,10 +10,10 @@ import (
 
 	"github.com/teslamotors/vehicle-command/internal/authentication"
 	"github.com/teslamotors/vehicle-command/internal/dispatcher"
+	"github.com/teslamotors/vehicle-command/pkg/action"
 	"github.com/teslamotors/vehicle-command/pkg/cache"
 	"github.com/teslamotors/vehicle-command/pkg/connector"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
-
 	"github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/signatures"
 	universal "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/universalmessage"
 )
@@ -255,7 +255,7 @@ func (v *Vehicle) Wakeup(ctx context.Context) error {
 	if oapi, ok := v.conn.(connector.FleetAPIConnector); ok {
 		return oapi.Wakeup(ctx)
 	} else {
-		return v.wakeupRKE(ctx)
+		return v.ExecuteAction(ctx, action.WakeUp())
 	}
 }
 

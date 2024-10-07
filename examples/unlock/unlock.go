@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/teslamotors/vehicle-command/pkg/account"
+	"github.com/teslamotors/vehicle-command/pkg/action"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
 )
 
@@ -90,7 +91,7 @@ func main() {
 	}
 
 	fmt.Println("Unlocking car...")
-	if err := car.Unlock(ctx); err != nil {
+	if err := car.ExecuteAction(ctx, action.Unlock()); err != nil {
 		if protocol.MayHaveSucceeded(err) {
 			logger.Printf("Unlock command sent, but client could not confirm receipt: %s\n", err)
 		} else {
