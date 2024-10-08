@@ -6,5 +6,5 @@ import (
 )
 
 func newDevice() (ble.Device, error) {
-	return nil, errors.New("Not supported on Windows")
+	return nil, errors.New("not supported on Windows")
 }
