@@ -67,7 +67,8 @@ func TestDomainExtraction(t *testing.T) {
 			"https://fleet-api.prd.na.vn.cloud.tesla.com",
 			"https://fleet-api.prd.eu.vn.cloud.tesla.com",
 		},
-		OUCode: "EU",
+		OUCode:  "EU",
+		Subject: "SUBJECT",
 	}
 
 	acct, err := New(makeTestJWT(payload), "")
@@ -75,7 +76,7 @@ func TestDomainExtraction(t *testing.T) {
 		t.Fatalf("Returned error on valid JWT: %s", err)
 	}
 	expectedHost := "fleet-api.prd.eu.vn.cloud.tesla.com"
-	if acct == nil || acct.Host != expectedHost {
+	if acct == nil || acct.Host != expectedHost || acct.Subject != "SUBJECT" {
 		t.Errorf("acct = %+v, expected Host = %s", acct, expectedHost)
 	}
 }
