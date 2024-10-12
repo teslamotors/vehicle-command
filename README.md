@@ -249,7 +249,7 @@ It can also be run using Docker:
 ```bash
 # option 1: using docker run
 docker pull tesla/vehicle-command:latest
-docker run -v ./config:/config -p 127.0.0.1:4433:4433 tesla/vehicle-command:latest -tls-key /config/tls-key.pem -cert /config/tls-cert.pem -key-file /config/fleet-key.pem -host 0.0.0.0 -port 4443
+docker run -v ./config:/config -p 127.0.0.1:4443:4443 tesla/vehicle-command:latest -tls-key /config/tls-key.pem -cert /config/tls-cert.pem -key-file /config/fleet-key.pem -host 0.0.0.0 -port 4443
 
 # option 2: using docker compose
 docker compose up
