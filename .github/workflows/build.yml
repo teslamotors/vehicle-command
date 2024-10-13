@@ -22,5 +22,11 @@ jobs:
         make format
         git diff --exit-code
 
+    - name: Mocks up to date
+      run: |
+        go install go.uber.org/mock/mockgen@latest
+        make generate-mocks
+        git diff --exit-code
+
     - name: Test
       run: make test
