@@ -883,6 +883,22 @@ var commands = map[string]*Command{
 			return nil
 		},
 	},
+	"guest-mode-on": &Command{
+		help:             "Enable Guest Mode. See https://developer.tesla.com/docs/fleet-api/endpoints/vehicle-commands#guest-mode.",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			return car.SetGuestMode(ctx, true)
+		},
+	},
+	"guest-mode-off": &Command{
+		help:             "Disable Guest Mode.",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			return car.SetGuestMode(ctx, false)
+		},
+	},
 	"erase-guest-data": &Command{
 		help:             "Erase Guest Mode user data",
 		requiresAuth:     true,
