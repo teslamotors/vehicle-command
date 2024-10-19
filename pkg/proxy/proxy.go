@@ -215,7 +215,7 @@ func (p *Proxy) forwardRequest(acct *account.Account, w http.ResponseWriter, req
 			writeJSONError(w, http.StatusBadGateway, err)
 			return
 		}
-		req.Body = io.NopCloser(bytes.NewBuffer(requestBody))
+		proxyReq.Body = io.NopCloser(bytes.NewBuffer(requestBody))
 	}
 
 	for {
@@ -259,8 +259,8 @@ func (p *Proxy) forwardRequest(acct *account.Account, w http.ResponseWriter, req
 			log.Debug("Received HTTP Status 421. Updating server URL to %s", altHost)
 			acct.Host = altHost
 			p.updateDomainForSubject(acct.Subject, acct.Host)
-			if req.Body != nil {
-				req.Body = io.NopCloser(bytes.NewBuffer(requestBody))
+			if proxyReq.Body != nil {
+				proxyReq.Body = io.NopCloser(bytes.NewBuffer(requestBody))
 			}
 		} else {
 			for _, hdr := range connectionHeaders {
