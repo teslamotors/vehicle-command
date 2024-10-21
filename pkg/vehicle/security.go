@@ -3,6 +3,8 @@ package vehicle
 import (
 	"context"
 	"crypto/ecdh"
+	"errors"
+	"strings"
 
 	"google.golang.org/protobuf/proto"
 
@@ -13,8 +15,41 @@ import (
 	"github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/vcsec"
 )
 
+// IsValidPIN returns true if the pin is four digits.
+func IsValidPIN(pin string) bool {
+	if len(pin) != 4 {
+		return false
+	}
+	for _, c := range pin {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+var ErrInvalidPIN = errors.New("PIN codes must be four digits")
+
+// EnableValetMode enters the vehicle's Valet Mode. This sets certain restrictions but disables PIN
+// to Drive. Consult the Owner's Manual for details. The PIN must be a four-digit string.
+func (v *Vehicle) EnableValetMode(ctx context.Context, pin string) error {
+	return v.SetValetMode(ctx, true, pin)
+}
+
+// DisableValetMode exits Valet Mode.
+func (v *Vehicle) DisableValetMode(ctx context.Context) error {
+	return v.SetValetMode(ctx, false, "")
+}
+
+// SetValetMode enables or disables Valet Mode. A password must be provided when turning valet mode
+// on, and should be empty when turning valet mode off.
+//
+// Deprecated: Use EnableValetMode or DisableValetMode.
 func (v *Vehicle) SetValetMode(ctx context.Context, on bool, valetPassword string) error {
-	return v.executeCarServerAction(ctx,
+	if on && !IsValidPIN(valetPassword) {
+		return ErrInvalidPIN
+	}
+	err := v.executeCarServerAction(ctx,
 		&carserver.Action_VehicleAction{
 			VehicleAction: &carserver.VehicleAction{
 				VehicleActionMsg: &carserver.VehicleAction_VehicleControlSetValetModeAction{
@@ -25,6 +60,10 @@ func (v *Vehicle) SetValetMode(ctx context.Context, on bool, valetPassword strin
 				},
 			},
 		})
+	if !on && err != nil && strings.HasSuffix(err.Error(), "already off") {
+		return nil
+	}
+	return err
 }
 
 func (v *Vehicle) ResetValetPin(ctx context.Context) error {
