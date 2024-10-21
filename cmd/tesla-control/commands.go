@@ -243,6 +243,25 @@ func (c *Command) Usage(name string) {
 }
 
 var commands = map[string]*Command{
+	"valet-mode-on": &Command{
+		help:             "Enable valet mode",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		args: []Argument{
+			Argument{name: "PIN", help: "Valet mode PIN"},
+		},
+		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			return car.EnableValetMode(ctx, args["PIN"])
+		},
+	},
+	"valet-mode-off": &Command{
+		help:             "Disable valet mode",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			return car.DisableValetMode(ctx)
+		},
+	},
 	"unlock": &Command{
 		help:             "Unlock vehicle",
 		requiresAuth:     true,
