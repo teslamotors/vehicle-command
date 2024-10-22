@@ -15,6 +15,8 @@ enum Tag
     TAG_COUNTER         = 5;
     TAG_CHALLENGE       = 6;
     TAG_FLAGS           = 7;
+    TAG_REQUEST_HASH    = 8;
+    TAG_FAULT           = 9;
     TAG_END             = 255;
 }
 
@@ -25,6 +27,7 @@ enum SignatureType
     SIGNATURE_TYPE_HMAC                 = 6;
     reserved 7;
     SIGNATURE_TYPE_HMAC_PERSONALIZED    = 8;
+    SIGNATURE_TYPE_AES_GCM_RESPONSE     = 9;
 }
 
 message KeyIdentity {
@@ -41,6 +44,12 @@ message AES_GCM_Personalized_Signature_Data {
     uint32  counter     = 3;
     fixed32 expires_at  = 4;
     bytes   tag         = 5;
+}
+
+message AES_GCM_Response_Signature_Data {
+    bytes  nonce   = 1;
+    uint32 counter = 2;
+    bytes  tag     = 3;
 }
 
 message HMAC_Signature_Data {
@@ -61,6 +70,7 @@ message SignatureData {
         AES_GCM_Personalized_Signature_Data AES_GCM_Personalized_data = 5;
         HMAC_Signature_Data                 session_info_tag          = 6;
         HMAC_Personalized_Signature_Data    HMAC_Personalized_data    = 8;
+        AES_GCM_Response_Signature_Data     AES_GCM_Response_data     = 9;
     }
 }
 

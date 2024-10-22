@@ -59,10 +59,10 @@ above are for printability.
  * The vehicle sets `signedMessageStatus` to indicate protocol-layer errors.
    [Application-layer errors](#Response-handling) appear in
    `protobuf_message_as_bytes`.
- * The `flags` field is a bit mask of `universal_message.Flags` values. There
-   is currently no need for clients to use this field; future versions of the
-   protocol may use this field to add authenticated data that is discarded by
-   older vehicles.
+ * The `flags` field is a bit mask of `universal_message.Flags` values.
+   Vehicles authenticate this value, but ignore unrecognized bits. Clients
+   should always set the `FLAG_ENCRYPT_RESPONSE` bit, which instructs vehicles
+   with compatible firmware (2024.38+) to encrypt the response.
 
 ## Decoding messages
 
@@ -275,7 +275,7 @@ in the remainder of the document.
 
 *Do not use this key except to debug implementations using the test vectors
 included in these documents. Since the private key is published, enrolling the
-public key on a vehicle may result in unauthorized access.
+public key on a vehicle may result in unauthorized access.*
 
 In `vehicle.key`:
 
@@ -464,7 +464,7 @@ fceb679ee7bca756fcd441bf238bf2f338629b41d9eb9c67be1b32c9672ce300
 
 ---
 
-Next, the client [serializes the following metadata](#Metadata serialization):
+Next, the client [serializes the following metadata](#Metadata-serialization):
 
  * `TAG_SIGNATURE_TYPE`: `Signatures.SIGNATURE_TYPE_HMAC`
  * `TAG_PERSONALIZATION`: `VIN`
@@ -534,6 +534,7 @@ The client serializes the following metadata values into a string `M`:
 | Epoch          | `Signatures.TAG_EPOCH`          | Copied from `session_info.epoch`           |
 | Expiration time| `Signatures.TAG_EXPIRES_AT`     | Time in seconds according to domain's clock |
 | Counter        | `Signatures.TAG_COUNTER`        | Monotonic counter, initially `session_info.counter` |
+| Flags          | `Signatures.TAG_FLAGS`          | Request flag bit mask. Only included if non-zero. |
 
 Setting the expiration time requires the client to track the difference between
 the domain's clock and the local clock. Note that each domain has its own clock.
@@ -730,6 +731,65 @@ then the vehicle sets the
 Error codes and their remediation are summarized in
 [universal_message.proto](protobuf/universal_message.proto).
 See comments in the `MessageFault_E` definition.
+
+### Response decryption
+
+If the client set the `FLAG_ENCRYPT_RESPONSE`, then vehicles running supported
+firmware (2024.38+) will encrypt the payload. Vehicles running previous
+firmware versions will ignore this flag, so clients do not need to check the
+vehicle's firmware version before setting it.
+
+If the response includes a `signature_data.AES_GCM_Response_data` field, then
+the `protobuf_message_as_bytes` payload is encrypted. Otherwise, the payload is
+plaintext.
+
+#### Request hash
+
+The client must compute the "request hash" of each request it sends. This value
+will be used when decrypting the response. The request hash is a single byte
+that encodes the authentication method used by the request (either
+`Signatures.SIGNATURE_TYPE_HMAC_PERSONALIZED` or
+`Signatures.SIGNATURE_TYPE_AES_GCM_PERSONALIZED`) followed by the request's
+authentication tag.
+
+ * If the request uses AES-GCM encryption, then the tag is the request's
+   `signature_data.AES_GCM_Personalized_Signature_Data.tag` field.
+ * If the request uses HMAC-SHA256 authentication, then the tag is the
+   request's `signature_data.HMAC_PersonalizedData.tag` field.
+
+If the request is sent to the Vehicle Security domain, then the request hash is
+truncated to 17 bytes (i.e., a single byte encoding the authentication method
+and the first 16 bytes of the MAC). Truncation only affects HMAC-SHA256
+requests, since AES-GCM tags are only 16 bytes.
+
+#### Counter verification
+
+The client must verify that the counter value contained in the response has
+not been previously used in a response for the same request. Note that if a
+request does trigger multiple responses, responses may be received out of
+order.
+
+Clients that fail to implement this check are vulnerable to replay attacks.
+
+#### Response metadata
+
+To decrypt the response, use AES-GCM with the shared key `K` defined above, the
+nonce and tag supplied in the response, and the associated authenticated data
+field obtained by [serializing](#Metadata serialization) the following metadata:
+
+| Value | Tag | Description |
+| ----- | --- | ----------- |
+| Signature type | `Signatures.TAG_SIGNATURE_TYPE` | `Signatures.SIGNATURE_TYPE_AES_GCM_RESPONSE` |
+| Domain         | `Signatures.TAG_DOMAIN`         | Typically `UniversalMesasge.DOMAIN_VEHICLE_SECURITY` or `UniversalMessage.DOMAIN_INFOTAINMENT` |
+| VIN            | `Signatures.TAG_PERSONALIZATION`| 17-character vehicle identification number |
+| Counter        | `Signatures.TAG_COUNTER`        | Monotonic counter, initially `session_info.counter` |
+| Flags          | `Signatures.TAG_FLAGS`          | Flags field of the response, not the request |
+| Request Hash   | `Signatures.TAG_REQUEST_HASH`   | See [Request hash](#request-hash) |
+| Fault          | `Signatures.TAG_FAULT`          | Message fault of the response |
+
+Note that the Flags field is always included in the response metadata, whereas
+for outgoing requests the flags are only included if non-zero. Encode the fault
+as a 32-bit big-endian integer.
 
 ### Infotainment application-layer responses
 

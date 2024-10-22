@@ -18,6 +18,9 @@ import (
 	universal "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/universalmessage"
 )
 
+// DefaultFlags is a bitmask that controls what flags are set on requests.
+var DefaultFlags = uint32(1 << universal.Flags_FLAG_ENCRYPT_RESPONSE)
+
 var (
 	// ErrNoFleetAPIConnection indicates the client attempted to send a command that terminates on
 	// Tesla's backend (rather than a vehicle), but the Vehicle Connection does not use connector/inet.
@@ -59,8 +62,9 @@ type sender interface {
 
 // A Vehicle represents a Tesla vehicle.
 type Vehicle struct {
+	Flags uint32
+
 	dispatcher sender
-	Flags      uint32
 	vin        string
 
 	conn       connector.Connector
@@ -77,6 +81,7 @@ func NewVehicle(conn connector.Connector, privateKey authentication.ECDHPrivateK
 	}
 	vin := conn.VIN()
 	vehicle := &Vehicle{
+		Flags:        DefaultFlags,
 		dispatcher:   dispatch,
 		vin:          vin,
 		conn:         conn,

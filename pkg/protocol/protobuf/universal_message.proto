@@ -69,6 +69,7 @@ message SessionInfoRequest
 
 enum Flags {
     FLAG_USER_COMMAND = 0;
+    FLAG_ENCRYPT_RESPONSE = 1;
 }
 
 message RoutableMessage {

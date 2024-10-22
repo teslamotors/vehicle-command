@@ -78,3 +78,40 @@ func (p *Peer) hmacTag(message *universal.RoutableMessage, hmacData *signatures.
 	}
 	return meta.Checksum(message.GetProtobufMessageAsBytes()), nil
 }
+
+func RequestID(message *universal.RoutableMessage) []byte {
+	sigData := message.GetSignatureData()
+	if sigData.GetSigType() == nil {
+		return nil
+	}
+
+	switch s := sigData.GetSigType().(type) {
+	case *signatures.SignatureData_AES_GCM_PersonalizedData:
+		return append(
+			[]byte{byte(signatures.SignatureType_SIGNATURE_TYPE_AES_GCM_PERSONALIZED)},
+			s.AES_GCM_PersonalizedData.GetTag()...)
+	case *signatures.SignatureData_HMAC_PersonalizedData:
+		tag := s.HMAC_PersonalizedData.GetTag()
+		if message.GetToDestination().GetDomain() == universal.Domain_DOMAIN_VEHICLE_SECURITY {
+			tag = tag[:16]
+		}
+		return append(
+			[]byte{byte(signatures.SignatureType_SIGNATURE_TYPE_HMAC_PERSONALIZED)}, tag...)
+	default:
+		return nil
+	}
+}
+
+func (p *Peer) responseMetadata(message *universal.RoutableMessage, id []byte, counter uint32) ([]byte, error) {
+	meta := newMetadata()
+	meta.Add(signatures.Tag_TAG_SIGNATURE_TYPE, []byte{byte(signatures.SignatureType_SIGNATURE_TYPE_AES_GCM_RESPONSE)})
+	meta.Add(signatures.Tag_TAG_DOMAIN, []byte{byte(message.GetFromDestination().GetDomain())})
+	if err := meta.Add(signatures.Tag_TAG_PERSONALIZATION, p.verifierName); err != nil {
+		return nil, err
+	}
+	meta.AddUint32(signatures.Tag_TAG_COUNTER, counter)
+	meta.AddUint32(signatures.Tag_TAG_FLAGS, message.Flags)
+	meta.Add(signatures.Tag_TAG_REQUEST_HASH, id)
+	meta.AddUint32(signatures.Tag_TAG_FAULT, uint32(message.GetSignedMessageStatus().GetSignedMessageFault()))
+	return meta.Checksum(nil), nil
+}

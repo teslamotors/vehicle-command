@@ -19,6 +19,7 @@ type Verifier struct {
 	Peer
 	lock   sync.Mutex
 	window uint64
+	handle uint32
 }
 
 // NewVerifier returns a Verifier.
@@ -72,6 +73,12 @@ func (v *Verifier) rotateEpochIfNeeded(force bool) error {
 	return nil
 }
 
+func (v *Verifier) AssignHandle(handle uint32) {
+	v.lock.Lock()
+	v.handle = handle
+	v.lock.Unlock()
+}
+
 func (v *Verifier) sessionInfo() (*signatures.SessionInfo, error) {
 	if err := v.adjustClock(); err != nil {
 		return nil, err
@@ -81,6 +88,7 @@ func (v *Verifier) sessionInfo() (*signatures.SessionInfo, error) {
 		PublicKey: v.session.LocalPublicBytes(),
 		Epoch:     v.epoch[:],
 		ClockTime: v.timestamp(),
+		Handle:    v.handle,
 	}
 	return info, nil
 }
@@ -217,55 +225,6 @@ func (v *Verifier) Verify(message *universal.RoutableMessage) (plaintext []byte,
 	return
 }
 
-// updateSlidingWindow takes the current counter value (i.e., the highest
-// counter value of any authentic message received so far), the current sliding
-// window, and the newCounter value from an incoming message. The function
-// returns the updated counter and window values and sets ok to true if it
-// could confirm that newCounter has never been previously used. If ok is
-// false, then updatedCounter = counter and updatedWindow = window.
-func updateSlidingWindow(counter uint32, window uint64, newCounter uint32) (updatedCounter uint32, updatedWindow uint64, ok bool) {
-	// If we exit early due to an error, we want to leave the counter/window
-	// state unchanged. Therefore we initialize return values to the current
-	// state.
-	updatedCounter = counter
-	updatedWindow = window
-	ok = false
-
-	if counter == newCounter {
-		// This counter value has been used before.
-		return
-	}
-
-	if newCounter < counter {
-		// This message arrived out of order.
-		age := counter - newCounter
-		if age > windowSize {
-			// Our history doesn't go back this far, so we can't determine if
-			// we've seen this newCounter value before.
-			return
-		}
-		if window>>(age-1)&1 == 1 {
-			// The newCounter value has been used before.
-			return
-		}
-		// Everything looks good.
-		ok = true
-		updatedWindow |= (1 << (age - 1))
-		return
-	}
-
-	// If we've reached this point, newCounter > counter, so newCounter is valid.
-	ok = true
-	updatedCounter = newCounter
-	// Compute how far we need to shift our sliding window.
-	shiftCount := newCounter - counter
-	updatedWindow <<= shiftCount
-	// We need to set the bit in our window that corresponds to counter (if
-	// newCounter = counter + 1, then this is the first [LSB] of the window).
-	updatedWindow |= uint64(1) << (shiftCount - 1)
-	return
-}
-
 func (v *Verifier) verifyGCM(message *universal.RoutableMessage, gcmData *signatures.AES_GCM_Personalized_Signature_Data) (plaintext []byte, err error) {
 	if err = v.verifySessionInfo(message, gcmData); err != nil {
 		return nil, err
@@ -334,6 +293,37 @@ func (v *Verifier) verifySessionInfo(message *universal.RoutableMessage, info se
 		if expiresAt == 0 || expiresAt-v.timestamp() > maxSecondsWithoutCounter {
 			return v.signatureError(universal.MessageFault_E_MESSAGEFAULT_ERROR_TIME_TO_LIVE_TOO_LONG, message.GetUuid())
 		}
+	}
+	return nil
+}
+
+// Encrypt a message response in place.
+//
+// The message id must uniquely identify the Signer's request that prompted the message. The
+// counter must increase monotonically for a given id.
+func (v *Verifier) Encrypt(message *universal.RoutableMessage, id []byte, counter uint32) error {
+	plaintext := message.GetProtobufMessageAsBytes()
+	authenticatedData, err := v.responseMetadata(message, id, counter)
+	if err != nil {
+		return err
+	}
+	nonce, ciphertext, tag, err := v.session.Encrypt(plaintext, authenticatedData)
+	if err != nil {
+		return err
+	}
+	message.SubSigData = &universal.RoutableMessage_SignatureData{
+		SignatureData: &signatures.SignatureData{
+			SigType: &signatures.SignatureData_AES_GCM_ResponseData{
+				AES_GCM_ResponseData: &signatures.AES_GCM_Response_Signature_Data{
+					Counter: counter,
+					Nonce:   nonce,
+					Tag:     tag,
+				},
+			},
+		},
+	}
+	message.Payload = &universal.RoutableMessage_ProtobufMessageAsBytes{
+		ProtobufMessageAsBytes: ciphertext,
 	}
 	return nil
 }

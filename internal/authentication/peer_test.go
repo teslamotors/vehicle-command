@@ -1,8 +1,10 @@
 package authentication
 
 import (
+	"bytes"
 	"testing"
 
+	"github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/signatures"
 	universal "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/universalmessage"
 )
 
@@ -82,5 +84,49 @@ func checkError(t *testing.T, err error, expectedCode universal.MessageFault_E) 
 		}
 	} else {
 		t.Errorf("Got unexpected error type: %s", err)
+	}
+}
+
+func TestRequestID(t *testing.T) {
+	tag := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18}
+	message := universal.RoutableMessage{
+		ToDestination: &universal.Destination{
+			SubDestination: &universal.Destination_Domain{
+				Domain: universal.Domain_DOMAIN_VEHICLE_SECURITY,
+			},
+		},
+		SubSigData: &universal.RoutableMessage_SignatureData{
+			SignatureData: &signatures.SignatureData{
+				SigType: &signatures.SignatureData_HMAC_PersonalizedData{
+					HMAC_PersonalizedData: &signatures.HMAC_Personalized_Signature_Data{
+						Tag: append([]byte{}, tag...),
+					},
+				},
+			},
+		},
+	}
+	id := RequestID(&message)
+	if len(id) != 17 {
+		t.Errorf("Expected 17-byte id, but got %d bytes", len(id))
+	}
+	if id[0] != byte(signatures.SignatureType_SIGNATURE_TYPE_HMAC_PERSONALIZED) {
+		t.Errorf("Invalid first byte of request ID: %02x", id[0])
+	}
+	if !bytes.Equal(id[1:], tag[:16]) {
+		t.Errorf("Expected: %02x", tag[:16])
+		t.Errorf("Observed: %02x", id[1:])
+	}
+
+	message.ToDestination.SubDestination = &universal.Destination_Domain{
+		Domain: universal.Domain_DOMAIN_INFOTAINMENT,
+	}
+
+	id = RequestID(&message)
+	if id[0] != byte(signatures.SignatureType_SIGNATURE_TYPE_HMAC_PERSONALIZED) {
+		t.Errorf("Invalid first byte of request ID: %02x", id[0])
+	}
+	if !bytes.Equal(id[1:], tag) {
+		t.Errorf("Expected: %02x", tag)
+		t.Errorf("Observed: %02x", id[1:])
 	}
 }
