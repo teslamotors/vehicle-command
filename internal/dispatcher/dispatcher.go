@@ -141,7 +141,7 @@ func (d *Dispatcher) StartSessions(ctx context.Context, domains []universal.Doma
 	return err
 }
 
-func (d *Dispatcher) createHandler(key *receiverKey) *receiver {
+func (d *Dispatcher) createHandler(key *receiverKey, id []byte) *receiver {
 	d.handlerLock.Lock()
 	defer d.handlerLock.Unlock()
 
@@ -152,6 +152,7 @@ func (d *Dispatcher) createHandler(key *receiverKey) *receiver {
 		dispatcher:    d,
 		requestSentAt: now,
 		lastActive:    now,
+		requestID:     id,
 	}
 
 	d.handlers[*key] = recv
@@ -205,6 +206,25 @@ func (d *Dispatcher) checkForSessionUpdate(message *universal.RoutableMessage, h
 		return
 	}
 	log.Info("[%02x] Updated session info for %s", message.GetRequestUuid(), domain)
+}
+
+func (d *Dispatcher) decrypt(message *universal.RoutableMessage, handler *receiver) error {
+	decryptionData := message.GetSignatureData().GetAES_GCM_ResponseData()
+	if decryptionData == nil {
+		return nil
+	}
+
+	domain := handler.key.domain
+
+	d.sessionLock.Lock()
+	defer d.sessionLock.Unlock()
+
+	session, ok := d.sessions[domain]
+	if !ok {
+		return protocol.ErrNoDecryptionContext
+	}
+
+	return session.decrypt(message, handler)
 }
 
 func (d *Dispatcher) process(message *universal.RoutableMessage) {
@@ -262,6 +282,15 @@ func (d *Dispatcher) process(message *universal.RoutableMessage) {
 	// the reply still needs to be passed down to the handler after updating
 	// session info.
 	d.checkForSessionUpdate(message, handler)
+
+	// Decryption is a no-op for plaintext messages
+	if err := d.decrypt(message, handler); err == protocol.ErrReplayedResponse {
+		log.Info("[%02x] Dropping duplicate vehicle response", requestUUID)
+		return
+	} else if err != nil {
+		log.Warning("[%02x] Error decrypting vehicle response: %s", requestUUID, err)
+		return
+	}
 
 	select {
 	case handler.ch <- message:
@@ -386,7 +415,7 @@ func (d *Dispatcher) Send(ctx context.Context, message *universal.RoutableMessag
 		}
 	}
 
-	resp := d.createHandler(&key)
+	resp := d.createHandler(&key, authentication.RequestID(message))
 	encodedMessage, err := proto.Marshal(message)
 	if err != nil {
 		return nil, err

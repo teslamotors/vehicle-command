@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/teslamotors/vehicle-command/internal/authentication"
 	universal "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/universalmessage"
 )
 
@@ -32,6 +33,8 @@ type receiver struct {
 	dispatcher    *Dispatcher
 	requestSentAt time.Time
 	lastActive    time.Time
+	antireplay    authentication.SlidingWindow
+	requestID     []byte
 }
 
 // Recv returns a channel that receives responses to the command that created the receiver.

@@ -8,6 +8,7 @@ import (
 
 	"github.com/teslamotors/vehicle-command/internal/authentication"
 	"github.com/teslamotors/vehicle-command/pkg/connector"
+	"github.com/teslamotors/vehicle-command/pkg/protocol"
 
 	universal "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/universalmessage"
 )
@@ -42,6 +43,19 @@ func NewSession(private authentication.ECDHPrivateKey, vin string) (*session, er
 		readySignal: make(chan struct{}, 1),
 		vin:         []byte(vin),
 	}, nil
+}
+
+func (s *session) decrypt(message *universal.RoutableMessage, handler *receiver) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	counter, err := s.ctx.Decrypt(message, handler.requestID)
+	if err != nil {
+		return err
+	}
+	if !handler.antireplay.Update(counter) {
+		return protocol.ErrReplayedResponse
+	}
+	return nil
 }
 
 func (s *session) Authorize(ctx context.Context, command *universal.RoutableMessage, method connector.AuthMethod) error {

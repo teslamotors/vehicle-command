@@ -211,3 +211,32 @@ func (s *Signer) AuthorizeHMAC(message *universal.RoutableMessage, expiresIn tim
 	}
 	return nil
 }
+
+// Decrypt a Verifier message in place.
+//
+// Returns the anti-replay counter included in the message, which the client must verify increases
+// monotonically for a given id or is inside of a sliding window.
+func (s *Signer) Decrypt(message *universal.RoutableMessage, id []byte) (uint32, error) {
+	gcmInfo := message.GetSignatureData().GetAES_GCM_ResponseData()
+	if gcmInfo == nil {
+		return 0, newError(errCodeBadParameter, "missing AES-GCM data")
+	}
+	authenticatedData, err := s.responseMetadata(message, id, gcmInfo.Counter)
+	if err != nil {
+		return 0, nil
+	}
+	plaintext, err := s.session.Decrypt(
+		gcmInfo.Nonce,
+		message.GetProtobufMessageAsBytes(),
+		authenticatedData,
+		gcmInfo.Tag,
+	)
+	if err != nil {
+		return 0, err
+	}
+	message.Payload = &universal.RoutableMessage_ProtobufMessageAsBytes{
+		ProtobufMessageAsBytes: plaintext,
+	}
+	message.SubSigData = nil
+	return gcmInfo.Counter, nil
+}
