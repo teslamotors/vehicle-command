@@ -16,6 +16,15 @@ message LatLong {
     float longitude = 2;
 }
 
+message ChargePortLatchState {
+    oneof type {
+        Void SNA = 1;
+        Void Disengaged = 2;
+        Void Engaged = 3;
+        Void Blocking = 4;
+    }
+}
+
 message PreconditioningTimes {
     oneof times {
         Void all_week = 1;
@@ -28,6 +37,19 @@ message OffPeakChargingTimes {
         Void all_week = 1;
         Void weekdays = 2;
     }
+}
+
+enum MediaPlaybackStatus {
+    Stopped = 0;
+    Playing = 1;
+    Paused = 2;
+}
+
+enum StwHeatLevel {
+    StwHeatLevel_Unknown = 0;
+    StwHeatLevel_Off = 1;
+    StwHeatLevel_Low = 2;
+    StwHeatLevel_High = 3;
 }
 
 message ChargeSchedule {

@@ -59,6 +59,35 @@ type Command struct {
 	domain           protocol.Domain
 }
 
+var categoriesByName = map[string]vehicle.StateCategory{
+	"charge":                vehicle.StateCategoryCharge,
+	"climate":               vehicle.StateCategoryClimate,
+	"drive":                 vehicle.StateCategoryDrive,
+	"closures":              vehicle.StateCategoryClosures,
+	"charge-schedule":       vehicle.StateCategoryChargeSchedule,
+	"precondition-schedule": vehicle.StateCategoryPreconditioningSchedule,
+	"tire-pressure":         vehicle.StateCategoryTirePressure,
+	"media":                 vehicle.StateCategoryMedia,
+	"media-detail":          vehicle.StateCategoryMediaDetail,
+	"software-update":       vehicle.StateCategorySoftwareUpdate,
+	"parental-controls":     vehicle.StateCategoryParentalControls,
+}
+
+func categoryNames() []string {
+	var names []string
+	for name, _ := range categoriesByName {
+		names = append(names, name)
+	}
+	return names
+}
+
+func GetCategory(nameStr string) (vehicle.StateCategory, error) {
+	if category, ok := categoriesByName[strings.ToLower(nameStr)]; ok {
+		return category, nil
+	}
+	return 0, fmt.Errorf("unrecognized state category '%s'", nameStr)
+}
+
 func GetDegree(degStr string) (float32, error) {
 	deg, err := strconv.ParseFloat(degStr, 32)
 	if err != nil {
@@ -1133,6 +1162,26 @@ var commands = map[string]*Command{
 				return errors.New("TYPE must be home|work|other|id")
 			}
 			return car.BatchRemovePreconditionSchedules(ctx, home, work, other)
+		},
+	},
+	"state": {
+		help:             "Fetch vehicle state over BLE.",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		args: []Argument{
+			Argument{name: "CATEGORY", help: "One of " + strings.Join(categoryNames(), ", ")},
+		},
+		handler: func(ctx context.Context, acct *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			category, err := GetCategory(args["CATEGORY"])
+			if err != nil {
+				return err
+			}
+			data, err := car.GetState(ctx, category)
+			if err != nil {
+				return err
+			}
+			fmt.Println(protojson.Format(data))
+			return nil
 		},
 	},
 }

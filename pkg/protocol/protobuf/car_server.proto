@@ -22,6 +22,7 @@ message VehicleAction {
     reserved 60;
     reserved 76;
     oneof vehicle_action_msg {
+        GetVehicleData getVehicleData = 1;
         ChargingSetLimitAction chargingSetLimitAction = 5;
         ChargingStartStopAction chargingStartStopAction = 6;
         DrivingClearSpeedLimitPinAction drivingClearSpeedLimitPinAction = 7;
@@ -75,6 +76,55 @@ message VehicleAction {
     }
 }
 
+message GetVehicleData {
+    GetChargeState getChargeState = 2;
+    GetClimateState getClimateState = 3;
+    GetDriveState getDriveState = 4;
+    reserved 5, 6, 7;
+    GetClosuresState getClosuresState = 8;
+    GetChargeScheduleState getChargeScheduleState = 10;
+    GetPreconditioningScheduleState getPreconditioningScheduleState = 11;
+    reserved 12, 13;
+    GetTirePressureState getTirePressureState = 14;
+    GetMediaState getMediaState = 15;
+    GetMediaDetailState getMediaDetailState = 16;
+    GetSoftwareUpdateState getSoftwareUpdateState = 17;
+    GetParentalControlsState getParentalControlsState = 19;
+}
+
+message GetTirePressureState {
+}
+
+message GetMediaState {
+}
+
+message GetMediaDetailState {
+}
+
+message GetSoftwareUpdateState {
+}
+
+message GetChargeState {
+}
+
+message GetClimateState {
+}
+
+message GetDriveState {
+}
+
+message GetClosuresState {
+}
+
+message GetChargeScheduleState {
+}
+
+message GetPreconditioningScheduleState {
+}
+
+message GetParentalControlsState {
+}
+
 message EraseUserDataAction {
     string reason = 1;
 }
@@ -82,6 +132,7 @@ message EraseUserDataAction {
 message Response {
     ActionStatus actionStatus = 1;
     oneof response_msg {
+        VehicleData vehicleData = 2;
         Signatures.SessionInfo getSessionInfoResponse = 3;
         NearbyChargingSites getNearbyChargingSites = 5;
         Ping ping = 9;
