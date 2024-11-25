@@ -54,6 +54,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -146,6 +147,7 @@ type Config struct {
 	TokenFilename    string
 	KeyFilename      string
 	CacheFilename    string
+	DisableCache     bool
 	Backend          keyring.Config
 	BackendType      backendType
 	Debug            bool // Enable keyring debug messages
@@ -185,7 +187,8 @@ func (c *Config) RegisterCommandLineFlags() {
 		if !c.Flags.isSet(FlagVIN) {
 			log.Debug("FlagPrivateKey is set but FlagVIN is not. A VIN is required to send vehicle commands.")
 		}
-		flag.StringVar(&c.CacheFilename, "session-cache", "", "Load session info cache from `file`. Defaults to $TESLA_CACHE_FILE.")
+		flag.StringVar(&c.CacheFilename, "session-cache", "", "Load session info cache from `file`. Defaults to $TESLA_CACHE_FILE then ~/.tesla-cache.json.")
+		flag.BoolVar(&c.DisableCache, "disable-session-cache", false, "Disable the session info cache.")
 		flag.StringVar(&c.KeyringKeyName, "key-name", "", "System keyring `name` for private key. Defaults to $TESLA_KEY_NAME.")
 		flag.StringVar(&c.KeyFilename, "key-file", "", "A `file` containing private key. Defaults to $TESLA_KEY_FILE.")
 		flag.Var(&c.Domains, "domain", "Domains to connect to (can be repeated; omit for all)")
@@ -236,8 +239,13 @@ func (c *Config) ReadFromEnvironment() {
 		}
 	}
 	if c.Flags.isSet(FlagPrivateKey) {
-		if c.CacheFilename == "" {
+		if !c.DisableCache && c.CacheFilename == "" {
 			c.CacheFilename = os.Getenv(EnvTeslaCacheFile)
+			if c.CacheFilename == "" {
+				if homeDir := os.Getenv("HOME"); homeDir != "" {
+					c.CacheFilename = filepath.Join(homeDir, ".tesla-cache.json")
+				}
+			}
 			log.Debug("Set session cache file to '%s'", c.CacheFilename)
 		}
 		if c.KeyringKeyName == "" && c.KeyFilename == "" {
@@ -286,11 +294,12 @@ func (c *Config) ReadFromEnvironment() {
 // If c.CacheFilename is not set or no vehicle handshake has occurred, then this method does
 // nothing.
 func (c *Config) UpdateCachedSessions(v *vehicle.Vehicle) {
-	if c.CacheFilename != "" && c.sessions != nil {
-		v.UpdateCachedSessions(c.sessions)
-		if err := c.sessions.ExportToFile(c.CacheFilename); err != nil {
-			log.Error("Error updating cache: %s", err)
-		}
+	if c.CacheFilename == "" || c.sessions == nil {
+		return
+	}
+	v.UpdateCachedSessions(c.sessions)
+	if err := c.sessions.ExportToFile(c.CacheFilename); err != nil {
+		log.Error("Error updating cache: %s", err)
 	}
 }
 
