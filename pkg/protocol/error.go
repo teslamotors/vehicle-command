@@ -193,7 +193,8 @@ type RoutableMessageError struct {
 }
 
 func (v *RoutableMessageError) MayHaveSucceeded() bool {
-	return v.Code == universal.MessageFault_E_MESSAGEFAULT_ERROR_NONE
+	return v.Code == universal.MessageFault_E_MESSAGEFAULT_ERROR_NONE ||
+		v.Code == universal.MessageFault_E_MESSAGEFAULT_ERROR_RESPONSE_MTU_EXCEEDED
 }
 
 // retriableErrors can sometimes be remedied if the client retries the command,

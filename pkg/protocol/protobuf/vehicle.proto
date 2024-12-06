@@ -15,6 +15,7 @@ message VehicleData {
     ChargeState charge_state = 3;
     ClimateState climate_state = 4;
     DriveState drive_state = 5;
+    LocationState location_state = 8;
     ClosuresState closures_state = 9;
     ChargeScheduleState charge_schedule_state = 15;
     PreconditioningScheduleState preconditioning_schedule_state = 16;
@@ -470,6 +471,55 @@ message ChargeOnSolarStateError {}
 
 // The user pressed the Stop Charging button during a Charge on Solar session.
 message ChargeOnSolarStateUserStopped {}
+
+// LocationState contains information about the vehicle's location. Typically
+// clients will want to use native coordinates, which use either WGS
+// (international) or GCJ (Chinese) coordinate systems depending on the
+// vehicle's region. If the native fields are not provided, WGS clients should
+// fall back to the plain latitude/longitude fields, and GCJ clients should
+// fall back to corrected fields.
+//
+// The geo fields contain raw WGS GPS coordinates. They are usually less
+// accurate. However, they should be used if there is a large discrepancy
+// between the raw and estimated location, as determined by the
+// "estimated to raw distance" field. This scenario most frequently arises when
+// the vehicle has recently been transported or towed.
+message LocationState {
+    message GPSCoordinateType {
+        oneof type {
+            Void GCJ = 1;
+            Void WGS = 2;
+        }
+    }
+
+    reserved 12;
+
+    oneof optional_latitude { float latitude = 101; }
+    oneof optional_longitude { float longitude = 102; }
+    oneof optional_heading { uint32 heading = 103; }
+    oneof optional_gps_as_of { uint64 gps_as_of = 104; }
+    oneof optional_native_location_supported { bool native_location_supported = 105; }
+    oneof optional_native_latitude { float native_latitude = 106; }
+    oneof optional_native_longitude { float native_longitude = 107; }
+    GPSCoordinateType native_type = 8;
+    oneof optional_corrected_latitude { float corrected_latitude = 109; } // only for China cars
+    oneof optional_corrected_longitude { float corrected_longitude = 110; } // only for China cars
+
+    google.protobuf.Timestamp timestamp = 11;
+
+    oneof optional_homelink_nearby { bool homelink_nearby = 112; } // only set when homelink supported
+
+    oneof optional_location_name { string location_name = 113; } // contains a non-precise location name
+
+    oneof optional_geo_latitude  { float geo_latitude = 114; } // raw GPS coordinates
+    oneof optional_geo_longitude { float geo_longitude = 115; }
+    oneof optional_geo_heading   { float geo_heading = 116; }
+    oneof optional_geo_elevation { float geo_elevation = 117; }
+    oneof optional_geo_accuracy  { float geo_accuracy = 118; }
+    oneof optional_estimated_gps_valid { bool estimated_gps_valid  = 119; }
+    oneof optional_estimated_to_raw_distance  { float estimated_to_raw_distance  = 120; } // the distance between the estimated and raw coordinates in meters
+} // LocationState
+
 
 message VehicleState {
     message GuestMode {
