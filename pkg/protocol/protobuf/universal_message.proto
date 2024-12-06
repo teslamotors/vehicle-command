@@ -53,6 +53,11 @@ enum MessageFault_E
     MESSAGEFAULT_ERROR_REMOTE_ACCESS_DISABLED = 21; // The vehicle owner has disabled Mobile access.
     MESSAGEFAULT_ERROR_REMOTE_SERVICE_ACCESS_DISABLED = 22; // The command was authorized with a Service key, but the vehicle has not been configured to permit remote service commands.
     MESSAGEFAULT_ERROR_COMMAND_REQUIRES_ACCOUNT_CREDENTIALS = 23; // The command requires proof of Tesla account credentials but was not sent over a channel that provides this proof. Resend the command using Fleet API.
+    MESSAGEFAULT_ERROR_REQUEST_MTU_EXCEEDED = 24; // Client sent a request with a field that exceeds MTU
+    MESSAGEFAULT_ERROR_RESPONSE_MTU_EXCEEDED = 25; // Client's request was received, but response size exceeded MTU
+    MESSAGEFAULT_ERROR_REPEATED_COUNTER = 26;
+    MESSAGEFAULT_ERROR_INVALID_KEY_HANDLE = 27;
+    MESSAGEFAULT_ERROR_REQUIRES_RESPONSE_ENCRYPTION = 28;
 }
 
 message MessageStatus
