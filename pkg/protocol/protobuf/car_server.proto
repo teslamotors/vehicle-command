@@ -80,7 +80,8 @@ message GetVehicleData {
     GetChargeState getChargeState = 2;
     GetClimateState getClimateState = 3;
     GetDriveState getDriveState = 4;
-    reserved 5, 6, 7;
+    reserved 5, 6;
+    GetLocationState getLocationState = 7;
     GetClosuresState getClosuresState = 8;
     GetChargeScheduleState getChargeScheduleState = 10;
     GetPreconditioningScheduleState getPreconditioningScheduleState = 11;
@@ -111,6 +112,9 @@ message GetClimateState {
 }
 
 message GetDriveState {
+}
+
+message GetLocationState {
 }
 
 message GetClosuresState {

@@ -63,6 +63,7 @@ var categoriesByName = map[string]vehicle.StateCategory{
 	"charge":                vehicle.StateCategoryCharge,
 	"climate":               vehicle.StateCategoryClimate,
 	"drive":                 vehicle.StateCategoryDrive,
+	"location":              vehicle.StateCategoryLocation,
 	"closures":              vehicle.StateCategoryClosures,
 	"charge-schedule":       vehicle.StateCategoryChargeSchedule,
 	"precondition-schedule": vehicle.StateCategoryPreconditioningSchedule,

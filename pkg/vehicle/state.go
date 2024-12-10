@@ -24,6 +24,7 @@ const (
 	StateCategoryCharge StateCategory = iota
 	StateCategoryClimate
 	StateCategoryDrive
+	StateCategoryLocation
 	StateCategoryClosures
 	StateCategoryChargeSchedule
 	StateCategoryPreconditioningSchedule
@@ -39,6 +40,7 @@ func (c StateCategory) submessage() *carserver.GetVehicleData {
 		StateCategoryCharge:                  &carserver.GetVehicleData{GetChargeState: &carserver.GetChargeState{}},
 		StateCategoryClimate:                 &carserver.GetVehicleData{GetClimateState: &carserver.GetClimateState{}},
 		StateCategoryDrive:                   &carserver.GetVehicleData{GetDriveState: &carserver.GetDriveState{}},
+		StateCategoryLocation:                &carserver.GetVehicleData{GetLocationState: &carserver.GetLocationState{}},
 		StateCategoryClosures:                &carserver.GetVehicleData{GetClosuresState: &carserver.GetClosuresState{}},
 		StateCategoryChargeSchedule:          &carserver.GetVehicleData{GetChargeScheduleState: &carserver.GetChargeScheduleState{}},
 		StateCategoryPreconditioningSchedule: &carserver.GetVehicleData{GetPreconditioningScheduleState: &carserver.GetPreconditioningScheduleState{}},
@@ -60,6 +62,9 @@ func (c StateCategory) submessage() *carserver.GetVehicleData {
 // This is intended for use over BLE. The [vehicle data] Fleet API endpoint is much more efficient
 // for clients that connect over the Internet because it combines data into a single query and can
 // serve cached data when the vehicle is offline.
+//
+// StateCategoryLocation may return a few different (latitude, longitude) fields. See
+// [carserver.LocationState] documentation for an explanation.
 //
 // [vehicle data]: https://developer.tesla.com/docs/fleet-api/endpoints/vehicle-endpoints#vehicle-data
 func (v *Vehicle) GetState(ctx context.Context, category StateCategory) (*carserver.VehicleData, error) {

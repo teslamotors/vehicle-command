@@ -59,6 +59,16 @@ func TestRetriableError(t *testing.T) {
 			shouldRetry = false
 		case universal.MessageFault_E_MESSAGEFAULT_ERROR_COMMAND_REQUIRES_ACCOUNT_CREDENTIALS:
 			shouldRetry = false
+		case universal.MessageFault_E_MESSAGEFAULT_ERROR_REQUEST_MTU_EXCEEDED:
+			shouldRetry = false
+		case universal.MessageFault_E_MESSAGEFAULT_ERROR_RESPONSE_MTU_EXCEEDED:
+			shouldRetry = false
+		case universal.MessageFault_E_MESSAGEFAULT_ERROR_REPEATED_COUNTER:
+			shouldRetry = false
+		case universal.MessageFault_E_MESSAGEFAULT_ERROR_INVALID_KEY_HANDLE:
+			shouldRetry = false
+		case universal.MessageFault_E_MESSAGEFAULT_ERROR_REQUIRES_RESPONSE_ENCRYPTION:
+			shouldRetry = false
 		default:
 			t.Fatalf("No expected retry behavior specified for %s", message)
 		}
