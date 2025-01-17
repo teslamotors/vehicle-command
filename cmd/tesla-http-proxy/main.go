@@ -110,11 +110,15 @@ func main() {
 			fmt.Fprintln(os.Stderr, "Generate a new TLS key for this server.")
 			return
 		}
+	} else {
+		log.Error("Error loading public key: %v", err)
+		return
 	}
 
 	log.Debug("Creating proxy")
 	p, err := proxy.New(context.Background(), skey, cacheSize)
 	if err != nil {
+		log.Error("Error initializing proxy service: %v", err)
 		return
 	}
 	p.Timeout = httpConfig.timeout
