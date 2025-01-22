@@ -189,6 +189,7 @@ func (d *Dispatcher) checkForSessionUpdate(message *universal.RoutableMessage, h
 	tag := message.GetSignatureData().GetSessionInfoTag().GetTag()
 	if tag == nil {
 		log.Warning("[%02x] Discarding unauthenticated session info", message.GetRequestUuid())
+		return
 	}
 	var err error
 
