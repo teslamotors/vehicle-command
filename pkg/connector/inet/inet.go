@@ -141,7 +141,7 @@ func ValidTeslaDomainSuffix(domain string) bool {
 // response body is not necessarily nil if the error is set.
 func (c *Connection) SendFleetAPICommand(ctx context.Context, endpoint string, command interface{}) ([]byte, error) {
 	url := fmt.Sprintf("https://%s/%s", c.serverURL, endpoint)
-	rsp, err := SendFleetAPICommand(ctx, &c.client, c.UserAgent, c.authHeader, url, command)
+	rsp, err := SendFleetAPICommand(ctx, c.client, c.UserAgent, c.authHeader, url, command)
 	if err != nil {
 		var httpErr *HttpError
 		if errors.As(err, &httpErr) && httpErr.Code == http.StatusMisdirectedRequest {
@@ -159,12 +159,12 @@ func (c *Connection) SendFleetAPICommand(ctx context.Context, endpoint string, c
 type Connection struct {
 	UserAgent  string
 	vin        string
-	client     http.Client
+	client     *http.Client
 	serverURL  string
 	inbox      chan []byte
 	authHeader string
 
-	wakeLock sync.Mutex
+	lock     sync.Mutex
 	lastPoke time.Time
 }
 
@@ -173,7 +173,7 @@ func NewConnection(vin string, authHeader, serverURL, userAgent string) *Connect
 	conn := Connection{
 		UserAgent:  userAgent,
 		vin:        vin,
-		client:     http.Client{},
+		client:     &http.Client{},
 		serverURL:  serverURL,
 		authHeader: authHeader,
 		inbox:      make(chan []byte, connector.BufferSize),
@@ -198,6 +198,8 @@ func (c *Connection) Receive() <-chan []byte {
 }
 
 func (c *Connection) Close() {
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	if c.inbox != nil {
 		close(c.inbox)
 		c.inbox = nil
@@ -217,9 +219,9 @@ func (c *Connection) Wakeup(ctx context.Context) error {
 	}
 
 	for {
-		c.wakeLock.Lock()
+		c.lock.Lock()
 		c.lastPoke = time.Now()
-		c.wakeLock.Unlock()
+		c.lock.Unlock()
 		endpoint := fmt.Sprintf("api/1/vehicles/%s/wake_up", c.vin)
 		respJSON, err := c.SendFleetAPICommand(ctx, endpoint, nil)
 		if err == nil {
@@ -261,6 +263,11 @@ func (c *Connection) Send(ctx context.Context, buffer []byte) error {
 	if err := json.Unmarshal(body, &rsp); err != nil {
 		log.Debug("Invalid server response (%d bytes): %s", len(body), body)
 		return &protocol.CommandError{Err: fmt.Errorf("unable to parse server response: %w", err), PossibleSuccess: true, PossibleTemporary: false}
+	}
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	if c.inbox == nil {
+		return protocol.ErrNotConnected
 	}
 	select {
 	case c.inbox <- rsp.Payload:
