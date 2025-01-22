@@ -199,11 +199,11 @@ func NewConnection(ctx context.Context, vin string) (*Connection, error) {
 func NewConnectionToBleTarget(ctx context.Context, vin string, target Advertisement) (*Connection, error) {
 	var lastError error
 	for {
-		conn, err := tryToConnect(ctx, vin, target)
+		conn, err, retry := tryToConnect(ctx, vin, target)
 		if err == nil {
 			return conn, nil
 		}
-		if strings.Contains(err.Error(), "operation not permitted") {
+		if !retry || strings.Contains(err.Error(), "operation not permitted") {
 			return nil, err
 		}
 		log.Warning("BLE connection attempt failed: %s", err)
@@ -217,13 +217,13 @@ func NewConnectionToBleTarget(ctx context.Context, vin string, target Advertisem
 	}
 }
 
-func tryToConnect(ctx context.Context, vin string, target Advertisement) (*Connection, error) {
+func tryToConnect(ctx context.Context, vin string, target Advertisement) (*Connection, error, bool) {
 	var err error
 	mu.Lock()
 	defer mu.Unlock()
 
 	if err = initDevice(); err != nil {
-		return nil, err
+		return nil, err, false
 	}
 
 	localName := VehicleLocalName(vin)
@@ -231,37 +231,37 @@ func tryToConnect(ctx context.Context, vin string, target Advertisement) (*Conne
 	if target == nil {
 		target, err = scanVehicleBeacon(ctx, localName)
 		if err != nil {
-			return nil, fmt.Errorf("ble: failed to scan for %s: %s", vin, err)
+			return nil, fmt.Errorf("ble: failed to scan for %s: %s", vin, err), true
 		}
 	}
 
 	if target.LocalName() != localName {
-		return nil, fmt.Errorf("ble: beacon with unexpected local name: '%s'", target.LocalName())
+		return nil, fmt.Errorf("ble: beacon with unexpected local name: '%s'", target.LocalName()), false
 	}
 
 	if !target.Connectable() {
-		return nil, ErrMaxConnectionsExceeded
+		return nil, ErrMaxConnectionsExceeded, false
 	}
 
 	log.Debug("Dialing to %s (%s)...", target.Addr(), localName)
 
 	client, err := ble.Dial(ctx, target.Addr())
 	if err != nil {
-		return nil, fmt.Errorf("ble: failed to dial for %s (%s): %s", vin, localName, err)
+		return nil, fmt.Errorf("ble: failed to dial for %s (%s): %s", vin, localName, err), true
 	}
 
 	log.Debug("Discovering services %s...", client.Addr())
 	services, err := client.DiscoverServices([]ble.UUID{vehicleServiceUUID})
 	if err != nil {
-		return nil, fmt.Errorf("ble: failed to enumerate device services: %s", err)
+		return nil, fmt.Errorf("ble: failed to enumerate device services: %s", err), true
 	}
 	if len(services) == 0 {
-		return nil, fmt.Errorf("ble: failed to discover service")
+		return nil, fmt.Errorf("ble: failed to discover service"), true
 	}
 
 	characteristics, err := client.DiscoverCharacteristics([]ble.UUID{toVehicleUUID, fromVehicleUUID}, services[0])
 	if err != nil {
-		return nil, fmt.Errorf("ble: failed to discover service characteristics: %s", err)
+		return nil, fmt.Errorf("ble: failed to discover service characteristics: %s", err), true
 	}
 
 	conn := Connection{
@@ -276,15 +276,15 @@ func tryToConnect(ctx context.Context, vin string, target Advertisement) (*Conne
 			conn.rxChar = characteristic
 		}
 		if _, err := client.DiscoverDescriptors(nil, characteristic); err != nil {
-			return nil, fmt.Errorf("ble: couldn't fetch descriptors: %s", err)
+			return nil, fmt.Errorf("ble: couldn't fetch descriptors: %s", err), true
 		}
 	}
 	if conn.txChar == nil || conn.rxChar == nil {
-		return nil, fmt.Errorf("ble: failed to find required characteristics")
+		return nil, fmt.Errorf("ble: failed to find required characteristics"), true
 	}
 	if err := client.Subscribe(conn.rxChar, true, conn.rx); err != nil {
-		return nil, fmt.Errorf("ble: failed to subscribe to RX: %s", err)
+		return nil, fmt.Errorf("ble: failed to subscribe to RX: %s", err), true
 	}
 	log.Info("Connected to vehicle BLE")
-	return &conn, nil
+	return &conn, nil, false
 }
