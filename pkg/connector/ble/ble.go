@@ -169,13 +169,6 @@ func ScanVehicleBeacon(ctx context.Context, vin string) (Advertisement, error) {
 func scanVehicleBeacon(ctx context.Context, localName string) (Advertisement, error) {
 	var err error
 	ctx2, cancel := context.WithCancel(ctx)
-	go func() {
-		select {
-		case <-ctx.Done():
-			cancel()
-		case <-ctx2.Done():
-		}
-	}()
 
 	ch := make(chan Advertisement)
 	fn := func(a Advertisement) {
