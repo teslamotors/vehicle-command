@@ -172,8 +172,7 @@ func scanVehicleBeacon(ctx context.Context, localName string) (Advertisement, er
 
 	ch := make(chan Advertisement)
 	fn := func(a Advertisement) {
-		ln := a.LocalName()
-		if ln != localName {
+		if a.LocalName() != localName {
 			return
 		}
 		cancel()
