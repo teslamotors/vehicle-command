@@ -110,9 +110,10 @@ func main() {
 			fmt.Fprintln(os.Stderr, "Generate a new TLS key for this server.")
 			return
 		}
+		log.Debug("Verified that TLS key is not the same as the command-authentication key.")
 	} else {
-		log.Error("Error loading public key: %v", err)
-		return
+		// Discarding the error here is deliberate
+		log.Debug("Verified that TLS key is not a recycled command-authentication key, because it is not NIST P256.")
 	}
 
 	log.Debug("Creating proxy")
