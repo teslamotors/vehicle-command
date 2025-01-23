@@ -78,22 +78,22 @@ func TestEviction(t *testing.T) {
 	c.MaxEntries = 5
 	// Note that generateTestSessions(n) adds an entry with timestamp n, and entries are evicted
 	// based on timestamp, not the order in which they were added to the cache.
-	c.Update("7", generateTestSessions(7))
-	c.Update("4", generateTestSessions(4))
-	c.Update("5", generateTestSessions(5))
-	c.Update("3", generateTestSessions(3))
-	c.Update("6", generateTestSessions(6))
+	_ = c.Update("7", generateTestSessions(7))
+	_ = c.Update("4", generateTestSessions(4))
+	_ = c.Update("5", generateTestSessions(5))
+	_ = c.Update("3", generateTestSessions(3))
+	_ = c.Update("6", generateTestSessions(6))
 	verifyCache(t, c, []int{3, 4, 5, 6, 7})
 
 	// Duplicate key updated in place
-	c.Update("5", generateTestSessions(5))
+	_ = c.Update("5", generateTestSessions(5))
 	verifyCache(t, c, []int{3, 4, 5, 6, 7})
 
 	// Evicts oldest entry
-	c.Update("8", generateTestSessions(8))
+	_ = c.Update("8", generateTestSessions(8))
 	verifyCache(t, c, []int{4, 5, 6, 7, 8})
 
 	// Older entry doesn't evict newer entry
-	c.Update("1", generateTestSessions(1))
+	_ = c.Update("1", generateTestSessions(1))
 	verifyCache(t, c, []int{4, 5, 6, 7, 8})
 }

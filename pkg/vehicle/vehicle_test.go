@@ -46,7 +46,7 @@ type testSender struct {
 	ConnectionErrors []error
 }
 
-func (s *testSender) StartSessions(ctx context.Context, domains []universal.Domain) error {
+func (s *testSender) StartSessions(_ context.Context, _ []universal.Domain) error {
 	if len(s.ConnectionErrors) > 0 {
 		err := s.ConnectionErrors[0]
 		s.ConnectionErrors = s.ConnectionErrors[1:]
@@ -59,7 +59,7 @@ func (s *testSender) Cache() []dispatcher.CacheEntry {
 	return nil
 }
 
-func (s *testSender) LoadCache(entries []dispatcher.CacheEntry) error {
+func (s *testSender) LoadCache(_ []dispatcher.CacheEntry) error {
 	return nil
 }
 
@@ -89,7 +89,7 @@ func (s *testSender) EnqueueResponse(t *testing.T, message *universal.RoutableMe
 	}
 }
 
-func (s *testSender) SetMaxLatency(latency time.Duration) {}
+func (s *testSender) SetMaxLatency(_ time.Duration) {}
 
 func newTestVehicle() (*Vehicle, *testSender) {
 	dispatch := newTestSender()
@@ -102,9 +102,9 @@ func newTestSender() *testSender {
 	}
 }
 
-func (t *testSender) Start(ctx context.Context) error {
+func (s *testSender) Start(ctx context.Context) error {
 	ready := make(chan struct{})
-	go t.Listen(ready)
+	go s.Listen(ready)
 	select {
 	case <-ready:
 		return nil
@@ -113,33 +113,33 @@ func (t *testSender) Start(ctx context.Context) error {
 	}
 }
 
-func (t *testSender) Listen(ready chan<- struct{}) {
-	t.lock.Lock()
-	t.listening = true
+func (s *testSender) Listen(ready chan<- struct{}) {
+	s.lock.Lock()
+	s.listening = true
 	if ready != nil {
 		close(ready)
 	}
-	t.lock.Unlock()
+	s.lock.Unlock()
 }
 
-func (t *testSender) Stop() {
-	t.lock.Lock()
-	t.listening = false
-	t.lock.Unlock()
+func (s *testSender) Stop() {
+	s.lock.Lock()
+	s.listening = false
+	s.lock.Unlock()
 }
 
-func (t *testSender) Send(ctx context.Context, message *universal.RoutableMessage, authorize connector.AuthMethod) (protocol.Receiver, error) {
-	t.lock.Lock()
-	defer t.lock.Unlock()
-	if t.SendError != nil {
-		return nil, t.SendError
+func (s *testSender) Send(_ context.Context, _ *universal.RoutableMessage, _ connector.AuthMethod) (protocol.Receiver, error) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	if s.SendError != nil {
+		return nil, s.SendError
 	}
-	if len(t.errQueue) > 0 {
-		err := t.errQueue[0]
-		t.errQueue = t.errQueue[1:]
+	if len(s.errQueue) > 0 {
+		err := s.errQueue[0]
+		s.errQueue = s.errQueue[1:]
 		return nil, err
 	}
-	return &testReceiever{parent: t}, nil
+	return &testReceiever{parent: s}, nil
 }
 
 func TestVehicleStartSessionFailed(t *testing.T) {

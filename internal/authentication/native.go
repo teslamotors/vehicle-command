@@ -29,37 +29,37 @@ type NativeSession struct {
 	localPublic []byte
 }
 
-func (b *NativeSession) LocalPublicBytes() []byte {
-	buff := make([]byte, len(b.localPublic))
-	copy(buff, b.localPublic)
+func (n *NativeSession) LocalPublicBytes() []byte {
+	buff := make([]byte, len(n.localPublic))
+	copy(buff, n.localPublic)
 	return buff
 }
 
-func (b *NativeSession) Encrypt(plaintext, associatedData []byte) (nonce, ciphertext, tag []byte, err error) {
-	if b.gcm == nil {
+func (n *NativeSession) Encrypt(plaintext, associatedData []byte) (nonce, ciphertext, tag []byte, err error) {
+	if n.gcm == nil {
 		err = errors.New("GCM context not initialized")
 		return
 	}
-	nonce = make([]byte, b.gcm.NonceSize())
+	nonce = make([]byte, n.gcm.NonceSize())
 	if _, err = rand.Read(nonce); err != nil {
 		return
 	}
 	length := len(plaintext)
-	ciphertext = b.gcm.Seal(nil, nonce, plaintext, associatedData)
+	ciphertext = n.gcm.Seal(nil, nonce, plaintext, associatedData)
 	tag = ciphertext[length:]
 	ciphertext = ciphertext[:length]
 	return
 }
 
-func (b *NativeSession) Decrypt(nonce, ciphertext, associatedData, tag []byte) (plaintext []byte, err error) {
-	if b.gcm == nil {
+func (n *NativeSession) Decrypt(nonce, ciphertext, associatedData, tag []byte) (plaintext []byte, err error) {
+	if n.gcm == nil {
 		err = errors.New("GCM context not initialized")
 		return
 	}
 	ctAndTag := make([]byte, 0, len(ciphertext)+len(tag))
 	ctAndTag = append(ctAndTag, ciphertext...)
 	ctAndTag = append(ctAndTag, tag...)
-	plaintext, err = b.gcm.Open(nil, nonce, ctAndTag, associatedData)
+	plaintext, err = n.gcm.Open(nil, nonce, ctAndTag, associatedData)
 	return
 }
 
@@ -69,12 +69,12 @@ func (n *NativeSession) subkey(label []byte) []byte {
 	return kdf.Sum(nil)
 }
 
-func (b *NativeSession) NewHMAC(label string) hash.Hash {
-	return hmac.New(sha256.New, b.subkey([]byte(label)))
+func (n *NativeSession) NewHMAC(label string) hash.Hash {
+	return hmac.New(sha256.New, n.subkey([]byte(label)))
 }
 
-func (b *NativeSession) SessionInfoHMAC(id, challenge, encodedInfo []byte) ([]byte, error) {
-	meta := newMetadataHash(b.NewHMAC(labelSessionInfo))
+func (n *NativeSession) SessionInfoHMAC(id, challenge, encodedInfo []byte) ([]byte, error) {
+	meta := newMetadataHash(n.NewHMAC(labelSessionInfo))
 	if err := meta.Add(signatures.Tag_TAG_SIGNATURE_TYPE, []byte{byte(signatures.SignatureType_SIGNATURE_TYPE_HMAC)}); err != nil {
 		return nil, err
 	}
@@ -136,12 +136,12 @@ func (n *NativeECDHKey) Exchange(publicBytes []byte) (Session, error) {
 }
 
 func NewECDHPrivateKey(rng io.Reader) (ECDHPrivateKey, error) {
-	if ecdsaKey, err := ecdsa.GenerateKey(elliptic.P256(), rng); err == nil {
-		native := &NativeECDHKey{ecdsaKey}
-		return native, nil
-	} else {
+	ecdsaKey, err := ecdsa.GenerateKey(elliptic.P256(), rng)
+	if err != nil {
 		return nil, err
 	}
+	native := &NativeECDHKey{ecdsaKey}
+	return native, nil
 }
 
 func LoadExternalECDHKey(filename string) (ECDHPrivateKey, error) {

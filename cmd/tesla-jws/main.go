@@ -21,7 +21,7 @@ usage: tesla-jws [OPTION...] sign APP [JSON_FILE]
 			Verifies that the signature on JWS_FILE is correct, but does not check that the issuer
 			is trusted or that the audience is correct.
 
-Creates or verifies a JWS (JSON Web Siganture) using Schnorr/P256 signatures. This signature type is
+Creates or verifies a JWS (JSON Web Signature) using Schnorr/P256 signatures. This signature type is
 not part of the JWS standard, but permits clients to safely re-use existing ECDH/P256 keys as
 signing keys.
 

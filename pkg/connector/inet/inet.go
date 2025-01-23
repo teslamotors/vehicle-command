@@ -54,26 +54,26 @@ The regular expression below extracts domains from HTTP bodies:
 */
 var baseDomainRE = regexp.MustCompile(`use base URL: https://([-a-z0-9.]*)`)
 
-type HttpError struct {
+type HTTPError struct {
 	Code    int
 	Message string
 }
 
-func (e *HttpError) Error() string {
+func (e *HTTPError) Error() string {
 	if e.Message == "" {
 		return http.StatusText(e.Code)
 	}
 	return e.Message
 }
 
-func (e *HttpError) MayHaveSucceeded() bool {
+func (e *HTTPError) MayHaveSucceeded() bool {
 	if e.Code >= 400 && e.Code < 500 {
 		return false
 	}
 	return e.Code != http.StatusServiceUnavailable
 }
 
-func (e *HttpError) Temporary() bool {
+func (e *HTTPError) Temporary() bool {
 	return e.Code == http.StatusServiceUnavailable ||
 		e.Code == http.StatusGatewayTimeout ||
 		e.Code == http.StatusRequestTimeout ||
@@ -105,7 +105,9 @@ func SendFleetAPICommand(ctx context.Context, client *http.Client, userAgent, au
 	if err != nil {
 		return nil, &protocol.CommandError{Err: err, PossibleSuccess: false, PossibleTemporary: true}
 	}
-	defer result.Body.Close()
+	defer func() {
+		_ = result.Body.Close()
+	}()
 
 	body = make([]byte, connector.MaxResponseLength+1)
 	body, err = ReadWithContext(ctx, result.Body, body)
@@ -130,7 +132,7 @@ func SendFleetAPICommand(ctx context.Context, client *http.Client, userAgent, au
 			return nil, ErrVehicleNotAwake
 		}
 	}
-	return nil, &HttpError{Code: result.StatusCode, Message: string(body)}
+	return nil, &HTTPError{Code: result.StatusCode, Message: string(body)}
 }
 
 func ValidTeslaDomainSuffix(domain string) bool {
@@ -143,7 +145,7 @@ func (c *Connection) SendFleetAPICommand(ctx context.Context, endpoint string, c
 	url := fmt.Sprintf("https://%s/%s", c.serverURL, endpoint)
 	rsp, err := SendFleetAPICommand(ctx, c.client, c.UserAgent, c.authHeader, url, command)
 	if err != nil {
-		var httpErr *HttpError
+		var httpErr *HTTPError
 		if errors.As(err, &httpErr) && httpErr.Code == http.StatusMisdirectedRequest {
 			matches := baseDomainRE.FindStringSubmatch(httpErr.Message)
 			if len(matches) == 2 && ValidTeslaDomainSuffix(matches[1]) {

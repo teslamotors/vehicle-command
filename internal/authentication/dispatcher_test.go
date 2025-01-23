@@ -28,9 +28,9 @@ func ExampleDispatcher() {
 		var challenge [16]byte
 		if _, err := rand.Read(challenge[:]); err != nil {
 			panic(fmt.Sprintf("Failed to generate random challenge: %s", err))
-		} else {
-			challenges = append(challenges, challenge[:])
 		}
+		challenges = append(challenges, challenge[:])
+
 		if err != nil {
 			panic(fmt.Sprintf("Failed to generate car key: %s", err))
 		}

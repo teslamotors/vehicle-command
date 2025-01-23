@@ -492,7 +492,7 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 			return nil, errors.New("command must be 'vent' or 'close'")
 		}
 	default:
-		return nil, &inet.HttpError{Code: http.StatusBadRequest, Message: "{\"response\":null,\"error\":\"invalid_command\",\"error_description\":\"\"}"}
+		return nil, &inet.HTTPError{Code: http.StatusBadRequest, Message: "{\"response\":null,\"error\":\"invalid_command\",\"error_description\":\"\"}"}
 	}
 }
 

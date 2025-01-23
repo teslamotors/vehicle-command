@@ -249,7 +249,7 @@ func (d *dummyConnector) EnqueueSendError(err error) {
 	d.lock.Unlock()
 }
 
-func (d *dummyConnector) Send(ctx context.Context, buffer []byte) error {
+func (d *dummyConnector) Send(_ context.Context, buffer []byte) error {
 	var message universal.RoutableMessage
 	if !d.AckRequests {
 		return errTimeout
@@ -898,7 +898,7 @@ func TestNoValidHandshakeResponse(t *testing.T) {
 	const maxCallbacks = 5
 	callbackCount := 0
 
-	conn.callback = func(d *dummyConnector, message *universal.RoutableMessage) ([]byte, bool) {
+	conn.callback = func(_ *dummyConnector, message *universal.RoutableMessage) ([]byte, bool) {
 		callbackCount++ // caller holds d.lock
 		reply := initReply(message)
 		reply.Payload = &universal.RoutableMessage_SessionInfo{}

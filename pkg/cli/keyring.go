@@ -58,9 +58,8 @@ func (c *Config) getPassword(prompt string) (string, error) {
 		fd = int(os.Stderr.Fd())
 		if !term.IsTerminal(fd) {
 			return "", fmt.Errorf("no terminal output available for password prompt")
-		} else {
-			w = os.Stderr
 		}
+		w = os.Stderr
 	} else {
 		w = os.Stdout
 	}

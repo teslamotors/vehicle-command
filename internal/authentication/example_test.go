@@ -26,12 +26,12 @@ func Example() {
 	// Signer and Verifier exchange public keys through an authenticated channel.
 	// Signer must know Verifier domain and name (see protocol description).
 	domain := universal.Domain_DOMAIN_VEHICLE_SECURITY
-	verifierId := []byte("testVIN-1234")
+	verifierID := []byte("testVIN-1234")
 
 	/***** Once per session *****************************************************/
 	// (A session typically lasts until either Signer or Verifier reboots)
 
-	verifier, err := command.NewVerifier(verifierKey, verifierId, domain, signerKey.PublicBytes())
+	verifier, err := command.NewVerifier(verifierKey, verifierID, domain, signerKey.PublicBytes())
 	if err != nil {
 		panic(fmt.Sprintf("Failed to initialize verifier: %s", err))
 	}
@@ -46,7 +46,7 @@ func Example() {
 
 	// Verifier sends encodedInfo, tag to Signer.
 	// Signer executes:
-	signer, err := command.NewAuthenticatedSigner(signerKey, verifierId, challenge, encodedInfo, tag)
+	signer, err := command.NewAuthenticatedSigner(signerKey, verifierID, challenge, encodedInfo, tag)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to initialize signer: %s", err))
 	}
