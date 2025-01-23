@@ -5,6 +5,7 @@ package ble
 import (
 	"context"
 	"crypto/sha1"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -169,16 +170,28 @@ func ScanVehicleBeacon(ctx context.Context, vin string) (Advertisement, error) {
 func scanVehicleBeacon(ctx context.Context, localName string) (Advertisement, error) {
 	var err error
 	ctx2, cancel := context.WithCancel(ctx)
+	defer cancel()
 
-	ch := make(chan Advertisement)
+	ch := make(chan Advertisement, 1)
 	fn := func(a Advertisement) {
 		if a.LocalName() != localName {
 			return
 		}
-		cancel()
-		ch <- a
+		select {
+		case ch <- a:
+			cancel() // Notify device.Scan() that we found a match
+		case <-ctx2.Done():
+			// Another goroutine already found a matching advertisement. We need to return so that
+			// the MacOS implementation of device.Scan(...) unblocks.
+		}
 	}
-	err = device.Scan(ctx2, false, fn)
+
+	if err = device.Scan(ctx2, false, fn); !errors.Is(err, context.Canceled) {
+		// If ctx rather than ctx2 was canceled, we'll pick that error up below. This is a bit
+		// hacky, but unfortunately device.Scan() _always_ returns an error on MacOS because it does
+		// not terminate until the provided context is canceled.
+		return nil, err
+	}
 
 	select {
 	case a, ok := <-ch:
@@ -187,8 +200,8 @@ func scanVehicleBeacon(ctx context.Context, localName string) (Advertisement, er
 			return nil, fmt.Errorf("scan channel closed")
 		}
 		return a, nil
-	default:
-		return nil, err
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 }
 
