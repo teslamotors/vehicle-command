@@ -825,4 +825,4 @@ key), a message is terminal if
 client should drop empty messages.
 
 For non-whitelist operations, an empty message indicates success and
-`FromVCSECMessage.commandStatus.nominalError` indicates an error.
+`FromVCSECMessage.nominalError` indicates an error.
