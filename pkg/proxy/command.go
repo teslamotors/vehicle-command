@@ -421,7 +421,10 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		if err != nil {
 			return nil, err
 		}
-		return func(v *vehicle.Vehicle) error { return v.SetValetMode(ctx, on, password) }, nil
+		if on {
+			return func(v *vehicle.Vehicle) error { return v.EnableValetMode(ctx, password) }, nil
+		}
+		return func(v *vehicle.Vehicle) error { return v.DisableValetMode(ctx) }, nil
 	case "set_vehicle_name":
 		name, err := params.getString("vehicle_name", true)
 		if err != nil {

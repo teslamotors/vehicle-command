@@ -11,6 +11,8 @@ issues:
     - "Error return value of `fmt.Fprintln` is not checked"
     - "Error return value of `file.Close` is not checked"
     - "Error return value of `os.Setenv` is not checked"
+    # ECDH code needs to support a Go 1.21 toolchain
+    - "elliptic.([A-Za-z]+) has been deprecated since Go 1.21: for ECDH"
 
 linters:
   enable:
@@ -21,9 +23,6 @@ linters:
     - misspell
     - revive
     - unused
-  disable:
-    # Remove from disable when all issues are fixed
-    - staticcheck
 
 linters-settings:
   revive:
@@ -53,8 +52,7 @@ linters-settings:
       - name: redefines-builtin-id
       - name: superfluous-else
       - name: time-naming
-      # Uncomment when all issues are fixed
-      # - name: unexported-return
+      - name: unexported-return
       - name: unreachable-code
       - name: unused-parameter
       - name: var-declaration
