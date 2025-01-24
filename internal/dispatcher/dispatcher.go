@@ -76,7 +76,7 @@ func (d *Dispatcher) StartSession(ctx context.Context, domain universal.Domain) 
 	d.sessionLock.Lock()
 	s, ok := d.sessions[domain]
 	if !ok {
-		d.sessions[domain], err = NewSession(d.privateKey, d.conn.VIN())
+		d.sessions[domain], err = newSession(d.privateKey, d.conn.VIN())
 		s = d.sessions[domain]
 	} else if s != nil && s.ctx != nil {
 		log.Info("Session for %s loaded from cache", domain)
@@ -202,7 +202,7 @@ func (d *Dispatcher) checkForSessionUpdate(message *universal.RoutableMessage, h
 		return
 	}
 
-	if err = session.ProcessHello(message.GetRequestUuid(), sessionInfo, tag); err != nil {
+	if err = session.processHello(message.GetRequestUuid(), sessionInfo, tag); err != nil {
 		log.Warning("[%02x] Session info error: %s", message.GetRequestUuid(), err)
 		return
 	}
@@ -411,7 +411,7 @@ func (d *Dispatcher) Send(ctx context.Context, message *universal.RoutableMessag
 			log.Warning("No session available for %s", message.GetToDestination().GetDomain())
 			return nil, protocol.ErrNoSession
 		}
-		if err := session.Authorize(ctx, message, auth); err != nil {
+		if err := session.authorize(ctx, message, auth); err != nil {
 			return nil, err
 		}
 	}
@@ -502,7 +502,7 @@ func (d *Dispatcher) Cache() []CacheEntry {
 func (d *Dispatcher) LoadCache(entries []CacheEntry) error {
 	sessions := make(map[universal.Domain]*session)
 	for _, entry := range entries {
-		s, err := NewSession(d.privateKey, d.conn.VIN())
+		s, err := newSession(d.privateKey, d.conn.VIN())
 		close(s.readySignal)
 		s.ready = true
 		if err != nil {
