@@ -71,7 +71,7 @@ func printPublicKey(skey protocol.ECDHPrivateKey, outputFile string) bool {
 		out = file
 	}
 
-	pem.Encode(out, &pem.Block{Type: "PUBLIC KEY", Bytes: derPublicKey})
+	_ = pem.Encode(out, &pem.Block{Type: "PUBLIC KEY", Bytes: derPublicKey})
 	return true
 }
 
@@ -84,7 +84,7 @@ func printPrivateKey(skey protocol.ECDHPrivateKey) error {
 	if err != nil {
 		return err
 	}
-	pem.Encode(os.Stdout, &pem.Block{Type: "EC PRIVATE KEY", Bytes: derPrivateKey})
+	_ = pem.Encode(os.Stdout, &pem.Block{Type: "EC PRIVATE KEY", Bytes: derPrivateKey})
 	return nil
 }
 

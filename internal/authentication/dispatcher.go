@@ -9,10 +9,10 @@ type Dispatcher struct {
 	ECDHPrivateKey
 }
 
-func (d *Dispatcher) Connect(verifierId []byte, sessionInfo *signatures.SessionInfo) (*Signer, error) {
-	return NewSigner(d, verifierId, sessionInfo)
+func (d *Dispatcher) Connect(verifierID []byte, sessionInfo *signatures.SessionInfo) (*Signer, error) {
+	return NewSigner(d, verifierID, sessionInfo)
 }
 
-func (d *Dispatcher) ConnectAuthenticated(verifierId, challenge, encodedSessionInfo, tag []byte) (*Signer, error) {
-	return NewAuthenticatedSigner(d, verifierId, challenge, encodedSessionInfo, tag)
+func (d *Dispatcher) ConnectAuthenticated(verifierID, challenge, encodedSessionInfo, tag []byte) (*Signer, error) {
+	return NewAuthenticatedSigner(d, verifierID, challenge, encodedSessionInfo, tag)
 }

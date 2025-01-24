@@ -21,7 +21,7 @@ type Peer struct {
 	domain       universal.Domain
 	verifierName []byte
 	counter      uint32
-	epoch        [epochIdLength]byte
+	epoch        [epochIDLength]byte
 	timeZero     time.Time
 	session      Session
 }
@@ -32,14 +32,14 @@ func (p *Peer) timestamp() uint32 {
 
 // extractMetadata populates metadata.
 func (p *Peer) extractMetadata(meta *metadata, message *universal.RoutableMessage, info sessionInfo, method signatures.SignatureType) error {
-	meta.Add(signatures.Tag_TAG_SIGNATURE_TYPE, []byte{byte(method)})
+	_ = meta.Add(signatures.Tag_TAG_SIGNATURE_TYPE, []byte{byte(method)})
 
 	// Authenticate domain. Use domain from message because sender might be using BROADCAST.
 	if x, ok := message.ToDestination.GetSubDestination().(*universal.Destination_Domain); ok {
 		if 0 > x.Domain || x.Domain > 255 {
 			return newError(errCodeInvalidDomain, "domain out of range")
 		}
-		meta.Add(signatures.Tag_TAG_DOMAIN, []byte{byte(x.Domain)})
+		_ = meta.Add(signatures.Tag_TAG_DOMAIN, []byte{byte(x.Domain)})
 	} else {
 		return newError(errCodeInvalidDomain, "domain missing")
 	}
@@ -56,15 +56,15 @@ func (p *Peer) extractMetadata(meta *metadata, message *universal.RoutableMessag
 		return newError(errCodeBadParameter, "out of bounds expiration time")
 	}
 
-	meta.Add(signatures.Tag_TAG_EPOCH, p.epoch[:])
-	meta.AddUint32(signatures.Tag_TAG_EXPIRES_AT, info.GetExpiresAt())
-	meta.AddUint32(signatures.Tag_TAG_COUNTER, info.GetCounter())
+	_ = meta.Add(signatures.Tag_TAG_EPOCH, p.epoch[:])
+	_ = meta.AddUint32(signatures.Tag_TAG_EXPIRES_AT, info.GetExpiresAt())
+	_ = meta.AddUint32(signatures.Tag_TAG_COUNTER, info.GetCounter())
 
 	// For backwards compatibility, message flags are only explicitly added to
 	// the metadata hash if at least one of them is set. (If a MITM
 	// clears these bits, the hashes will not match, as desired).
 	if message.Flags > 0 {
-		meta.AddUint32(signatures.Tag_TAG_FLAGS, message.Flags)
+		_ = meta.AddUint32(signatures.Tag_TAG_FLAGS, message.Flags)
 	}
 
 	return nil
@@ -104,14 +104,14 @@ func RequestID(message *universal.RoutableMessage) []byte {
 
 func (p *Peer) responseMetadata(message *universal.RoutableMessage, id []byte, counter uint32) ([]byte, error) {
 	meta := newMetadata()
-	meta.Add(signatures.Tag_TAG_SIGNATURE_TYPE, []byte{byte(signatures.SignatureType_SIGNATURE_TYPE_AES_GCM_RESPONSE)})
-	meta.Add(signatures.Tag_TAG_DOMAIN, []byte{byte(message.GetFromDestination().GetDomain())})
+	_ = meta.Add(signatures.Tag_TAG_SIGNATURE_TYPE, []byte{byte(signatures.SignatureType_SIGNATURE_TYPE_AES_GCM_RESPONSE)})
+	_ = meta.Add(signatures.Tag_TAG_DOMAIN, []byte{byte(message.GetFromDestination().GetDomain())})
 	if err := meta.Add(signatures.Tag_TAG_PERSONALIZATION, p.verifierName); err != nil {
 		return nil, err
 	}
-	meta.AddUint32(signatures.Tag_TAG_COUNTER, counter)
-	meta.AddUint32(signatures.Tag_TAG_FLAGS, message.Flags)
-	meta.Add(signatures.Tag_TAG_REQUEST_HASH, id)
-	meta.AddUint32(signatures.Tag_TAG_FAULT, uint32(message.GetSignedMessageStatus().GetSignedMessageFault()))
+	_ = meta.AddUint32(signatures.Tag_TAG_COUNTER, counter)
+	_ = meta.AddUint32(signatures.Tag_TAG_FLAGS, message.Flags)
+	_ = meta.Add(signatures.Tag_TAG_REQUEST_HASH, id)
+	_ = meta.AddUint32(signatures.Tag_TAG_FAULT, uint32(message.GetSignedMessageStatus().GetSignedMessageFault()))
 	return meta.Checksum(nil), nil
 }

@@ -82,8 +82,8 @@ func (c *Connection) flush() bool {
 }
 
 func (c *Connection) Close() {
-	c.client.ClearSubscriptions()
-	c.client.CancelConnection()
+	_ = c.client.ClearSubscriptions()
+	_ = c.client.CancelConnection()
 }
 
 func (c *Connection) AllowedLatency() time.Duration {
@@ -100,7 +100,7 @@ func (c *Connection) rx(p []byte) {
 	}
 }
 
-func (c *Connection) Send(ctx context.Context, buffer []byte) error {
+func (c *Connection) Send(_ context.Context, buffer []byte) error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 

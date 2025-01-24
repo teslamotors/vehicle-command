@@ -79,7 +79,6 @@ func Verify(publicKeyBytes, message, signature []byte) error {
 	pX, pY = p256.Add(tempX, tempY, pX, pY)
 	if pX.Cmp(&vX) == 0 && pY.Cmp(&vY) == 0 {
 		return nil
-	} else {
-		return ErrInvalidSignature
 	}
+	return ErrInvalidSignature
 }

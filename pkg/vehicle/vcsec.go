@@ -125,7 +125,7 @@ func (v *Vehicle) getVCSECInfo(ctx context.Context, requestType vcsec.Informatio
 		return nil, err
 	}
 
-	done := func(v *vcsec.FromVCSECMessage) (bool, error) { return true, nil }
+	done := func(_ *vcsec.FromVCSECMessage) (bool, error) { return true, nil }
 	return v.getVCSECResult(ctx, encodedPayload, connector.AuthMethodNone, done)
 }
 

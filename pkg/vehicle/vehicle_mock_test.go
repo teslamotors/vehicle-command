@@ -4,6 +4,6 @@ import "context"
 
 type MockVehicle struct{}
 
-func (v *MockVehicle) SetVolume(ctx context.Context, volume float32) error {
+func (v *MockVehicle) SetVolume(_ context.Context, _ float32) error {
 	return nil
 }

@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func phonePublicTestKey(t *testing.T) []byte {
+func phonePublicTestKey() []byte {
 	return []byte{
 		0x04, 0x07, 0xfb, 0x60, 0xb6, 0x5b, 0x94, 0xe0, 0xde, 0x4a, 0x95,
 		0x4c, 0x53, 0xbe, 0x10, 0x00, 0x3d, 0x9e, 0x69, 0x91, 0x8d, 0xed,
@@ -57,7 +57,7 @@ func TestSharedKey(t *testing.T) {
 		0xac, 0xe2, 0x2c, 0xa1, 0x5e, 0x6f, 0xd8, 0x45,
 	}
 
-	phonePublicKey := phonePublicTestKey(t)
+	phonePublicKey := phonePublicTestKey()
 	vehicleKey := UnmarshalECDHPrivateKey(privateKeyBytes).(*NativeECDHKey)
 	if vehicleKey == nil {
 		t.Fatalf("Error parsing private key")
@@ -88,7 +88,7 @@ func TestSharedKey(t *testing.T) {
 
 func TestZero(t *testing.T) {
 	privateKeyBytes := make([]byte, 32)
-	phonePublicKey := phonePublicTestKey(t)
+	phonePublicKey := phonePublicTestKey()
 	vehicleKey := UnmarshalECDHPrivateKey(privateKeyBytes).(*NativeECDHKey)
 	if vehicleKey == nil {
 		t.Fatalf("Error parsing private key")

@@ -18,8 +18,8 @@ func assertEquals(t *testing.T, expected, actual interface{}, message string) {
 }
 
 func TestParseConfig(t *testing.T) {
-	origCert := os.Getenv(EnvTlsCert)
-	origKey := os.Getenv(EnvTlsKey)
+	origCert := os.Getenv(EnvTLSCert)
+	origKey := os.Getenv(EnvTLSKey)
 	origHost := os.Getenv(EnvHost)
 	origPort := os.Getenv(EnvPort)
 	origVerbose := os.Getenv(EnvVerbose)
@@ -28,8 +28,8 @@ func TestParseConfig(t *testing.T) {
 	os.Args = []string{"cmd"}
 
 	defer func() {
-		os.Setenv(EnvTlsCert, origCert)
-		os.Setenv(EnvTlsKey, origKey)
+		os.Setenv(EnvTLSCert, origCert)
+		os.Setenv(EnvTLSKey, origKey)
 		os.Setenv(EnvHost, origHost)
 		os.Setenv(EnvPort, origPort)
 		os.Setenv(EnvVerbose, origVerbose)
@@ -51,8 +51,8 @@ func TestParseConfig(t *testing.T) {
 	})
 
 	t.Run("environment variables", func(t *testing.T) {
-		os.Setenv(EnvTlsCert, "/env/cert.pem")
-		os.Setenv(EnvTlsKey, "/env/key.pem")
+		os.Setenv(EnvTLSCert, "/env/cert.pem")
+		os.Setenv(EnvTLSKey, "/env/key.pem")
 		os.Setenv(EnvHost, "envhost")
 		os.Setenv(EnvPort, "8443")
 		os.Setenv(EnvVerbose, "true")

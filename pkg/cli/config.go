@@ -297,7 +297,7 @@ func (c *Config) UpdateCachedSessions(v *vehicle.Vehicle) {
 	if c.CacheFilename == "" || c.sessions == nil {
 		return
 	}
-	v.UpdateCachedSessions(c.sessions)
+	_ = v.UpdateCachedSessions(c.sessions)
 	if err := c.sessions.ExportToFile(c.CacheFilename); err != nil {
 		log.Error("Error updating cache: %s", err)
 	}

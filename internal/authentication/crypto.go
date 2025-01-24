@@ -16,7 +16,7 @@ const (
 
 const (
 	counterMax               = 0xFFFFFFFF
-	epochIdLength            = 16
+	epochIDLength            = 16
 	maxSecondsWithoutCounter = 30
 	windowSize               = 32 // Verifier.windowSize is uint64, so must be ≤ 64.
 )

@@ -10,7 +10,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -36,7 +35,6 @@ const (
 	MaxAttempts          = 2
 )
 
-var baseDomainRE = regexp.MustCompile(`use base URL: https://([-a-z0-9.]*)`)
 var h2Prefix = "h2=https://"
 
 func getAccount(req *http.Request) (*account.Account, error) {
@@ -112,7 +110,7 @@ func (p *Proxy) unlockVIN(vin string) {
 //
 // Vehicles must have the public part of skey enrolled on their keychains. (This is a
 // command-authentication key, not a TLS key.)
-func New(ctx context.Context, skey protocol.ECDHPrivateKey, cacheSize int) (*Proxy, error) {
+func New(_ context.Context, skey protocol.ECDHPrivateKey, cacheSize int) (*Proxy, error) {
 	return &Proxy{
 		Timeout:    DefaultTimeout,
 		commandKey: skey,
@@ -135,7 +133,7 @@ type carResponse struct {
 func writeJSONError(w http.ResponseWriter, code int, err error) {
 	reply := Response{}
 
-	var httpErr *inet.HttpError
+	var httpErr *inet.HTTPError
 	var jsonBytes []byte
 	if errors.As(err, &httpErr) {
 		code = httpErr.Code
@@ -235,7 +233,7 @@ func (p *Proxy) forwardRequest(acct *account.Account, w http.ResponseWriter, req
 
 		limitedReader := &io.LimitedReader{R: result.Body, N: MaxResponseLength + 1}
 		body, err := io.ReadAll(limitedReader)
-		result.Body.Close()
+		_ = result.Body.Close()
 
 		if err != nil {
 			writeJSONError(w, http.StatusBadGateway, err)
@@ -276,7 +274,7 @@ func (p *Proxy) forwardRequest(acct *account.Account, w http.ResponseWriter, req
 			return
 		}
 
-		attempts += 1
+		attempts++
 		if attempts == MaxAttempts {
 			writeJSONError(w, http.StatusBadGateway, protocol.NewError("max retry exhausted", false, false))
 		}
@@ -335,7 +333,9 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 func (p *Proxy) handleFleetTelemetryConfig(acct *account.Account, w http.ResponseWriter, req *http.Request) {
 	log.Info("Processing fleet telemetry configuration...")
-	defer req.Body.Close()
+	defer func() {
+		_ = req.Body.Close()
+	}()
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, fmt.Errorf("could not read request body: %s", err))
@@ -413,7 +413,9 @@ func (p *Proxy) handleVehicleCommand(acct *account.Account, w http.ResponseWrite
 		writeJSONError(w, http.StatusInternalServerError, err)
 		return err
 	}
-	defer car.UpdateCachedSessions(p.sessions)
+	defer func() {
+		_ = car.UpdateCachedSessions(p.sessions)
+	}()
 
 	if err = commandToExecuteFunc(car); err == ErrCommandUseRESTAPI {
 		return err
@@ -460,11 +462,11 @@ func extractCommandAction(ctx context.Context, req *http.Request, command string
 	var params RequestParameters
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
-		return nil, &inet.HttpError{Code: http.StatusBadRequest, Message: "could not read request body"}
+		return nil, &inet.HTTPError{Code: http.StatusBadRequest, Message: "could not read request body"}
 	}
 	if len(body) > 0 {
 		if err := json.Unmarshal(body, &params); err != nil {
-			return nil, &inet.HttpError{Code: http.StatusBadRequest, Message: "error occurred while parsing request parameters"}
+			return nil, &inet.HTTPError{Code: http.StatusBadRequest, Message: "error occurred while parsing request parameters"}
 		}
 	}
 

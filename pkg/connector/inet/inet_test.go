@@ -11,7 +11,7 @@ import (
 )
 
 func TestSendAfterClose(t *testing.T) {
-	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Write([]byte(`{"response": ""}`))
 	}))
 	defer server.Close()

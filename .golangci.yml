@@ -1,0 +1,61 @@
+---
+run:
+  timeout: 4m
+
+issues:
+  exclude-dirs:
+    - temp
+  exclude:
+    - "Error return value of `w.Write` is not checked"
+    - "Error return value of `fmt.Fprintf` is not checked"
+    - "Error return value of `fmt.Fprintln` is not checked"
+    - "Error return value of `file.Close` is not checked"
+    - "Error return value of `os.Setenv` is not checked"
+
+linters:
+  enable:
+    - errcheck
+    - gofmt
+    - gosimple
+    - govet
+    - misspell
+    - revive
+    - unused
+  disable:
+    # Remove from disable when all issues are fixed
+    - staticcheck
+
+linters-settings:
+  revive:
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+        arguments:
+          - allowedPackages:
+            - "github.com/onsi/ginkgo"
+            - "github.com/onsi/ginkgo/v2"
+            - "github.com/onsi/gomega"
+      - name: empty-block
+      - name: error-naming
+      - name: error-return
+      - name: error-strings
+      - name: errorf
+      # Uncomment when all issues are fixed
+      # - name: exported
+      - name: increment-decrement
+      - name: indent-error-flow
+      - name: package-comments
+        disabled: true
+      - name: range
+      - name: receiver-naming
+      - name: redefines-builtin-id
+      - name: superfluous-else
+      - name: time-naming
+      # Uncomment when all issues are fixed
+      # - name: unexported-return
+      - name: unreachable-code
+      - name: unused-parameter
+      - name: var-declaration
+      - name: var-naming

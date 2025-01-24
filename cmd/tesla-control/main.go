@@ -146,11 +146,10 @@ func main() {
 			info.Usage(args[1])
 			status = 0
 			return
-		} else {
-			if err := configureFlags(config, args[0], forceBLE); err != nil {
-				writeErr("Missing required flag: %s", err)
-				return
-			}
+		}
+		if err := configureFlags(config, args[0], forceBLE); err != nil {
+			writeErr("Missing required flag: %s", err)
+			return
 		}
 	}
 
