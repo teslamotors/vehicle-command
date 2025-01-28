@@ -87,26 +87,40 @@ func (d *Dispatcher) StartSession(ctx context.Context, domain universal.Domain) 
 		return err
 	}
 	for {
-		recv, err := d.RequestSessionInfo(ctx, domain)
-		if err != nil {
+		if retry, err := d.tryStartSession(ctx, s, domain); !retry {
 			return err
 		}
-		defer recv.Close()
-		select {
-		case reply := <-recv.Recv():
-			if err = protocol.GetError(reply); err != nil {
-				return err
-			}
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-s.readySignal:
-			return nil
+	}
+}
+
+func (d *Dispatcher) tryStartSession(ctx context.Context, s *session, domain universal.Domain) (retry bool, err error) {
+	recv, err := d.RequestSessionInfo(ctx, domain)
+	if err != nil {
+		return false, err
+	}
+	defer recv.Close()
+	// Request sent
+	select {
+	case <-ctx.Done():
+		return false, ctx.Err()
+	case <-s.readySignal:
+		return false, nil
+	case <-time.After(d.RetryInterval()):
+		return true, nil
+	case reply := <-recv.Recv():
+		if err = protocol.GetError(reply); err != nil {
+			return false, err
 		}
-		select {
-		case <-time.After(d.conn.RetryInterval()):
-		case <-ctx.Done():
-			return ctx.Err()
-		}
+	}
+	// Reply received. Normally, the dispatcher will clear readySignal after processing the reply;
+	// the other branches handle malformed vehicle responses.
+	select {
+	case <-s.readySignal:
+		return false, nil
+	case <-ctx.Done():
+		return false, ctx.Err()
+	case <-time.After(d.RetryInterval()):
+		return true, nil
 	}
 }
 
