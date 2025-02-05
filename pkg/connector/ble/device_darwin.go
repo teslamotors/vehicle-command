@@ -5,7 +5,7 @@ import (
 	"github.com/go-ble/ble/darwin"
 )
 
-func newDevice() (ble.Device, error) {
+func newDevice(ble.Addr) (ble.Device, error) {
 	device, err := darwin.NewDevice()
 	if err != nil {
 		return nil, err

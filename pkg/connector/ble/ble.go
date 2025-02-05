@@ -132,7 +132,23 @@ func VehicleLocalName(vin string) string {
 	return fmt.Sprintf("S%02xC", digest[:8])
 }
 
-func initDevice() error {
+// InitDevice initializes a device with the local Bluetooth device address.
+// If bdAddr is nil, the first available BLE device will be used.
+// On linux it is a MAC address, on MacOS it is a UUID.
+// If this function is not called before making a connection, the first available
+// BLE device will be used, and this function will return an error.
+// NOTE: Currently targeting an address is only supported on Linux.
+func InitDevice(bdAddr ble.Addr) error {
+	mu.Lock()
+	defer mu.Unlock()
+	if device != nil {
+		return fmt.Errorf("ble: device already initialized")
+	}
+
+	return initDevice(bdAddr)
+}
+
+func initDevice(bdAddr ble.Addr) error {
 	var err error
 	// We don't want concurrent calls to NewConnection that would defeat
 	// the point of reusing the existing BLE device. Note that this is not
@@ -141,12 +157,26 @@ func initDevice() error {
 		log.Debug("Reusing existing BLE device")
 	} else {
 		log.Debug("Creating new BLE device")
-		device, err = newDevice()
+		device, err = newDevice(bdAddr)
 		if err != nil {
 			return fmt.Errorf("failed to find a BLE device: %s", err)
 		}
 		ble.SetDefaultDevice(device)
 	}
+	return nil
+}
+
+func StopDevice() error {
+	mu.Lock()
+	defer mu.Unlock()
+	if device == nil {
+		log.Debug("Closing a non-existent BLE device")
+		return nil
+	}
+	if err := device.Stop(); err != nil {
+		return fmt.Errorf("ble: failed to stop device: %s", err)
+	}
+	device = nil
 	return nil
 }
 
@@ -156,7 +186,7 @@ func ScanVehicleBeacon(ctx context.Context, vin string) (Advertisement, error) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	if err := initDevice(); err != nil {
+	if err := initDevice(nil); err != nil {
 		return nil, err
 	}
 
@@ -235,7 +265,7 @@ func tryToConnect(ctx context.Context, vin string, target Advertisement) (*Conne
 	mu.Lock()
 	defer mu.Unlock()
 
-	if err = initDevice(); err != nil {
+	if err = initDevice(nil); err != nil {
 		return nil, false, err
 	}
 
