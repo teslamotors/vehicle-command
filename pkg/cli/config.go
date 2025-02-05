@@ -66,6 +66,7 @@ import (
 	"github.com/teslamotors/vehicle-command/pkg/vehicle"
 
 	"github.com/99designs/keyring"
+	goble "github.com/go-ble/ble"
 )
 
 var DomainsByName = map[string]protocol.Domain{
@@ -150,6 +151,7 @@ type Config struct {
 	DisableCache     bool
 	Backend          keyring.Config
 	BackendType      backendType
+	BdAddress        string
 	Debug            bool // Enable keyring debug messages
 
 	// Domains can limit a vehicle connection to relevant subsystems, which can reduce
@@ -182,6 +184,9 @@ func NewConfig(flags Flag) (*Config, error) {
 func (c *Config) RegisterCommandLineFlags() {
 	if c.Flags.isSet(FlagVIN) {
 		flag.StringVar(&c.VIN, "vin", "", "Vehicle Identification Number. Defaults to $TESLA_VIN.")
+	}
+	if c.Flags.isSet(FlagBLE) {
+		flag.StringVar(&c.BdAddress, "bdAddr", "", "Bluetooth device address")
 	}
 	if c.Flags.isSet(FlagPrivateKey) {
 		if !c.Flags.isSet(FlagVIN) {
@@ -469,6 +474,14 @@ func (c *Config) ConnectRemote(ctx context.Context, skey protocol.ECDHPrivateKey
 
 // ConnectLocal connects to a vehicle over BLE.
 func (c *Config) ConnectLocal(ctx context.Context, skey protocol.ECDHPrivateKey) (car *vehicle.Vehicle, err error) {
+	var addr goble.Addr
+	if c.BdAddress != "" {
+		addr = goble.NewAddr(c.BdAddress)
+	}
+	err = ble.InitDevice(addr)
+	if err != nil {
+		return nil, err
+	}
 	conn, err := ble.NewConnection(ctx, c.VIN)
 	if err != nil {
 		return nil, err
