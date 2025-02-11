@@ -1,14 +1,14 @@
 package ble
 
 import (
-	"github.com/go-ble/ble"
-	"github.com/go-ble/ble/darwin"
+	"github.com/teslamotors/vehicle-command/internal/log"
+	"tinygo.org/x/bluetooth"
 )
 
-func newDevice() (ble.Device, error) {
-	device, err := darwin.NewDevice()
-	if err != nil {
-		return nil, err
+func newAdapter(id string) *bluetooth.Adapter {
+	if id != "" {
+		log.Warning("BLE adapter ID is not supported on Darwin")
 	}
-	return device, nil
+
+	return bluetooth.DefaultAdapter
 }

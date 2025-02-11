@@ -11,10 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-ble/ble"
 	"github.com/teslamotors/vehicle-command/internal/log"
 	"github.com/teslamotors/vehicle-command/pkg/connector"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
+	"tinygo.org/x/bluetooth"
 )
 
 const maxBLEMessageSize = 1024
@@ -26,24 +26,33 @@ var (
 	maxLatency = 4 * time.Second // Max allowed error when syncing vehicle clock
 )
 
+func mustParseUUID(uuid string) bluetooth.UUID {
+	uuidParsed, err := bluetooth.ParseUUID(uuid)
+	if err != nil {
+		panic(err)
+	}
+	return uuidParsed
+}
+
 var (
-	vehicleServiceUUID = ble.MustParse("00000211-b2d1-43f0-9b88-960cebf8b91e")
-	toVehicleUUID      = ble.MustParse("00000212-b2d1-43f0-9b88-960cebf8b91e")
-	fromVehicleUUID    = ble.MustParse("00000213-b2d1-43f0-9b88-960cebf8b91e")
+	vehicleServiceUUID = mustParseUUID("00000211-b2d1-43f0-9b88-960cebf8b91e")
+	toVehicleUUID      = mustParseUUID("00000212-b2d1-43f0-9b88-960cebf8b91e")
+	fromVehicleUUID    = mustParseUUID("00000213-b2d1-43f0-9b88-960cebf8b91e")
 )
 
 var (
-	device ble.Device
-	mu     sync.Mutex
+	adapter *bluetooth.Adapter
+	mu      sync.Mutex
 )
 
 type Connection struct {
 	vin         string
 	inbox       chan []byte
-	txChar      *ble.Characteristic
-	rxChar      *ble.Characteristic
+	txChar      bluetooth.DeviceCharacteristic
+	blockLength int
+	rxChar      bluetooth.DeviceCharacteristic
 	inputBuffer []byte
-	client      ble.Client
+	device      bluetooth.Device
 	lastRx      time.Time
 	lock        sync.Mutex
 }
@@ -83,8 +92,12 @@ func (c *Connection) flush() bool {
 }
 
 func (c *Connection) Close() {
-	_ = c.client.ClearSubscriptions()
-	_ = c.client.CancelConnection()
+	if err := c.rxChar.EnableNotifications(nil); err != nil {
+		log.Warning("ble: failed to disable RX notifications: %s", err)
+	}
+	if err := c.device.Disconnect(); err != nil {
+		log.Warning("ble: failed to disconnect: %s", err)
+	}
 }
 
 func (c *Connection) AllowedLatency() time.Duration {
@@ -109,13 +122,17 @@ func (c *Connection) Send(_ context.Context, buffer []byte) error {
 	log.Debug("TX: %02x", buffer)
 	out = append(out, uint8(len(buffer)>>8), uint8(len(buffer)))
 	out = append(out, buffer...)
-	blockLength := 20
+	blockLength := c.blockLength
 	for len(out) > 0 {
 		if blockLength > len(out) {
 			blockLength = len(out)
 		}
-		if err := c.client.WriteCharacteristic(c.txChar, out[:blockLength], false); err != nil {
+
+		n, err := c.txChar.WriteWithoutResponse(out[:blockLength])
+		if err != nil {
 			return err
+		} else if n != blockLength {
+			return fmt.Errorf("ble: failed to write %d bytes", blockLength)
 		}
 		out = out[blockLength:]
 	}
@@ -132,31 +149,57 @@ func VehicleLocalName(vin string) string {
 	return fmt.Sprintf("S%02xC", digest[:8])
 }
 
-func initDevice() error {
+// InitAdapterWithID initializes the BLE adapter with the given ID.
+// Currently this is only supported on Linux. It is not necessary to
+// call this function if using the default adapter, but if not, it
+// must be called before making any other BLE calls.
+// Linux:
+//   - id is in the form "hciX" where X is the number of the adapter.
+func InitAdapterWithID(id string) error {
+	mu.Lock()
+	defer mu.Unlock()
+	return initAdapter(&id)
+}
+
+// CloseAdapter unsets the BLE adapter so that a new one can be created
+// on the next call to InitAdapter. This does not disconnect any existing
+// connections or stop any ongoing scans and must be done separately.
+func CloseAdapter() error {
+	mu.Lock()
+	defer mu.Unlock()
+	adapter = nil
+	return nil
+}
+
+func initAdapter(id *string) error {
 	var err error
-	// We don't want concurrent calls to NewConnection that would defeat
-	// the point of reusing the existing BLE device. Note that this is not
-	// an issue on MacOS, but multiple calls to newDevice() on Linux leads to failures.
-	if device != nil {
+	if adapter != nil {
 		log.Debug("Reusing existing BLE device")
 	} else {
-		log.Debug("Creating new BLE device")
-		device, err = newDevice()
-		if err != nil {
-			return fmt.Errorf("failed to find a BLE device: %s", err)
+		log.Debug("Creating new BLE adapter")
+		idStr := ""
+		if id != nil {
+			idStr = *id
 		}
-		ble.SetDefaultDevice(device)
+		adapter = newAdapter(idStr)
+		if err = adapter.Enable(); err != nil {
+			return fmt.Errorf("ble: failed to enable device: %s", err)
+		}
 	}
 	return nil
 }
 
-type Advertisement = ble.Advertisement
+type ScanResult struct {
+	Address   bluetooth.Address
+	LocalName string
+	RSSI      int16
+}
 
-func ScanVehicleBeacon(ctx context.Context, vin string) (Advertisement, error) {
+func ScanVehicleBeacon(ctx context.Context, vin string) (*ScanResult, error) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	if err := initDevice(); err != nil {
+	if err := initAdapter(nil); err != nil {
 		return nil, err
 	}
 
@@ -167,40 +210,41 @@ func ScanVehicleBeacon(ctx context.Context, vin string) (Advertisement, error) {
 	return a, nil
 }
 
-func scanVehicleBeacon(ctx context.Context, localName string) (Advertisement, error) {
-	var err error
-	ctx2, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	ch := make(chan Advertisement, 1)
-	fn := func(a Advertisement) {
-		if a.LocalName() != localName {
-			return
-		}
-		select {
-		case ch <- a:
-			cancel() // Notify device.Scan() that we found a match
-		case <-ctx2.Done():
-			// Another goroutine already found a matching advertisement. We need to return so that
-			// the MacOS implementation of device.Scan(...) unblocks.
+func scanVehicleBeacon(ctx context.Context, localName string) (*ScanResult, error) {
+	stopScan := func() {
+		if err := adapter.StopScan(); err != nil {
+			log.Warning("ble: failed to stop scan: %s", err)
 		}
 	}
 
-	if err = device.Scan(ctx2, false, fn); !errors.Is(err, context.Canceled) {
-		// If ctx rather than ctx2 was canceled, we'll pick that error up below. This is a bit
-		// hacky, but unfortunately device.Scan() _always_ returns an error on MacOS because it does
-		// not terminate until the provided context is canceled.
-		return nil, err
-	}
+	errorCh := make(chan error)
+	foundCh := make(chan *ScanResult)
+
+	// Scan is blocking, so run it in a goroutine
+	go func() {
+		if err := adapter.Scan(func(_ *bluetooth.Adapter, result bluetooth.ScanResult) {
+			log.Debug("found device: %s %s %d", result.Address.String(), result.LocalName(), result.RSSI)
+
+			if result.LocalName() == localName {
+				stopScan()
+				foundCh <- &ScanResult{
+					Address:   result.Address,
+					LocalName: result.LocalName(),
+					RSSI:      result.RSSI,
+				}
+			}
+		}); err != nil {
+			errorCh <- err
+		}
+	}()
 
 	select {
-	case a, ok := <-ch:
-		if !ok {
-			// This should never happen, but just in case
-			return nil, fmt.Errorf("scan channel closed")
-		}
-		return a, nil
+	case result := <-foundCh:
+		return result, nil
+	case err := <-errorCh:
+		return nil, err
 	case <-ctx.Done():
+		stopScan()
 		return nil, ctx.Err()
 	}
 }
@@ -209,7 +253,14 @@ func NewConnection(ctx context.Context, vin string) (*Connection, error) {
 	return NewConnectionToBleTarget(ctx, vin, nil)
 }
 
-func NewConnectionToBleTarget(ctx context.Context, vin string, target Advertisement) (*Connection, error) {
+// NewConnectionToBleTarget creates a new BLE connection to the given target.
+// If target is nil, the vehicle will be scanned for.
+//
+// NOTE(Linux/bluez): If target is specified the user must make sure that the
+// time between scanning and connecting is no longer than ~10 seconds as if
+// it is, bluez will not allow the connection to be established until it is
+// rescanned.
+func NewConnectionToBleTarget(ctx context.Context, vin string, target *ScanResult) (*Connection, error) {
 	var lastError error
 	for {
 		conn, retry, err := tryToConnect(ctx, vin, target)
@@ -230,12 +281,12 @@ func NewConnectionToBleTarget(ctx context.Context, vin string, target Advertisem
 	}
 }
 
-func tryToConnect(ctx context.Context, vin string, target Advertisement) (*Connection, bool, error) {
+func tryToConnect(ctx context.Context, vin string, target *ScanResult) (*Connection, bool, error) {
 	var err error
 	mu.Lock()
 	defer mu.Unlock()
 
-	if err = initDevice(); err != nil {
+	if err = initAdapter(nil); err != nil {
 		return nil, false, err
 	}
 
@@ -248,54 +299,83 @@ func tryToConnect(ctx context.Context, vin string, target Advertisement) (*Conne
 		}
 	}
 
-	if target.LocalName() != localName {
-		return nil, false, fmt.Errorf("ble: beacon with unexpected local name: '%s'", target.LocalName())
+	if target.LocalName != localName {
+		return nil, false, fmt.Errorf("ble: beacon with unexpected local name: '%s'", target.LocalName)
 	}
 
-	if !target.Connectable() {
-		return nil, false, ErrMaxConnectionsExceeded
+	log.Debug("Connecting to %s (%s)...", target.Address.String(), localName)
+
+	// FIXME: This is a workaround for the fact that bluetooth library doesn't
+	// support context handling. While not a big issue, it will be good to
+	// have this fixed upstream. Also applies to the DiscoverServices and
+	// DiscoverCharacteristics calls below. See:
+	// https://github.com/tinygo-org/bluetooth/issues/339
+	deviceCh := make(chan bluetooth.Device)
+	errorCh := make(chan error)
+	connectionCancelled := false
+	go func() {
+		params := bluetooth.ConnectionParams{}
+		// If a deadline is set, use it as the connection timeout
+		// else this go routine will expire after the default timeout.
+		if deadline, ok := ctx.Deadline(); ok {
+			params.ConnectionTimeout = bluetooth.NewDuration(time.Until(deadline))
+		}
+		device, err := adapter.Connect(target.Address, params)
+		if err != nil && !connectionCancelled {
+			errorCh <- err
+		} else if !connectionCancelled {
+			deviceCh <- device
+		} else {
+			if err := device.Disconnect(); err != nil {
+				log.Warning("ble: failed to disconnect: %s", err)
+			}
+		}
+	}()
+	var device bluetooth.Device
+	select {
+	case device = <-deviceCh:
+		log.Debug("Connected to %s", target.Address.String())
+	case err := <-errorCh:
+		return nil, true, fmt.Errorf("ble: failed to connect to device: %s", err)
+	case <-ctx.Done():
+		connectionCancelled = true
+		return nil, true, ctx.Err()
 	}
 
-	log.Debug("Dialing to %s (%s)...", target.Addr(), localName)
-
-	client, err := ble.Dial(ctx, target.Addr())
-	if err != nil {
-		return nil, true, fmt.Errorf("ble: failed to dial for %s (%s): %s", vin, localName, err)
-	}
-
-	log.Debug("Discovering services %s...", client.Addr())
-	services, err := client.DiscoverServices([]ble.UUID{vehicleServiceUUID})
+	log.Debug("Discovering services %s...", device.Address.String())
+	services, err := device.DiscoverServices([]bluetooth.UUID{vehicleServiceUUID})
 	if err != nil {
 		return nil, true, fmt.Errorf("ble: failed to enumerate device services: %s", err)
 	}
-	if len(services) == 0 {
+	if len(services) != 1 {
 		return nil, true, fmt.Errorf("ble: failed to discover service")
 	}
 
-	characteristics, err := client.DiscoverCharacteristics([]ble.UUID{toVehicleUUID, fromVehicleUUID}, services[0])
+	characteristics, err := services[0].DiscoverCharacteristics([]bluetooth.UUID{toVehicleUUID, fromVehicleUUID})
 	if err != nil {
 		return nil, true, fmt.Errorf("ble: failed to discover service characteristics: %s", err)
 	}
 
+	if len(characteristics) != 2 {
+		return nil, true, errors.New("ble: failed to find required characteristics")
+	}
+
+	mtu, err := characteristics[0].GetMTU()
+	if err != nil {
+		log.Warning("Failed to get TX MTU (using 20): %s", err)
+		mtu = 20
+	}
+
 	conn := Connection{
-		vin:    vin,
-		client: client,
-		inbox:  make(chan []byte, 5),
+		vin:         vin,
+		device:      device,
+		inbox:       make(chan []byte, 5),
+		txChar:      characteristics[0],
+		rxChar:      characteristics[1],
+		blockLength: int(mtu) - 3,
 	}
-	for _, characteristic := range characteristics {
-		if characteristic.UUID.Equal(toVehicleUUID) {
-			conn.txChar = characteristic
-		} else if characteristic.UUID.Equal(fromVehicleUUID) {
-			conn.rxChar = characteristic
-		}
-		if _, err := client.DiscoverDescriptors(nil, characteristic); err != nil {
-			return nil, true, fmt.Errorf("ble: couldn't fetch descriptors: %s", err)
-		}
-	}
-	if conn.txChar == nil || conn.rxChar == nil {
-		return nil, true, fmt.Errorf("ble: failed to find required characteristics")
-	}
-	if err := client.Subscribe(conn.rxChar, true, conn.rx); err != nil {
+
+	if err := conn.rxChar.EnableNotifications(conn.rx); err != nil {
 		return nil, true, fmt.Errorf("ble: failed to subscribe to RX: %s", err)
 	}
 	log.Info("Connected to vehicle BLE")

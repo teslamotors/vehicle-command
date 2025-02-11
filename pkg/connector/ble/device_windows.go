@@ -1,10 +1,14 @@
 package ble
 
 import (
-	"errors"
-	"github.com/go-ble/ble"
+	"github.com/teslamotors/vehicle-command/internal/log"
+	"tinygo.org/x/bluetooth"
 )
 
-func newDevice() (ble.Device, error) {
-	return nil, errors.New("not supported on Windows")
+func newAdapter(id string) *bluetooth.Adapter {
+	if id != "" {
+		log.Warning("BLE adapter ID is not supported on Windows")
+	}
+
+	return bluetooth.DefaultAdapter
 }
