@@ -144,6 +144,7 @@ type Config struct {
 	KeyringKeyName   string // Username for private key in system keyring
 	KeyringTokenName string // Username for OAuth token in system keyring
 	VIN              string
+	BtAdapterID      string // ID of Bluetooth adapter to use (Linux only)
 	TokenFilename    string
 	KeyFilename      string
 	CacheFilename    string
@@ -182,6 +183,9 @@ func NewConfig(flags Flag) (*Config, error) {
 func (c *Config) RegisterCommandLineFlags() {
 	if c.Flags.isSet(FlagVIN) {
 		flag.StringVar(&c.VIN, "vin", "", "Vehicle Identification Number. Defaults to $TESLA_VIN.")
+	}
+	if c.Flags.isSet(FlagBLE) {
+		flag.StringVar(&c.BtAdapterID, "btAdapter", "", "ID of the Bluetooth adapter to use (Linux only). Defaults to hci0.")
 	}
 	if c.Flags.isSet(FlagPrivateKey) {
 		if !c.Flags.isSet(FlagVIN) {
@@ -469,6 +473,11 @@ func (c *Config) ConnectRemote(ctx context.Context, skey protocol.ECDHPrivateKey
 
 // ConnectLocal connects to a vehicle over BLE.
 func (c *Config) ConnectLocal(ctx context.Context, skey protocol.ECDHPrivateKey) (car *vehicle.Vehicle, err error) {
+	err = ble.InitAdapterWithID(c.BtAdapterID)
+	if err != nil {
+		return nil, err
+	}
+
 	conn, err := ble.NewConnection(ctx, c.VIN)
 	if err != nil {
 		return nil, err
