@@ -211,7 +211,9 @@ func ScanVehicleBeacon(ctx context.Context, vin string) (*ScanResult, error) {
 }
 
 func scanVehicleBeacon(ctx context.Context, localName string) (*ScanResult, error) {
+	scanIsStopped := false
 	stopScan := func() {
+		scanIsStopped = true
 		if err := adapter.StopScan(); err != nil {
 			log.Warning("ble: failed to stop scan: %s", err)
 		}
@@ -220,9 +222,29 @@ func scanVehicleBeacon(ctx context.Context, localName string) (*ScanResult, erro
 	errorCh := make(chan error)
 	foundCh := make(chan *ScanResult)
 
+	// FIXME: We need to check if the context is already done to prevent starting the scan
+	// and then immediately stopping it, since that would create a chance for
+	// the scan to not be stopped before being started. There is still a small chance that
+	// the scan will not be stopped properly if the context is done between
+	// the check and the start of the scan, but that is a very small window.
+	// This can be fixed once the bluetooth library supports context handling.
+	// See: https://github.com/tinygo-org/bluetooth/issues/339
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
 	// Scan is blocking, so run it in a goroutine
 	go func() {
+		if scanIsStopped {
+			return
+		}
 		if err := adapter.Scan(func(_ *bluetooth.Adapter, result bluetooth.ScanResult) {
+			// If we have stopped the scan and we still get results it means
+			// that the case described in the comment above has happened.
+			if scanIsStopped {
+				stopScan()
+				return
+			}
 			log.Debug("found device: %s %s %d", result.Address.String(), result.LocalName(), result.RSSI)
 
 			if result.LocalName() == localName {
