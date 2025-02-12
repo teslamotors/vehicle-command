@@ -7,7 +7,6 @@ import (
 	"crypto/sha1"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
