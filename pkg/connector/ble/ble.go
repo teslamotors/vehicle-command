@@ -245,6 +245,7 @@ func scanVehicleBeacon(ctx context.Context, localName string) (*ScanResult, erro
 		if scanIsStopped {
 			return
 		}
+		log.Debug("Scanning for %s...", localName)
 		if err := adapter.Scan(func(_ *bluetooth.Adapter, result bluetooth.ScanResult) {
 			// If we have stopped the scan and we still get results it means
 			// that the case described in the comment above has happened.
@@ -252,7 +253,6 @@ func scanVehicleBeacon(ctx context.Context, localName string) (*ScanResult, erro
 				stopScan()
 				return
 			}
-			log.Debug("found device: %s %s %d", result.Address.String(), result.LocalName(), result.RSSI)
 
 			if result.LocalName() == localName {
 				stopScan()
