@@ -184,9 +184,6 @@ func (c *Config) RegisterCommandLineFlags() {
 	if c.Flags.isSet(FlagVIN) {
 		flag.StringVar(&c.VIN, "vin", "", "Vehicle Identification Number. Defaults to $TESLA_VIN.")
 	}
-	if c.Flags.isSet(FlagBLE) {
-		flag.StringVar(&c.BtAdapterID, "btAdapter", "", "ID of the Bluetooth adapter to use (Linux only). Defaults to hci0.")
-	}
 	if c.Flags.isSet(FlagPrivateKey) {
 		if !c.Flags.isSet(FlagVIN) {
 			log.Debug("FlagPrivateKey is set but FlagVIN is not. A VIN is required to send vehicle commands.")
@@ -211,6 +208,7 @@ func (c *Config) RegisterCommandLineFlags() {
 		flag.StringVar(&c.Backend.FileDir, "keyring-file-dir", keyringDirectory, "keyring `directory` for file-backed keyring types")
 		flag.BoolVar(&c.Debug, "keyring-debug", false, "Enable keyring debug logging")
 	}
+	c.registerCommandLineFlagsOsSpecific()
 }
 
 // LoadCredentials attempts to open a keyring, prompting for a password if not needed. Call this
