@@ -297,7 +297,7 @@ func NewConnectionToBleTarget(ctx context.Context, vin string, target *ScanResul
 		if err == nil {
 			return conn, nil
 		}
-		if !retry || strings.Contains(err.Error(), "operation not permitted") {
+		if !retry || IsAdapterError(err) {
 			return nil, err
 		}
 		log.Warning("BLE connection attempt failed: %s", err)
