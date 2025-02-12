@@ -279,17 +279,17 @@ func scanVehicleBeacon(ctx context.Context, localName string) (*ScanResult, erro
 }
 
 func NewConnection(ctx context.Context, vin string) (*Connection, error) {
-	return NewConnectionToBleTarget(ctx, vin, nil)
+	return NewConnectionFromScanResult(ctx, vin, nil)
 }
 
-// NewConnectionToBleTarget creates a new BLE connection to the given target.
+// NewConnectionFromScanResult creates a new BLE connection to the given target.
 // If target is nil, the vehicle will be scanned for.
 //
 // NOTE(Linux/bluez): If target is specified the user must make sure that the
 // time between scanning and connecting is no longer than ~10 seconds as if
 // it is, bluez will not allow the connection to be established until it is
 // rescanned.
-func NewConnectionToBleTarget(ctx context.Context, vin string, target *ScanResult) (*Connection, error) {
+func NewConnectionFromScanResult(ctx context.Context, vin string, target *ScanResult) (*Connection, error) {
 	var lastError error
 	for {
 		conn, retry, err := tryToConnect(ctx, vin, target)
