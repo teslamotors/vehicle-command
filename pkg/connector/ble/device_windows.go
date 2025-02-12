@@ -22,3 +22,9 @@ func newAdapter(id string) *bluetooth.Adapter {
 
 	return bluetooth.DefaultAdapter
 }
+
+func (c *Connection) Close() {
+	if err := c.device.Disconnect(); err != nil {
+		log.Warning("ble: failed to disconnect: %s", err)
+	}
+}

@@ -90,15 +90,6 @@ func (c *Connection) flush() bool {
 	return false
 }
 
-func (c *Connection) Close() {
-	if err := c.rxChar.EnableNotifications(nil); err != nil {
-		log.Warning("ble: failed to disable RX notifications: %s", err)
-	}
-	if err := c.device.Disconnect(); err != nil {
-		log.Warning("ble: failed to disconnect: %s", err)
-	}
-}
-
 func (c *Connection) AllowedLatency() time.Duration {
 	return maxLatency
 }
