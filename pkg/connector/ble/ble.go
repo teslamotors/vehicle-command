@@ -233,8 +233,16 @@ func scanVehicleBeacon(ctx context.Context, localName string) (*ScanResult, erro
 		return nil, ctx.Err()
 	}
 
+	// Another fix: We need to wait for the Scan() call to finish before returning because
+	// waiting for StopScan() to finish is not enough.
+	scanFinished := make(chan struct{})
+	defer func() {
+		<-scanFinished
+	}()
+
 	// Scan is blocking, so run it in a goroutine
 	go func() {
+		defer close(scanFinished)
 		if scanIsStopped {
 			return
 		}
