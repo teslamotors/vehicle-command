@@ -33,6 +33,10 @@ func newAdapter(id string) *bluetooth.Adapter {
 	return bluetooth.DefaultAdapter
 }
 
+var (
+	deviceCharacteristicWrite = bluetooth.DeviceCharacteristic.WriteWithoutResponse
+)
+
 func (c *Connection) Close() {
 	if err := c.rxChar.EnableNotifications(nil); err != nil {
 		log.Warning("ble: failed to disable RX notifications: %s", err)

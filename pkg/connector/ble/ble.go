@@ -118,7 +118,8 @@ func (c *Connection) Send(_ context.Context, buffer []byte) error {
 			blockLength = len(out)
 		}
 
-		n, err := c.txChar.WriteWithoutResponse(out[:blockLength])
+		// FIX: Darwin requires c.txChar.Write instead of .WriteWithoutResponse.
+		n, err := deviceCharacteristicWrite(c.txChar, out[:blockLength])
 		if err != nil {
 			return err
 		} else if n != blockLength {
@@ -382,8 +383,8 @@ func tryToConnect(ctx context.Context, vin string, target *ScanResult) (*Connect
 
 	mtu, err := characteristics[0].GetMTU()
 	if err != nil {
-		log.Warning("Failed to get TX MTU (using 20): %s", err)
-		mtu = 20
+		log.Warning("Failed to get TX MTU (using 23): %s", err)
+		mtu = 23
 	}
 
 	conn := Connection{
