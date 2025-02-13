@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
+	"runtime"
 	"time"
 
 	debugger "github.com/teslamotors/vehicle-command/internal/log"
@@ -27,16 +29,67 @@ func main() {
 
 	// Provided through command line options
 	var (
+		scanOnly       bool
+		btAdapter      string
 		privateKeyFile string
 		vin            string
 	)
+	flag.BoolVar(&scanOnly, "scan-only", false, "Scan for vehicles and exit")
 	flag.StringVar(&privateKeyFile, "key", "", "Private key `file` for authorizing commands (PEM PKCS8 NIST-P256)")
 	flag.StringVar(&vin, "vin", "", "Vehicle Identification Number (`VIN`) of the car")
 	flag.BoolVar(&debug, "debug", false, "Enable debugging of TX/RX BLE packets")
+	if runtime.GOOS == "linux" {
+		flag.StringVar(&btAdapter, "bt-adapter", "", "Optional ID of Bluetooth adapter to use")
+	}
+
 	flag.Parse()
 
 	if debug {
 		debugger.SetLevel(debugger.LevelDebug)
+	}
+
+	err := ble.InitAdapterWithID(btAdapter)
+	if err != nil {
+		if ble.IsAdapterError(err) {
+			logger.Print(ble.AdapterErrorHelpMessage(err))
+		} else {
+			logger.Printf("Failed to initialize BLE adapter: %s", err)
+		}
+		return
+	}
+
+	if vin == "" {
+		logger.Printf("Must specify VIN")
+		return
+	}
+
+	if scanOnly {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		doneChan := make(chan struct{})
+		go func() {
+			_, err := ble.ScanVehicleBeacon(ctx, vin)
+			if err != nil && ctx.Err() == nil {
+				logger.Printf("Scan failed: %s", err)
+			} else if ctx.Err() == nil {
+				logger.Printf("Found vehicle")
+				status = 0
+			}
+			close(doneChan)
+		}()
+		logger.Printf("Scanning for BLE devices until interrupted")
+
+		signalChan := make(chan os.Signal, 1)
+		signal.Notify(signalChan, os.Interrupt)
+		select {
+		case <-doneChan:
+		case <-signalChan:
+			logger.Printf("Stopping scan")
+			cancel()
+			<-doneChan
+			status = 130 // Script terminated by SIGINT
+		}
+		return
 	}
 
 	// For simplcity, allow 30 seconds to wake up the vehicle, connect to it,
@@ -44,12 +97,6 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	if vin == "" {
-		logger.Printf("Must specify VIN")
-		return
-	}
-
-	var err error
 	var privateKey protocol.ECDHPrivateKey
 	if privateKeyFile != "" {
 		if privateKey, err = protocol.LoadPrivateKey(privateKeyFile); err != nil {
@@ -58,7 +105,14 @@ func main() {
 		}
 	}
 
-	conn, err := ble.NewConnection(ctx, vin)
+	scan, err := ble.ScanVehicleBeacon(ctx, vin)
+	if err != nil {
+		logger.Println(err)
+		return
+	}
+	logger.Printf("Found vehicle: %s (%s) %ddBm", scan.LocalName, scan.Address.String(), scan.RSSI)
+
+	conn, err := ble.NewConnectionFromScanResult(ctx, vin, scan)
 	if err != nil {
 		logger.Printf("Failed to connect to vehicle: %s", err)
 		return
