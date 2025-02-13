@@ -254,7 +254,7 @@ func scanVehicleBeacon(ctx context.Context, localName string) (*ScanResult, erro
 					RSSI:      result.RSSI,
 				}
 			}
-		}); err != nil {
+		}); err != nil && !scanIsStopped {
 			errorCh <- err
 		}
 	}()
