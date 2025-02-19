@@ -331,9 +331,8 @@ func tryToConnect(ctx context.Context, vin string, target *ScanResult) (*Connect
 	// have this fixed upstream. Also applies to the DiscoverServices and
 	// DiscoverCharacteristics calls below. See:
 	// https://github.com/tinygo-org/bluetooth/issues/339
-	deviceCh := make(chan bluetooth.Device)
-	errorCh := make(chan error)
-	connectionCancelled := false
+	deviceCh := make(chan bluetooth.Device, 1)
+	errorCh := make(chan error, 1)
 	go func() {
 		params := bluetooth.ConnectionParams{}
 		// If a deadline is set, use it as the connection timeout
@@ -342,9 +341,9 @@ func tryToConnect(ctx context.Context, vin string, target *ScanResult) (*Connect
 			params.ConnectionTimeout = bluetooth.NewDuration(time.Until(deadline))
 		}
 		device, err := adapter.Connect(target.Address, params)
-		if err != nil && !connectionCancelled {
+		if err != nil {
 			errorCh <- err
-		} else if !connectionCancelled {
+		} else if ctx.Err() == nil {
 			deviceCh <- device
 		} else {
 			if err := device.Disconnect(); err != nil {
@@ -359,7 +358,6 @@ func tryToConnect(ctx context.Context, vin string, target *ScanResult) (*Connect
 	case err := <-errorCh:
 		return nil, true, fmt.Errorf("ble: failed to connect to device: %s", err)
 	case <-ctx.Done():
-		connectionCancelled = true
 		return nil, true, ctx.Err()
 	}
 
