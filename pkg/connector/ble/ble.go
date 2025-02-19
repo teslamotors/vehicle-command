@@ -263,6 +263,10 @@ func scanVehicleBeacon(ctx context.Context, localName string) (*ScanResult, erro
 	case result := <-foundCh:
 		return result, nil
 	case err := <-errorCh:
+		// FIX: If we get an error we can not be sure that the scan has stopped
+		// so we need to stop it manually.
+		// See: https://github.com/tinygo-org/bluetooth/issues/340
+		stopScan()
 		return nil, err
 	case <-ctx.Done():
 		stopScan()
