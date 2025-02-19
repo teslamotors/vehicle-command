@@ -5,7 +5,7 @@ import (
 	"tinygo.org/x/bluetooth"
 )
 
-func IsAdapterError(err error) bool {
+func IsAdapterError(_ error) bool {
 	// TODO: Add check for Darwin
 	return false
 }
