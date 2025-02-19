@@ -92,7 +92,7 @@ func main() {
 		return
 	}
 
-	// For simplcity, allow 30 seconds to wake up the vehicle, connect to it,
+	// For simplicity, allow 30 seconds to wake up the vehicle, connect to it,
 	// and unlock. In practice you'd want a fresh timeout for each command.
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
