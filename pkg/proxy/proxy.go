@@ -294,8 +294,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	log.Info("Received %s request for %s", req.Method, req.URL.Path)
 
 	if req.URL.Path == "/health" {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		p.handleHealthCheck(w, req)
 		return
 	}
 
@@ -335,6 +334,15 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 	p.forwardRequest(acct, w, req)
+}
+
+func (p *Proxy) handleHealthCheck(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, nil)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
 }
 
 func (p *Proxy) handleFleetTelemetryConfig(acct *account.Account, w http.ResponseWriter, req *http.Request) {
