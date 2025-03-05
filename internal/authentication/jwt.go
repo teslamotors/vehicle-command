@@ -41,26 +41,7 @@ func (s *SigningMethodSchnorrP256) Alg() string {
 	return TeslaSchnorrSHA256
 }
 
-// SignMessageForVehicle returns a JWT with the provided claims. Only the vehicle with the given VIN
-// will accept the JWT. To create a JWT that is valid for all vehicles in a fleet, use
-// [SignMessageForFleet].
-//
-// The function overwrites the audience ("aud") and issuer ("iss") JWT claims.
-func SignMessageForVehicle(privateKey ECDHPrivateKey, vin, app string, message jwt.MapClaims) (string, error) {
-	return signMessage(privateKey, message, "com.tesla.vehicle."+vin+"."+app)
-}
-
-// SignMessageForFleet returns a JWT with the provided claims. All vehicles that trust privateKey
-// will accept the JWT. To create a JWT that is valid for a single vehicle, use
-// [SignMessageForVehicle].
-//
-// The function overwrites the audience ("aud") and issuer ("iss") JWT claims.
-func SignMessageForFleet(privateKey ECDHPrivateKey, app string, message jwt.MapClaims) (string, error) {
-	// Issuers are identified by their public key
-	return signMessage(privateKey, message, "com.tesla.fleet."+app)
-}
-
-func signMessage(privateKey ECDHPrivateKey, message jwt.MapClaims, audience string) (string, error) {
+func SignMessage(privateKey ECDHPrivateKey, message jwt.MapClaims, audience string) (string, error) {
 	message["iss"] = base64.StdEncoding.EncodeToString(privateKey.PublicBytes())
 	message["aud"] = audience
 	token := jwt.New(&tss256)
