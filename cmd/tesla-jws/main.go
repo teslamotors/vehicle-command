@@ -12,6 +12,7 @@ import (
 
 	"github.com/teslamotors/vehicle-command/internal/authentication"
 	"github.com/teslamotors/vehicle-command/pkg/cli"
+	"github.com/teslamotors/vehicle-command/pkg/sign"
 )
 
 const helpStr = `
@@ -56,7 +57,7 @@ func usage() {
 	flag.PrintDefaults()
 }
 
-func sign(config *cli.Config, fleet bool) {
+func signConfig(config *cli.Config, fleet bool) {
 	skey, err := config.PrivateKey()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load private key: %s\n", err)
@@ -78,13 +79,13 @@ func sign(config *cli.Config, fleet bool) {
 	}
 	var token string
 	if fleet {
-		token, err = authentication.SignMessageForFleet(skey, application, claims)
+		token, err = sign.SignMessageForFleet(skey, application, claims)
 	} else {
 		if config.VIN == "" {
 			fmt.Fprintln(os.Stderr, "Provide either -vin or -fleet")
 			os.Exit(1)
 		}
-		token, err = authentication.SignMessageForVehicle(skey, config.VIN, application, claims)
+		token, err = sign.SignMessageForVehicle(skey, config.VIN, application, claims)
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create JWS: %s\n", err)
@@ -164,7 +165,7 @@ func main() {
 
 	switch flag.Arg(0) {
 	case "sign":
-		sign(config, fleet)
+		signConfig(config, fleet)
 	case "verify":
 		verify()
 	default:
