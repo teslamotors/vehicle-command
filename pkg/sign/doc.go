@@ -1,2 +1,2 @@
-// Package sign provides functionality to sign fleet config using a ECDH private key
+// Package sign provides functionality to sign fleet configs using an ECDH private key.
 package sign
