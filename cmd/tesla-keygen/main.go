@@ -167,6 +167,8 @@ func main() {
 		}
 		if err != nil {
 			writeErr("Failed to export private key: %s", err)
+		} else {
+			status = 0
 		}
 		return
 	default:
