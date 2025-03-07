@@ -157,8 +157,8 @@ func writeJSONError(w http.ResponseWriter, code int, err error) {
 	if code != http.StatusOK {
 		log.Error("Returning error %s", http.StatusText(code))
 	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	w.Header().Add("Content-Type", "application/json")
 	jsonBytes = append(jsonBytes, '\n')
 	w.Write(jsonBytes)
 }
@@ -443,7 +443,8 @@ func (p *Proxy) handleVehicleCommand(acct *account.Account, w http.ResponseWrite
 		return err
 	}
 
-	w.Header().Add("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 	fmt.Fprintln(w, "{\"response\":{\"result\":true,\"reason\":\"\"}}")
 	return nil
 }
