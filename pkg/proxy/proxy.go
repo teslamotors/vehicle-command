@@ -127,7 +127,7 @@ type Response struct {
 
 type carResponse struct {
 	Result bool   `json:"result"`
-	Reason string `json:"string"`
+	Reason string `json:"reason"`
 }
 
 func writeJSONError(w http.ResponseWriter, code int, err error) {
