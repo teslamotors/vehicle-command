@@ -532,8 +532,9 @@ var commands = map[string]*Command{
 		},
 	},
 	"flash-lights": {
-		help:         "Flash lights",
-		requiresAuth: true,
+		help:             "Flash lights",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
 		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, _ map[string]string) error {
 			return car.FlashLights(ctx)
 		},
@@ -761,7 +762,9 @@ var commands = map[string]*Command{
 		},
 	},
 	"autosecure-modelx": {
-		help: "Close falcon-wing doors and lock vehicle. Model X only.",
+		help:             "Close falcon-wing doors and lock vehicle. Model X only.",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
 		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, _ map[string]string) error {
 			return car.AutoSecureVehicle(ctx)
 		},
@@ -1152,7 +1155,7 @@ var commands = map[string]*Command{
 					if err != nil {
 						return errors.New("expected numeric ID")
 					}
-					return car.RemoveChargeSchedule(ctx, id)
+					return car.RemovePreconditionSchedule(ctx, id)
 				} else {
 					return errors.New("missing schedule ID")
 				}
