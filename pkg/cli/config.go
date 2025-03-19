@@ -144,6 +144,7 @@ type Config struct {
 	KeyringKeyName   string // Username for private key in system keyring
 	KeyringTokenName string // Username for OAuth token in system keyring
 	VIN              string
+	BtAdapterID      string // ID of Bluetooth adapter to use (Linux only)
 	TokenFilename    string
 	KeyFilename      string
 	CacheFilename    string
@@ -207,6 +208,7 @@ func (c *Config) RegisterCommandLineFlags() {
 		flag.StringVar(&c.Backend.FileDir, "keyring-file-dir", keyringDirectory, "keyring `directory` for file-backed keyring types")
 		flag.BoolVar(&c.Debug, "keyring-debug", false, "Enable keyring debug logging")
 	}
+	c.registerCommandLineFlagsOsSpecific()
 }
 
 // LoadCredentials attempts to open a keyring, prompting for a password if not needed. Call this
@@ -469,6 +471,11 @@ func (c *Config) ConnectRemote(ctx context.Context, skey protocol.ECDHPrivateKey
 
 // ConnectLocal connects to a vehicle over BLE.
 func (c *Config) ConnectLocal(ctx context.Context, skey protocol.ECDHPrivateKey) (car *vehicle.Vehicle, err error) {
+	err = ble.InitAdapterWithID(c.BtAdapterID)
+	if err != nil {
+		return nil, err
+	}
+
 	conn, err := ble.NewConnection(ctx, c.VIN)
 	if err != nil {
 		return nil, err
