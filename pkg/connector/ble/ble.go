@@ -7,7 +7,6 @@ import (
 	"crypto/sha1"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -17,8 +16,12 @@ import (
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
 )
 
-const maxBLEMessageSize = 1024
+const (
+	maxBLEMTUSize     = ble.MaxMTU // Max MTU size accepted by the client (this library)
+	maxBLEMessageSize = 1024
+)
 
+var ErrAdapterInvalidID = protocol.NewError("the bluetooth adapter ID is invalid", false, false)
 var ErrMaxConnectionsExceeded = protocol.NewError("the vehicle is already connected to the maximum number of BLE devices", false, false)
 
 var (
@@ -41,6 +44,7 @@ type Connection struct {
 	vin         string
 	inbox       chan []byte
 	txChar      *ble.Characteristic
+	blockLength int
 	rxChar      *ble.Characteristic
 	inputBuffer []byte
 	client      ble.Client
@@ -109,7 +113,7 @@ func (c *Connection) Send(_ context.Context, buffer []byte) error {
 	log.Debug("TX: %02x", buffer)
 	out = append(out, uint8(len(buffer)>>8), uint8(len(buffer)))
 	out = append(out, buffer...)
-	blockLength := 20
+	blockLength := c.blockLength
 	for len(out) > 0 {
 		if blockLength > len(out) {
 			blockLength = len(out)
@@ -132,7 +136,35 @@ func VehicleLocalName(vin string) string {
 	return fmt.Sprintf("S%02xC", digest[:8])
 }
 
-func initDevice() error {
+// InitAdapterWithID initializes the BLE adapter with the given ID.
+// Currently this is only supported on Linux. It is not necessary to
+// call this function if using the default adapter, but if not, it
+// must be called before making any other BLE calls.
+// Linux:
+//   - id is in the form "hciX" where X is the number of the adapter.
+func InitAdapterWithID(id string) error {
+	mu.Lock()
+	defer mu.Unlock()
+	return initAdapter(&id)
+}
+
+// CloseAdapter unsets the BLE adapter so that a new one can be created
+// on the next call to InitAdapter. This does not disconnect any existing
+// connections or stop any ongoing scans and must be done separately.
+func CloseAdapter() error {
+	mu.Lock()
+	defer mu.Unlock()
+	if device != nil {
+		if err := device.Stop(); err != nil {
+			return fmt.Errorf("ble: failed to stop device: %s", err)
+		}
+		device = nil
+		log.Debug("Closed BLE adapter")
+	}
+	return nil
+}
+
+func initAdapter(id *string) error {
 	var err error
 	// We don't want concurrent calls to NewConnection that would defeat
 	// the point of reusing the existing BLE device. Note that this is not
@@ -140,23 +172,36 @@ func initDevice() error {
 	if device != nil {
 		log.Debug("Reusing existing BLE device")
 	} else {
-		log.Debug("Creating new BLE device")
-		device, err = newDevice()
+		log.Debug("Creating new BLE adapter")
+		device, err = newAdapter(id)
 		if err != nil {
-			return fmt.Errorf("failed to find a BLE device: %s", err)
+			return fmt.Errorf("ble: failed to enable device: %s", err)
 		}
-		ble.SetDefaultDevice(device)
 	}
 	return nil
 }
 
-type Advertisement = ble.Advertisement
+type ScanResult struct {
+	Address     string
+	LocalName   string
+	RSSI        int16
+	Connectable bool
+}
 
-func ScanVehicleBeacon(ctx context.Context, vin string) (Advertisement, error) {
+func advertisementToScanResult(a ble.Advertisement) *ScanResult {
+	return &ScanResult{
+		Address:     a.Addr().String(),
+		LocalName:   a.LocalName(),
+		RSSI:        int16(a.RSSI()),
+		Connectable: a.Connectable(),
+	}
+}
+
+func ScanVehicleBeacon(ctx context.Context, vin string) (*ScanResult, error) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	if err := initDevice(); err != nil {
+	if err := initAdapter(nil); err != nil {
 		return nil, err
 	}
 
@@ -167,13 +212,13 @@ func ScanVehicleBeacon(ctx context.Context, vin string) (Advertisement, error) {
 	return a, nil
 }
 
-func scanVehicleBeacon(ctx context.Context, localName string) (Advertisement, error) {
+func scanVehicleBeacon(ctx context.Context, localName string) (*ScanResult, error) {
 	var err error
 	ctx2, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	ch := make(chan Advertisement, 1)
-	fn := func(a Advertisement) {
+	ch := make(chan ble.Advertisement, 1)
+	fn := func(a ble.Advertisement) {
 		if a.LocalName() != localName {
 			return
 		}
@@ -199,24 +244,26 @@ func scanVehicleBeacon(ctx context.Context, localName string) (Advertisement, er
 			// This should never happen, but just in case
 			return nil, fmt.Errorf("scan channel closed")
 		}
-		return a, nil
+		return advertisementToScanResult(a), nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
 }
 
 func NewConnection(ctx context.Context, vin string) (*Connection, error) {
-	return NewConnectionToBleTarget(ctx, vin, nil)
+	return NewConnectionFromScanResult(ctx, vin, nil)
 }
 
-func NewConnectionToBleTarget(ctx context.Context, vin string, target Advertisement) (*Connection, error) {
+// NewConnectionFromScanResult creates a new BLE connection to the given target.
+// If target is nil, the vehicle will be scanned for.
+func NewConnectionFromScanResult(ctx context.Context, vin string, target *ScanResult) (*Connection, error) {
 	var lastError error
 	for {
 		conn, retry, err := tryToConnect(ctx, vin, target)
 		if err == nil {
 			return conn, nil
 		}
-		if !retry || strings.Contains(err.Error(), "operation not permitted") {
+		if !retry || IsAdapterError(err) {
 			return nil, err
 		}
 		log.Warning("BLE connection attempt failed: %s", err)
@@ -230,12 +277,12 @@ func NewConnectionToBleTarget(ctx context.Context, vin string, target Advertisem
 	}
 }
 
-func tryToConnect(ctx context.Context, vin string, target Advertisement) (*Connection, bool, error) {
+func tryToConnect(ctx context.Context, vin string, target *ScanResult) (*Connection, bool, error) {
 	var err error
 	mu.Lock()
 	defer mu.Unlock()
 
-	if err = initDevice(); err != nil {
+	if err = initAdapter(nil); err != nil {
 		return nil, false, err
 	}
 
@@ -248,17 +295,17 @@ func tryToConnect(ctx context.Context, vin string, target Advertisement) (*Conne
 		}
 	}
 
-	if target.LocalName() != localName {
-		return nil, false, fmt.Errorf("ble: beacon with unexpected local name: '%s'", target.LocalName())
+	if target.LocalName != localName {
+		return nil, false, fmt.Errorf("ble: beacon with unexpected local name: '%s'", target.LocalName)
 	}
 
-	if !target.Connectable() {
+	if !target.Connectable {
 		return nil, false, ErrMaxConnectionsExceeded
 	}
 
-	log.Debug("Dialing to %s (%s)...", target.Addr(), localName)
+	log.Debug("Dialing to %s (%s)...", target.Address, localName)
 
-	client, err := ble.Dial(ctx, target.Addr())
+	client, err := device.Dial(ctx, ble.NewAddr(target.Address))
 	if err != nil {
 		return nil, true, fmt.Errorf("ble: failed to dial for %s (%s): %s", vin, localName, err)
 	}
@@ -298,6 +345,16 @@ func tryToConnect(ctx context.Context, vin string, target Advertisement) (*Conne
 	if err := client.Subscribe(conn.rxChar, true, conn.rx); err != nil {
 		return nil, true, fmt.Errorf("ble: failed to subscribe to RX: %s", err)
 	}
+
+	txMtu, err := client.ExchangeMTU(maxBLEMTUSize)
+	if err != nil {
+		log.Warning("ble: failed to exchange MTU: %s", err)
+		conn.blockLength = ble.DefaultMTU - 3 // Fallback to default MTU size
+	} else {
+		conn.blockLength = min(txMtu, maxBLEMessageSize) - 3 // 3 bytes for header
+		log.Debug("MTU size: %d", txMtu)
+	}
+
 	log.Info("Connected to vehicle BLE")
 	return &conn, false, nil
 }
