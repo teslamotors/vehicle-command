@@ -1,3 +1,5 @@
+import "github.com/Sensei-Intent-Tensor/vehicle-command/internal/intent"
+
 package proxy
 
 import (
@@ -391,7 +393,11 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		return func(v *vehicle.Vehicle) error { return v.Wakeup(ctx) }, nil
 	// Security
 	case "door_lock":
-		return func(v *vehicle.Vehicle) error { return v.Lock(ctx) }, nil
+    		return func(v *vehicle.Vehicle) error {
+        		return intent.WrapWithIntentCheck("door_lock", func(ctx context.Context, v *vehicle.Vehicle) error {
+            			return v.Lock(ctx)
+        		})(ctx, v)
+    		}, nil
 	case "door_unlock":
 		return func(v *vehicle.Vehicle) error { return v.Unlock(ctx) }, nil
 	case "erase_user_data":
