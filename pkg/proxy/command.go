@@ -212,7 +212,13 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		return func(v *vehicle.Vehicle) error { return v.CloseTonneau(ctx) }, nil
 	case "stop_tonneau":
 		return func(v *vehicle.Vehicle) error { return v.StopTonneau(ctx) }, nil
-	// Charging controls
+	// Power-management controls
+	case "set_low_power_mode":
+		on, err := params.getBool("enable", true)
+		if err != nil {
+			return nil, err
+		}
+		return func(v *vehicle.Vehicle) error { return v.SetLowPowerMode(ctx, on) }, nil
 	case "charge_standard":
 		return func(v *vehicle.Vehicle) error { return v.ChargeStandardRange(ctx) }, nil
 	case "charge_start":
