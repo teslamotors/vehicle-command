@@ -11,5 +11,7 @@ services:
       - TESLA_HTTP_PROXY_TIMEOUT=10s
       - TESLA_KEY_FILE=/config/fleet-key.pem
       - TESLA_VERBOSE=true
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - ./config:/config
