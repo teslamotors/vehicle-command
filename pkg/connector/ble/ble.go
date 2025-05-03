@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-ble/ble"
 	"github.com/teslamotors/vehicle-command/internal/log"
 	"github.com/teslamotors/vehicle-command/pkg/connector"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
+	"github.com/zlymeda/go-ble"
 )
 
 const (

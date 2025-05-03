@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-ble/ble"
-	"github.com/go-ble/ble/linux"
-	"github.com/go-ble/ble/linux/hci/cmd"
+	"github.com/zlymeda/go-ble"
+	"github.com/zlymeda/go-ble/linux"
+	"github.com/zlymeda/go-ble/linux/hci/cmd"
 )
 
 func IsAdapterError(err error) bool {
