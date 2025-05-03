@@ -19,6 +19,8 @@ import (
 	"github.com/teslamotors/vehicle-command/pkg/connector/ble"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
 	"github.com/teslamotors/vehicle-command/pkg/vehicle"
+
+	_ "github.com/teslamotors/vehicle-command/pkg/connector/ble/goble"
 )
 
 func writeErr(format string, a ...interface{}) {
