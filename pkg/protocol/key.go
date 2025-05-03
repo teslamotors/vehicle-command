@@ -89,27 +89,29 @@ func LoadPublicKey(filename string) (*ecdh.PublicKey, error) {
 		if err != nil {
 			return nil, err
 		}
-		if ecdsaPrivateKey, ok := skey.(*ecdsa.PrivateKey); !ok {
+		ecdsaPrivateKey, ok := skey.(*ecdsa.PrivateKey)
+		if !ok {
 			return nil, ErrInvalidPublicKey
-		} else {
-			pkey, err = ecdsaPrivateKey.PublicKey.ECDH()
-			if err != nil {
-				return nil, err
-			}
 		}
+		pkey, err = ecdsaPrivateKey.PublicKey.ECDH()
+		if err != nil {
+			return nil, err
+		}
+
 	case "PUBLIC KEY":
 		publicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
 		if err != nil {
 			return nil, err
 		}
-		if ecdsaPublicKey, ok := publicKey.(*ecdsa.PublicKey); !ok {
+		ecdsaPublicKey, ok := publicKey.(*ecdsa.PublicKey)
+		if !ok {
 			return nil, ErrInvalidPublicKey
-		} else {
-			pkey, err = ecdsaPublicKey.ECDH()
-			if err != nil {
-				return nil, err
-			}
 		}
+		pkey, err = ecdsaPublicKey.ECDH()
+		if err != nil {
+			return nil, err
+		}
+
 	default:
 		return nil, fmt.Errorf("unrecognized PEM block type %s", block.Type)
 	}

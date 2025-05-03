@@ -27,8 +27,8 @@ func testPrivateKey(t *testing.T) *ecdsa.PrivateKey {
 		D: big.NewInt(0),
 	}
 	privateKey.D.SetBytes(privateScalar)
-	privateKey.PublicKey.X, privateKey.PublicKey.Y = curve.ScalarBaseMult(privateScalar)
-	if !curve.IsOnCurve(privateKey.PublicKey.X, privateKey.PublicKey.Y) {
+	privateKey.X, privateKey.Y = curve.ScalarBaseMult(privateScalar)
+	if !curve.IsOnCurve(privateKey.X, privateKey.Y) {
 		t.Fatalf("Failed to load test key")
 	}
 	return &privateKey
@@ -45,10 +45,10 @@ func TestLocalPublicBytes(t *testing.T) {
 	}
 	skey := testPrivateKey(t)
 	x, y := elliptic.Unmarshal(elliptic.P256(), encodedPublicKey)
-	if x.Cmp(skey.PublicKey.X) != 0 || y.Cmp(skey.PublicKey.Y) != 0 {
+	if x.Cmp(skey.X) != 0 || y.Cmp(skey.Y) != 0 {
 		t.Errorf("Unexpected public key")
 	}
-	if !bytes.Equal(encodedPublicKey, elliptic.Marshal(elliptic.P256(), skey.PublicKey.X, skey.PublicKey.Y)) {
+	if !bytes.Equal(encodedPublicKey, elliptic.Marshal(elliptic.P256(), skey.X, skey.Y)) {
 		t.Errorf("Mismatch on serialized public key")
 	}
 }

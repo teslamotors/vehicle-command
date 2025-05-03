@@ -168,8 +168,8 @@ func configureFlags(c *cli.Config, commandName string, forceBLE bool) error {
 	}
 
 	// Verify all required parameters are present.
-	havePrivateKey := !(c.KeyringKeyName == "" && c.KeyFilename == "")
-	haveOAuth := !(c.KeyringTokenName == "" && c.TokenFilename == "")
+	havePrivateKey := c.KeyringKeyName != "" || c.KeyFilename != ""
+	haveOAuth := c.KeyringTokenName != "" || c.TokenFilename != ""
 	haveVIN := c.VIN != ""
 	_, err := checkReadiness(commandName, havePrivateKey, haveOAuth, haveVIN)
 	return err
@@ -1052,9 +1052,10 @@ var commands = map[string]*Command{
 						return errors.New("expected numeric ID")
 					}
 					return car.RemoveChargeSchedule(ctx, id)
-				} else {
-					return errors.New("missing schedule ID")
 				}
+
+				return errors.New("missing schedule ID")
+
 			case "HOME":
 				home = true
 			case "WORK":
@@ -1156,9 +1157,8 @@ var commands = map[string]*Command{
 						return errors.New("expected numeric ID")
 					}
 					return car.RemovePreconditionSchedule(ctx, id)
-				} else {
-					return errors.New("missing schedule ID")
 				}
+				return errors.New("missing schedule ID")
 			case "HOME":
 				home = true
 			case "WORK":

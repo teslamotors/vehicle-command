@@ -371,7 +371,7 @@ func (p *Proxy) handleFleetTelemetryConfig(acct *account.Account, w http.Respons
 	if _, ok := params.Config["iss"]; ok {
 		log.Warning("Configuration 'iss' field will be overwritten")
 	}
-	token, err := sign.SignMessageForFleet(p.commandKey, "TelemetryClient", params.Config)
+	token, err := sign.MessageForFleet(p.commandKey, "TelemetryClient", params.Config)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, fmt.Errorf("error signing configuration: %s", err))
 		return
