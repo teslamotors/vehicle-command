@@ -3,7 +3,7 @@ package ble
 import (
 	"errors"
 
-	"github.com/go-ble/ble"
+	"github.com/zlymeda/go-ble"
 )
 
 func IsAdapterError(_ error) bool {
