@@ -46,7 +46,8 @@ func (a adapter) InitAdapter(id *string) error {
 		if id != nil {
 			idStr = *id
 		}
-		device, err := newAdapter(idStr)
+		var err error
+		device, err = newAdapter(idStr)
 		if err != nil {
 			return fmt.Errorf("ble: failed to enable device: %s", err)
 		}
