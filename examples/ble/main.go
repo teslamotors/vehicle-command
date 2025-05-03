@@ -17,6 +17,11 @@ import (
 	"github.com/teslamotors/vehicle-command/pkg/connector/ble"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
 	"github.com/teslamotors/vehicle-command/pkg/vehicle"
+
+	// use go-ble impl
+	_ "github.com/teslamotors/vehicle-command/pkg/connector/ble/goble"
+	// or use tinygo
+	// _ "github.com/teslamotors/vehicle-command/pkg/connector/ble/tinygo"
 )
 
 func main() {

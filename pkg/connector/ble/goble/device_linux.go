@@ -1,6 +1,7 @@
-package ble
+package goble
 
 import (
+	iface "github.com/teslamotors/vehicle-command/pkg/connector/ble"
 	"os"
 	"strconv"
 	"strings"
@@ -43,12 +44,12 @@ func newAdapter(id *string) (ble.Device, error) {
 	}
 	if id != nil && *id != "" {
 		if !strings.HasPrefix(*id, "hci") {
-			return nil, ErrAdapterInvalidID
+			return nil, iface.ErrAdapterInvalidID
 		}
 		hciStr := strings.TrimPrefix(*id, "hci")
 		hciID, err := strconv.Atoi(hciStr)
 		if err != nil || hciID < 0 || hciID > 15 {
-			return nil, ErrAdapterInvalidID
+			return nil, iface.ErrAdapterInvalidID
 		}
 		opts = append(opts, ble.OptDeviceID(hciID))
 	}
