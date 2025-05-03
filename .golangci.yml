@@ -1,59 +1,79 @@
----
-run:
-  timeout: 4m
-
-issues:
-  exclude-dirs:
-    - temp
-  exclude:
-    - "Error return value of `w.Write` is not checked"
-    - "Error return value of `fmt.Fprintf` is not checked"
-    - "Error return value of `fmt.Fprintln` is not checked"
-    - "Error return value of `file.Close` is not checked"
-    - "Error return value of `os.Setenv` is not checked"
-    # ECDH code needs to support a Go 1.21 toolchain
-    - "elliptic.([A-Za-z]+) has been deprecated since Go 1.21: for ECDH"
+version: "2"
 
 linters:
   enable:
     - errcheck
-    - gofmt
-    - gosimple
     - govet
     - misspell
     - revive
     - unused
 
-linters-settings:
-  revive:
+  settings:
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+          arguments:
+            - allowedPackages:
+                - github.com/onsi/ginkgo
+                - github.com/onsi/ginkgo/v2
+                - github.com/onsi/gomega
+        - name: empty-block
+        - name: error-naming
+        - name: error-return
+        - name: error-strings
+        - name: errorf
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: package-comments
+          disabled: true
+        - name: range
+        - name: receiver-naming
+        - name: redefines-builtin-id
+        - name: superfluous-else
+        - name: time-naming
+        - name: unexported-return
+        - name: unreachable-code
+        - name: unused-parameter
+        - name: var-declaration
+        - name: var-naming
+        - name: exported
+
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
     rules:
-      - name: blank-imports
-      - name: context-as-argument
-      - name: context-keys-type
-      - name: dot-imports
-        arguments:
-          - allowedPackages:
-            - "github.com/onsi/ginkgo"
-            - "github.com/onsi/ginkgo/v2"
-            - "github.com/onsi/gomega"
-      - name: empty-block
-      - name: error-naming
-      - name: error-return
-      - name: error-strings
-      - name: errorf
-      # Uncomment when all issues are fixed
-      # - name: exported
-      - name: increment-decrement
-      - name: indent-error-flow
-      - name: package-comments
-        disabled: true
-      - name: range
-      - name: receiver-naming
-      - name: redefines-builtin-id
-      - name: superfluous-else
-      - name: time-naming
-      - name: unexported-return
-      - name: unreachable-code
-      - name: unused-parameter
-      - name: var-declaration
-      - name: var-naming
+      - path: (.+)\.go$
+        text: Error return value of `w.Write` is not checked
+      - path: (.+)\.go$
+        text: Error return value of `fmt.Fprintf` is not checked
+      - path: (.+)\.go$
+        text: Error return value of `fmt.Fprintln` is not checked
+      - path: (.+)\.go$
+        text: Error return value of `file.Close` is not checked
+      - path: (.+)\.go$
+        text: Error return value of `os.Setenv` is not checked
+      - path: (.+)\.go$ # ECDH code needs to support a Go 1.21 toolchain
+        text: 'elliptic.([A-Za-z]+) has been deprecated since Go 1.21: for ECDH'
+    paths:
+      - temp
+      - third_party$
+      - builtin$
+      - examples$
+
+formatters:
+  enable:
+    - gofmt
+  exclusions:
+    generated: lax
+    paths:
+      - temp
+      - third_party$
+      - builtin$
+      - examples$

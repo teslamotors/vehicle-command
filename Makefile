@@ -1,4 +1,4 @@
-LINTER			= golangci-lint run -v $(LINTER_FLAGS) --exclude-use-default=false --timeout $(LINTER_DEADLINE)
+LINTER			= golangci-lint run -v $(LINTER_FLAGS) --timeout $(LINTER_DEADLINE)
 LINTER_DEADLINE	= 30s
 LINTER_FLAGS ?=
 
