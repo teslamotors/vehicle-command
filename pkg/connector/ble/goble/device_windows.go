@@ -15,6 +15,6 @@ func AdapterErrorHelpMessage(err error) string {
 	return err.Error()
 }
 
-func newAdapter(_ *string) (ble.Device, error) {
+func newAdapter(_ string) (ble.Device, error) {
 	return nil, errors.New("not supported on Windows")
 }

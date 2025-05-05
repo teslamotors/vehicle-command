@@ -1,7 +1,7 @@
 package tinygo
 
 import (
-	iface "github.com/teslamotors/vehicle-command/pkg/connector/ble"
+	"github.com/teslamotors/vehicle-command/pkg/connector/ble/iface"
 
 	"github.com/teslamotors/vehicle-command/internal/log"
 	"tinygo.org/x/bluetooth"
