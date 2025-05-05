@@ -1,14 +1,15 @@
-package ble
+package goble
 
 import (
+	"github.com/teslamotors/vehicle-command/pkg/connector/ble/iface"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/go-ble/ble"
-	"github.com/go-ble/ble/linux"
-	"github.com/go-ble/ble/linux/hci/cmd"
+	"github.com/zlymeda/go-ble"
+	"github.com/zlymeda/go-ble/linux"
+	"github.com/zlymeda/go-ble/linux/hci/cmd"
 )
 
 func IsAdapterError(err error) bool {
@@ -35,20 +36,20 @@ var scanParams = cmd.LESetScanParameters{
 	ScanningFilterPolicy: 2,    // Basic filtered
 }
 
-func newAdapter(id *string) (ble.Device, error) {
+func newAdapter(id string) (ble.Device, error) {
 	opts := []ble.Option{
 		ble.OptDialerTimeout(bleTimeout),
 		ble.OptListenerTimeout(bleTimeout),
 		ble.OptScanParams(scanParams),
 	}
-	if id != nil && *id != "" {
-		if !strings.HasPrefix(*id, "hci") {
-			return nil, ErrAdapterInvalidID
+	if id != "" {
+		if !strings.HasPrefix(id, "hci") {
+			return nil, iface.ErrAdapterInvalidID
 		}
-		hciStr := strings.TrimPrefix(*id, "hci")
+		hciStr := strings.TrimPrefix(id, "hci")
 		hciID, err := strconv.Atoi(hciStr)
 		if err != nil || hciID < 0 || hciID > 15 {
-			return nil, ErrAdapterInvalidID
+			return nil, iface.ErrAdapterInvalidID
 		}
 		opts = append(opts, ble.OptDeviceID(hciID))
 	}

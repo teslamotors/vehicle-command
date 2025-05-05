@@ -1,9 +1,9 @@
-package ble
+package goble
 
 import (
 	"errors"
 
-	"github.com/go-ble/ble"
+	"github.com/zlymeda/go-ble"
 )
 
 func IsAdapterError(_ error) bool {
@@ -15,6 +15,6 @@ func AdapterErrorHelpMessage(err error) string {
 	return err.Error()
 }
 
-func newAdapter(_ *string) (ble.Device, error) {
+func newAdapter(_ string) (ble.Device, error) {
 	return nil, errors.New("not supported on Windows")
 }
