@@ -7,51 +7,29 @@ import (
 	"crypto/sha1"
 	"fmt"
 	"github.com/teslamotors/vehicle-command/internal/log"
-	"github.com/teslamotors/vehicle-command/pkg/connector"
-	"github.com/teslamotors/vehicle-command/pkg/protocol"
+	"github.com/teslamotors/vehicle-command/pkg/connector/ble/goble"
+	"github.com/teslamotors/vehicle-command/pkg/connector/ble/iface"
 	"sync"
-	"time"
 )
 
-var ErrAdapterInvalidID = protocol.NewError("the bluetooth adapter ID is invalid", false, false)
-var ErrMaxConnectionsExceeded = protocol.NewError("the vehicle is already connected to the maximum number of BLE devices", false, false)
+var ErrAdapterInvalidID = iface.ErrAdapterInvalidID
+var ErrMaxConnectionsExceeded = iface.ErrMaxConnectionsExceeded
 
 var (
 	mu   sync.Mutex
-	impl Adapter
+	impl = goble.NewAdapter()
 )
 
-func RegisterAdapter(adapter Adapter) {
+func RegisterAdapter(adapter iface.Adapter) {
+	if impl != nil {
+		_ = impl.CloseAdapter()
+	}
 	impl = adapter
 }
 
-type ScanResult struct {
-	Address     string
-	LocalName   string
-	RSSI        int16
-	Connectable bool
-}
+type ScanResult = iface.ScanResult
 
-type Adapter interface {
-	InitAdapter(s *string) error
-	CloseAdapter() error
-
-	ScanVehicleBeacon(ctx context.Context, vin string) (*ScanResult, error)
-	TryToConnect(ctx context.Context, vin string, target *ScanResult) (Connection, bool, error)
-
-	IsAdapterError(err error) bool
-	AdapterErrorHelpMessage(err error) string
-}
-
-type Connection interface {
-	PreferredAuthMethod() connector.AuthMethod
-	RetryInterval() time.Duration
-	Receive() <-chan []byte
-	Close()
-	AllowedLatency() time.Duration
-	Send(ctx context.Context, buffer []byte) error
-	VIN() string
-}
+type Connection = iface.Connection
 
 func VehicleLocalName(vin string) string {
 	vinBytes := []byte(vin)
@@ -68,7 +46,11 @@ func VehicleLocalName(vin string) string {
 func InitAdapterWithID(id string) error {
 	mu.Lock()
 	defer mu.Unlock()
-	return impl.InitAdapter(&id)
+	return impl.InitAdapter(id)
+}
+
+func InitAdapter() error {
+	return InitAdapterWithID("")
 }
 
 // CloseAdapter unsets the BLE adapter so that a new one can be created
@@ -84,18 +66,18 @@ func ScanVehicleBeacon(ctx context.Context, vin string) (*ScanResult, error) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	if err := impl.InitAdapter(nil); err != nil {
+	if err := impl.InitAdapter(""); err != nil {
 		return nil, err
 	}
 
-	a, err := impl.ScanVehicleBeacon(ctx, VehicleLocalName(vin))
+	result, err := impl.ScanVehicleBeacon(ctx, VehicleLocalName(vin))
 	if err != nil {
 		return nil, fmt.Errorf("ble: failed to scan for %s: %s", vin, err)
 	}
-	return a, nil
+	return result, nil
 }
 
-func NewConnection(ctx context.Context, vin string) (Connection, error) {
+func NewConnection(ctx context.Context, vin string) (*Connection, error) {
 	return NewConnectionFromScanResult(ctx, vin, nil)
 }
 
@@ -106,7 +88,7 @@ func NewConnection(ctx context.Context, vin string) (Connection, error) {
 // time between scanning and connecting is no longer than ~10 seconds as if
 // it is, bluez will not allow the connection to be established until it is
 // rescanned.
-func NewConnectionFromScanResult(ctx context.Context, vin string, target *ScanResult) (Connection, error) {
+func NewConnectionFromScanResult(ctx context.Context, vin string, target *ScanResult) (*Connection, error) {
 	var lastError error
 	for {
 		conn, retry, err := tryToConnect(ctx, vin, target)
@@ -135,12 +117,12 @@ func AdapterErrorHelpMessage(err error) string {
 	return impl.AdapterErrorHelpMessage(err)
 }
 
-func tryToConnect(ctx context.Context, vin string, target *ScanResult) (Connection, bool, error) {
+func tryToConnect(ctx context.Context, vin string, target *ScanResult) (*Connection, bool, error) {
 	var err error
 	mu.Lock()
 	defer mu.Unlock()
 
-	if err = impl.InitAdapter(nil); err != nil {
+	if err = impl.InitAdapter(""); err != nil {
 		return nil, false, err
 	}
 

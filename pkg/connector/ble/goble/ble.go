@@ -5,16 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"github.com/teslamotors/vehicle-command/internal/log"
-	iface "github.com/teslamotors/vehicle-command/pkg/connector/ble"
-	"github.com/teslamotors/vehicle-command/pkg/connector/ble/conn"
+	"github.com/teslamotors/vehicle-command/pkg/connector/ble/iface"
 	"github.com/zlymeda/go-ble"
 	"sync"
 )
 
 var (
-	vehicleServiceUUID = ble.MustParse(conn.VehicleServiceUUID)
-	toVehicleUUID      = ble.MustParse(conn.ToVehicleUUID)
-	fromVehicleUUID    = ble.MustParse(conn.FromVehicleUUID)
+	vehicleServiceUUID = ble.MustParse(iface.VehicleServiceUUID)
+	toVehicleUUID      = ble.MustParse(iface.ToVehicleUUID)
+	fromVehicleUUID    = ble.MustParse(iface.FromVehicleUUID)
 )
 
 var (
@@ -22,8 +21,8 @@ var (
 	mu     sync.Mutex
 )
 
-func init() {
-	iface.RegisterAdapter(adapter{})
+func NewAdapter() iface.Adapter {
+	return adapter{}
 }
 
 type adapter struct {
@@ -33,7 +32,7 @@ func (a adapter) AdapterErrorHelpMessage(err error) string {
 	return AdapterErrorHelpMessage(err)
 }
 
-func (a adapter) InitAdapter(id *string) error {
+func (a adapter) InitAdapter(id string) error {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -107,7 +106,7 @@ func (a adapter) ScanVehicleBeacon(ctx context.Context, localName string) (*ifac
 	}
 }
 
-func (a adapter) TryToConnect(ctx context.Context, vin string, target *iface.ScanResult) (iface.Connection, bool, error) {
+func (a adapter) TryToConnect(ctx context.Context, vin string, target *iface.ScanResult) (*iface.Connection, bool, error) {
 	log.Debug("Dialing to %s (%s)...", target.Address, target.LocalName)
 
 	client, err := device.Dial(ctx, ble.NewAddr(target.Address))
@@ -129,8 +128,6 @@ func (a adapter) TryToConnect(ctx context.Context, vin string, target *iface.Sca
 		return nil, true, fmt.Errorf("ble: failed to discover service characteristics: %s", err)
 	}
 
-	//conn.NewConnection(vin, )
-
 	var txChar *ble.Characteristic
 	var rxChar *ble.Characteristic
 
@@ -149,7 +146,7 @@ func (a adapter) TryToConnect(ctx context.Context, vin string, target *iface.Sca
 		return nil, true, fmt.Errorf("ble: failed to find required characteristics")
 	}
 
-	connection := conn.NewConnection(vin, 0, writer{
+	connection := iface.NewConnection(vin, 0, writer{
 		txChar: txChar,
 		rxChar: rxChar,
 		client: client,
@@ -164,7 +161,7 @@ func (a adapter) TryToConnect(ctx context.Context, vin string, target *iface.Sca
 		log.Warning("ble: failed to exchange MTU: %s", err)
 		connection.SetBlockLength(ble.DefaultMTU - 3) // Fallback to default MTU size
 	} else {
-		connection.SetBlockLength(min(txMtu, conn.MaxBLEMessageSize) - 3) // 3 bytes for header
+		connection.SetBlockLength(min(txMtu, iface.MaxBLEMessageSize) - 3) // 3 bytes for header
 		log.Debug("MTU size: %d", txMtu)
 	}
 

@@ -15,19 +15,16 @@ import (
 	debugger "github.com/teslamotors/vehicle-command/internal/log"
 
 	"github.com/teslamotors/vehicle-command/pkg/connector/ble"
+	"github.com/teslamotors/vehicle-command/pkg/connector/ble/tinygo"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
 	"github.com/teslamotors/vehicle-command/pkg/vehicle"
-
-	// use go-ble impl
-	_ "github.com/teslamotors/vehicle-command/pkg/connector/ble/goble"
-	// or use tinygo
-	// _ "github.com/teslamotors/vehicle-command/pkg/connector/ble/tinygo"
 )
 
 func main() {
 	logger := log.New(os.Stderr, "", 0)
 	status := 1
 	debug := false
+	useTinyGo := false
 	defer func() {
 		os.Exit(status)
 	}()
@@ -43,6 +40,7 @@ func main() {
 	flag.StringVar(&privateKeyFile, "key", "", "Private key `file` for authorizing commands (PEM PKCS8 NIST-P256)")
 	flag.StringVar(&vin, "vin", "", "Vehicle Identification Number (`VIN`) of the car")
 	flag.BoolVar(&debug, "debug", false, "Enable debugging of TX/RX BLE packets")
+	flag.BoolVar(&useTinyGo, "tinygo", false, "Use tinygo ble impl (go-ble is the default")
 	if runtime.GOOS == "linux" {
 		flag.StringVar(&btAdapter, "bt-adapter", "", "Optional ID of Bluetooth adapter to use")
 	}
@@ -51,6 +49,11 @@ func main() {
 
 	if debug {
 		debugger.SetLevel(debugger.LevelDebug)
+	}
+
+	// goble is the default impl
+	if useTinyGo {
+		ble.RegisterAdapter(tinygo.NewAdapter())
 	}
 
 	err := ble.InitAdapterWithID(btAdapter)

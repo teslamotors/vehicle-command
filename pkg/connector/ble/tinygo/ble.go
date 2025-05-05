@@ -4,19 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/teslamotors/vehicle-command/pkg/connector/ble/conn"
+	"github.com/teslamotors/vehicle-command/pkg/connector/ble/iface"
 	"sync"
 	"time"
 
 	"github.com/teslamotors/vehicle-command/internal/log"
-	iface "github.com/teslamotors/vehicle-command/pkg/connector/ble"
+
 	"tinygo.org/x/bluetooth"
 )
 
 var (
-	vehicleServiceUUID = mustParseUUID(conn.VehicleServiceUUID)
-	toVehicleUUID      = mustParseUUID(conn.ToVehicleUUID)
-	fromVehicleUUID    = mustParseUUID(conn.FromVehicleUUID)
+	vehicleServiceUUID = mustParseUUID(iface.VehicleServiceUUID)
+	toVehicleUUID      = mustParseUUID(iface.ToVehicleUUID)
+	fromVehicleUUID    = mustParseUUID(iface.FromVehicleUUID)
 )
 
 var (
@@ -24,8 +24,8 @@ var (
 	mu     sync.Mutex
 )
 
-func init() {
-	iface.RegisterAdapter(adapter{})
+func NewAdapter() iface.Adapter {
+	return adapter{}
 }
 
 type adapter struct{}
@@ -34,7 +34,7 @@ func (a adapter) AdapterErrorHelpMessage(err error) string {
 	return AdapterErrorHelpMessage(err)
 }
 
-func (a adapter) InitAdapter(id *string) error {
+func (a adapter) InitAdapter(id string) error {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -42,12 +42,9 @@ func (a adapter) InitAdapter(id *string) error {
 		log.Debug("Reusing existing BLE device")
 	} else {
 		log.Debug("Creating new BLE adapter")
-		idStr := ""
-		if id != nil {
-			idStr = *id
-		}
+
 		var err error
-		device, err = newAdapter(idStr)
+		device, err = newAdapter(id)
 		if err != nil {
 			return fmt.Errorf("ble: failed to enable device: %s", err)
 		}
@@ -139,7 +136,7 @@ func (a adapter) ScanVehicleBeacon(ctx context.Context, localName string) (*ifac
 	}
 }
 
-func (a adapter) TryToConnect(ctx context.Context, vin string, target *iface.ScanResult) (iface.Connection, bool, error) {
+func (a adapter) TryToConnect(ctx context.Context, vin string, target *iface.ScanResult) (*iface.Connection, bool, error) {
 	log.Debug("Connecting to %s (%s)...", target.Address, target.LocalName)
 
 	// FIXME: This is a workaround for the fact that bluetooth library doesn't
@@ -217,7 +214,7 @@ func (a adapter) TryToConnect(ctx context.Context, vin string, target *iface.Sca
 		rxChar: characteristics[1],
 		device: device,
 	}
-	connection := conn.NewConnection(vin, blockLength, w)
+	connection := iface.NewConnection(vin, blockLength, w)
 
 	if err := w.rxChar.EnableNotifications(connection.Rx); err != nil {
 		return nil, true, fmt.Errorf("ble: failed to subscribe to RX: %s", err)

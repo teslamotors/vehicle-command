@@ -1,7 +1,7 @@
 package goble
 
 import (
-	iface "github.com/teslamotors/vehicle-command/pkg/connector/ble"
+	"github.com/teslamotors/vehicle-command/pkg/connector/ble/iface"
 	"os"
 	"strconv"
 	"strings"
@@ -36,17 +36,17 @@ var scanParams = cmd.LESetScanParameters{
 	ScanningFilterPolicy: 2,    // Basic filtered
 }
 
-func newAdapter(id *string) (ble.Device, error) {
+func newAdapter(id string) (ble.Device, error) {
 	opts := []ble.Option{
 		ble.OptDialerTimeout(bleTimeout),
 		ble.OptListenerTimeout(bleTimeout),
 		ble.OptScanParams(scanParams),
 	}
-	if id != nil && *id != "" {
-		if !strings.HasPrefix(*id, "hci") {
+	if id != "" {
+		if !strings.HasPrefix(id, "hci") {
 			return nil, iface.ErrAdapterInvalidID
 		}
-		hciStr := strings.TrimPrefix(*id, "hci")
+		hciStr := strings.TrimPrefix(id, "hci")
 		hciID, err := strconv.Atoi(hciStr)
 		if err != nil || hciID < 0 || hciID > 15 {
 			return nil, iface.ErrAdapterInvalidID

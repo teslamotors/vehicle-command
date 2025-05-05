@@ -1,7 +1,7 @@
 package goble
 
 import (
-	iface "github.com/teslamotors/vehicle-command/pkg/connector/ble"
+	"github.com/teslamotors/vehicle-command/pkg/connector/ble/iface"
 
 	"github.com/teslamotors/vehicle-command/internal/log"
 	"github.com/zlymeda/go-ble"
@@ -17,8 +17,8 @@ func AdapterErrorHelpMessage(err error) string {
 	return err.Error()
 }
 
-func newAdapter(id *string) (ble.Device, error) {
-	if id != nil && *id != "" {
+func newAdapter(id string) (ble.Device, error) {
+	if id != "" {
 		log.Warning("Darwin does not support specifying a Bluetooth adapter ID")
 		return nil, iface.ErrAdapterInvalidID
 	}

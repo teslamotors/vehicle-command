@@ -17,10 +17,9 @@ import (
 	"github.com/teslamotors/vehicle-command/pkg/account"
 	"github.com/teslamotors/vehicle-command/pkg/cli"
 	"github.com/teslamotors/vehicle-command/pkg/connector/ble"
+	"github.com/teslamotors/vehicle-command/pkg/connector/ble/tinygo"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
 	"github.com/teslamotors/vehicle-command/pkg/vehicle"
-
-	_ "github.com/teslamotors/vehicle-command/pkg/connector/ble/goble"
 )
 
 func writeErr(format string, a ...interface{}) {
@@ -108,6 +107,7 @@ func main() {
 	var (
 		debug          bool
 		forceBLE       bool
+		useTinyGo      bool
 		commandTimeout time.Duration
 		connTimeout    time.Duration
 	)
@@ -119,6 +119,7 @@ func main() {
 	flag.Usage = Usage
 	flag.BoolVar(&debug, "debug", false, "Enable verbose debugging messages")
 	flag.BoolVar(&forceBLE, "ble", false, "Force BLE connection even if OAuth environment variables are defined")
+	flag.BoolVar(&useTinyGo, "tinygo", false, "Use tinygo ble impl (go-ble is the default")
 	flag.DurationVar(&commandTimeout, "command-timeout", 5*time.Second, "Set timeout for commands sent to the vehicle.")
 	flag.DurationVar(&connTimeout, "connect-timeout", 20*time.Second, "Set timeout for establishing initial connection.")
 
@@ -159,6 +160,15 @@ func main() {
 	if err := config.LoadCredentials(); err != nil {
 		writeErr("Error loading credentials: %s", err)
 		return
+	}
+
+	if forceBLE {
+		if useTinyGo {
+			ble.RegisterAdapter(tinygo.NewAdapter())
+			log.Debug("Using tinygo")
+		} else {
+			log.Debug("Using go-ble")
+		}
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), connTimeout)
