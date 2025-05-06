@@ -79,13 +79,13 @@ func signConfig(config *cli.Config, fleet bool) {
 	}
 	var token string
 	if fleet {
-		token, err = sign.MessageForFleet(skey, application, claims)
+		token, err = sign.SignMessageForFleet(skey, application, claims)
 	} else {
 		if config.VIN == "" {
 			fmt.Fprintln(os.Stderr, "Provide either -vin or -fleet")
 			os.Exit(1)
 		}
-		token, err = sign.MessageForVehicle(skey, config.VIN, application, claims)
+		token, err = sign.SignMessageForVehicle(skey, config.VIN, application, claims)
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create JWS: %s\n", err)

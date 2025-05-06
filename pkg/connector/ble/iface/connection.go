@@ -20,7 +20,7 @@ const (
 )
 
 type Writer interface {
-	WriteCharacteristic(bytes []byte, length int) error
+	WriteCharacteristic(ctx context.Context, bytes []byte) error
 	Close()
 }
 
@@ -97,7 +97,7 @@ func (c *Connection) Rx(p []byte) {
 	}
 }
 
-func (c *Connection) Send(_ context.Context, buffer []byte) error {
+func (c *Connection) Send(ctx context.Context, buffer []byte) error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -111,7 +111,7 @@ func (c *Connection) Send(_ context.Context, buffer []byte) error {
 			blockLength = len(out)
 		}
 
-		if err := c.writer.WriteCharacteristic(out[:blockLength], blockLength); err != nil {
+		if err := c.writer.WriteCharacteristic(ctx, out[:blockLength]); err != nil {
 			return err
 		}
 		out = out[blockLength:]

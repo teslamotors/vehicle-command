@@ -233,13 +233,13 @@ type writer struct {
 	device bluetooth.Device
 }
 
-func (w *writer) WriteCharacteristic(bytes []byte, length int) error {
+func (w *writer) WriteCharacteristic(_ context.Context, bytes []byte) error {
 	n, err := deviceCharacteristicWrite(w.txChar, bytes)
 	if err != nil {
 		return err
 	}
-	if n != length {
-		return fmt.Errorf("ble: failed to write %d bytes", length)
+	if n != len(bytes) {
+		return fmt.Errorf("ble: failed to write %d bytes", len(bytes))
 	}
 
 	return nil

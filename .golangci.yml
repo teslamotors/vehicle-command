@@ -41,6 +41,10 @@ linters:
         - name: var-naming
         - name: exported
 
+    staticcheck:
+      checks:
+        - "-QF1008"
+
   exclusions:
     generated: lax
     presets:

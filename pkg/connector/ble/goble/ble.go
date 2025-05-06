@@ -184,7 +184,7 @@ func (a writer) Close() {
 	_ = a.client.CancelConnection()
 }
 
-func (a writer) WriteCharacteristic(bytes []byte, _ int) error {
+func (a writer) WriteCharacteristic(_ context.Context, bytes []byte) error {
 	return a.client.WriteCharacteristic(a.txChar, bytes, false)
 }
 

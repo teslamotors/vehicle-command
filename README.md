@@ -63,7 +63,7 @@ curl --cacert cert.pem \
 Requirements:
 
  * You've [installed Golang](https://go.dev/doc/install). The package was
-   tested with Go 1.23.0.
+   tested with Go 1.24.2.
  * You're using macOS or Linux. (Everything except BLE should run on Windows,
    but Windows is not officially supported).
 

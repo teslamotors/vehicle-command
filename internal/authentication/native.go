@@ -188,9 +188,9 @@ func UnmarshalECDHPrivateKey(privateScalar []byte) ECDHPrivateKey {
 	if sk.D.Cmp(elliptic.P256().Params().N) >= 0 {
 		return nil
 	}
-	x, y := sk.ScalarBaseMult(privateScalar)
-	sk.X = x
-	sk.Y = y
+	x, y := sk.PublicKey.Curve.ScalarBaseMult(privateScalar)
+	sk.PublicKey.X = x
+	sk.PublicKey.Y = y
 	return &sk
 }
 
@@ -204,7 +204,7 @@ func (n *NativeECDHKey) PublicBytes() []byte {
 }
 
 func (n *NativeECDHKey) SchnorrSignature(message []byte) ([]byte, error) {
-	skey, err := n.ECDH()
+	skey, err := n.PrivateKey.ECDH()
 	if err != nil {
 		return nil, err
 	}
