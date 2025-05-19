@@ -494,6 +494,21 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		default:
 			return nil, errors.New("command must be 'vent' or 'close'")
 		}
+	// media
+	case "media_next_track":
+		return func(v *vehicle.Vehicle) error { return v.MediaNextTrack(ctx) }, nil
+	case "media_next_favorite":
+		return func(v *vehicle.Vehicle) error { return v.MediaNextFavorite(ctx) }, nil
+	case "media_prev_track":
+		return func(v *vehicle.Vehicle) error { return v.MediaPreviousTrack(ctx) }, nil
+	case "media_prev_favorite":
+		return func(v *vehicle.Vehicle) error { return v.MediaPreviousFavorite(ctx) }, nil
+	case "media_volume_down", "media_volume_up":
+		delta, err := params.getNumber("volume_delta", true)
+		if err != nil {
+			return nil, err
+		}
+		return func(v *vehicle.Vehicle) error { return v.MediaVolumeRelative(ctx, int32(delta)) }, nil
 	default:
 		return nil, &inet.HTTPError{Code: http.StatusBadRequest, Message: "{\"response\":null,\"error\":\"invalid_command\",\"error_description\":\"\"}"}
 	}
