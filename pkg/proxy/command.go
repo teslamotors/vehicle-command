@@ -67,6 +67,14 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 			return nil, err
 		}
 		return func(v *vehicle.Vehicle) error { return v.SetVolume(ctx, float32(volume)) }, nil
+	case "media_next_fav":
+		return func(v *vehicle.Vehicle) error { return v.MediaNextFavorite(ctx) }, nil
+	case "media_next_track":
+		return func(v *vehicle.Vehicle) error { return v.MediaNextTrack(ctx) }, nil
+	case "media_prev_fav":
+		return func(v *vehicle.Vehicle) error { return v.MediaPreviousFavorite(ctx) }, nil
+	case "media_prev_track":
+		return func(v *vehicle.Vehicle) error { return v.MediaPreviousTrack(ctx) }, nil
 	case "remote_boombox":
 		return nil, ErrCommandNotImplemented
 	case "media_toggle_playback":
@@ -480,6 +488,22 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 	// end-to-end authentication.
 	case "navigation_request":
 		return nil, ErrCommandUseRESTAPI
+	case "sun_roof_control":
+		state, err := params.getString("state", true)
+		if err != nil {
+			return nil, err
+		}
+
+		switch state {
+		case "vent":
+			return func(v *vehicle.Vehicle) error { return v.VentSunRoof(ctx) }, nil
+		case "close":
+			return func(v *vehicle.Vehicle) error { return v.CloseSunRoof(ctx) }, nil
+		case "stop":
+			return func(v *vehicle.Vehicle) error { return v.StopSunRoof(ctx) }, nil
+		default:
+			return nil, errors.New("state must be 'stop', 'close', or 'vent'")
+		}
 	case "window_control":
 		// Latitude and longitude are not required for vehicles that support this protocol.
 		cmd, err := params.getString("command", true)
