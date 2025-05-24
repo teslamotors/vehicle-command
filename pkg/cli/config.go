@@ -52,6 +52,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/teslamotors/vehicle-command/pkg/connector/ble"
+	"github.com/teslamotors/vehicle-command/pkg/connector/ble/goble"
+	"github.com/teslamotors/vehicle-command/pkg/connector/ble/tinygo"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -61,7 +64,6 @@ import (
 	"github.com/teslamotors/vehicle-command/internal/log"
 	"github.com/teslamotors/vehicle-command/pkg/account"
 	"github.com/teslamotors/vehicle-command/pkg/cache"
-	"github.com/teslamotors/vehicle-command/pkg/connector/ble"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
 	"github.com/teslamotors/vehicle-command/pkg/vehicle"
 
@@ -145,6 +147,7 @@ type Config struct {
 	KeyringTokenName string // Username for OAuth token in system keyring
 	VIN              string
 	BtAdapterID      string // ID of Bluetooth adapter to use (Linux only)
+	BtTinyGo         bool
 	TokenFilename    string
 	KeyFilename      string
 	CacheFilename    string
@@ -207,6 +210,9 @@ func (c *Config) RegisterCommandLineFlags() {
 		flag.Var(&c.BackendType, "keyring-type", "Keyring `type` ("+strings.Join(names, "|")+"). Defaults to $TESLA_KEYRING_TYPE.")
 		flag.StringVar(&c.Backend.FileDir, "keyring-file-dir", keyringDirectory, "keyring `directory` for file-backed keyring types")
 		flag.BoolVar(&c.Debug, "keyring-debug", false, "Enable keyring debug logging")
+	}
+	if c.Flags.isSet(FlagBLE) && c.Flags.isSet(FlagVIN) {
+		flag.BoolVar(&c.BtTinyGo, "tinygo", false, "Use tinygo ble impl (go-ble is the default.")
 	}
 	c.registerCommandLineFlagsOsSpecific()
 }
@@ -347,7 +353,7 @@ func (c *Config) Connect(ctx context.Context) (acct *account.Account, car *vehic
 	// provided ones.
 	var skey protocol.ECDHPrivateKey
 	skey, err = c.PrivateKey()
-	if err != nil && err != ErrNoKeySpecified {
+	if err != nil && !errors.Is(err, ErrNoKeySpecified) {
 		return nil, nil, err
 	}
 
@@ -470,20 +476,24 @@ func (c *Config) ConnectRemote(ctx context.Context, skey protocol.ECDHPrivateKey
 }
 
 // ConnectLocal connects to a vehicle over BLE.
-func (c *Config) ConnectLocal(ctx context.Context, skey protocol.ECDHPrivateKey) (car *vehicle.Vehicle, err error) {
-	err = ble.InitAdapterWithID(c.BtAdapterID)
+func (c *Config) ConnectLocal(ctx context.Context, skey protocol.ECDHPrivateKey) (*vehicle.Vehicle, error) {
+	var adapter ble.Adapter
+	var err error
+
+	if c.BtTinyGo {
+		adapter, err = tinygo.NewAdapter(c.BtAdapterID)
+	} else {
+		adapter, err = goble.NewAdapter(c.BtAdapterID)
+	}
+
 	if err != nil {
 		return nil, err
 	}
 
-	conn, err := ble.NewConnection(ctx, c.VIN)
+	conn, err := ble.NewConnection(ctx, c.VIN, adapter)
 	if err != nil {
 		return nil, err
 	}
 
-	car, err = vehicle.NewVehicle(conn, skey, c.sessions)
-	if err != nil {
-		return nil, err
-	}
-	return
+	return vehicle.NewVehicle(conn, skey, c.sessions)
 }

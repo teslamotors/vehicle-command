@@ -8,9 +8,9 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/zlymeda/go-ble v0.0.0-20250503163836-ac689226ee0c
-	golang.org/x/term v0.31.0
+	golang.org/x/term v0.32.0
 	google.golang.org/protobuf v1.36.6
-	tinygo.org/x/bluetooth v0.11.0
+	tinygo.org/x/bluetooth v0.11.1-0.20250505124847-38847b0d22b1
 )
 
 require (
@@ -30,10 +30,10 @@ require (
 	github.com/raff/goble v0.0.0-20200327175727-d63360dcfd80 // indirect
 	github.com/saltosystems/winrt-go v0.0.0-20241223121953-98e32661f6ff // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
-	github.com/soypat/cyw43439 v0.0.0-20250322192939-ffedeab80a50 // indirect
+	github.com/soypat/cyw43439 v0.0.0-20250505012923-830110c8f4af // indirect
 	github.com/soypat/seqs v0.0.0-20250124201400-0d65bc7c1710 // indirect
 	github.com/tinygo-org/cbgo v0.0.4 // indirect
 	github.com/tinygo-org/pio v0.2.0 // indirect
-	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
-	golang.org/x/sys v0.32.0 // indirect
+	golang.org/x/exp v0.0.0-20250506013437-ce4c2cf36ca6 // indirect
+	golang.org/x/sys v0.33.0 // indirect
 )

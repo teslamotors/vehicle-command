@@ -2,8 +2,6 @@ package tinygo
 
 import (
 	"strings"
-
-	"github.com/teslamotors/vehicle-command/internal/log"
 	"tinygo.org/x/bluetooth"
 )
 
@@ -36,12 +34,3 @@ func newAdapter(id string) (*bluetooth.Adapter, error) {
 var (
 	deviceCharacteristicWrite = bluetooth.DeviceCharacteristic.WriteWithoutResponse
 )
-
-func (w *writer) Close() {
-	if err := w.rxChar.EnableNotifications(nil); err != nil {
-		log.Warning("ble: failed to disable RX notifications: %s", err)
-	}
-	if err := w.device.Disconnect(); err != nil {
-		log.Warning("ble: failed to disconnect: %s", err)
-	}
-}

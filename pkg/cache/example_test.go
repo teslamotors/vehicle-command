@@ -3,6 +3,7 @@ package cache_test
 import (
 	"context"
 	"fmt"
+	"github.com/teslamotors/vehicle-command/pkg/connector/ble/goble"
 
 	"github.com/teslamotors/vehicle-command/pkg/cache"
 	"github.com/teslamotors/vehicle-command/pkg/connector/ble"
@@ -14,7 +15,12 @@ func Example() {
 	const cacheFilename = "my_cache.json"
 	const privateKeyFilename = "private_key.pem"
 
-	conn, err := ble.NewConnection(context.Background(), "myvin123")
+	adapter, err := goble.NewAdapter("")
+	if err != nil {
+		panic(err)
+	}
+
+	conn, err := ble.NewConnection(context.Background(), "myvin123", adapter)
 	if err != nil {
 		panic(err)
 	}

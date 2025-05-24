@@ -1,5 +1,3 @@
-// Package ble implements the vehicle.Connector interface using BLE.
-
 package ble
 
 import (
@@ -7,29 +5,30 @@ import (
 	"crypto/sha1"
 	"fmt"
 	"github.com/teslamotors/vehicle-command/internal/log"
-	"github.com/teslamotors/vehicle-command/pkg/connector/ble/goble"
-	"github.com/teslamotors/vehicle-command/pkg/connector/ble/iface"
+	"github.com/teslamotors/vehicle-command/pkg/connector"
+	"github.com/teslamotors/vehicle-command/pkg/protocol"
 	"sync"
+	"time"
 )
-
-var ErrAdapterInvalidID = iface.ErrAdapterInvalidID
-var ErrMaxConnectionsExceeded = iface.ErrMaxConnectionsExceeded
 
 var (
-	mu   sync.Mutex
-	impl = goble.NewAdapter()
+	ErrMaxConnectionsExceeded = protocol.NewError("the vehicle is already connected to the maximum number of BLE devices", false, false)
 )
 
-func RegisterAdapter(adapter iface.Adapter) {
-	if impl != nil {
-		_ = impl.CloseAdapter()
-	}
-	impl = adapter
-}
+const (
+	defaultMTU        = 23
+	maxBLEMTUSize     = 512 + 3
+	maxBLEMessageSize = 1024
 
-type ScanResult = iface.ScanResult
+	rxTimeout  = time.Second     // Timeout interval between receiving chunks of a mesasge
+	maxLatency = 4 * time.Second // Max allowed error when syncing vehicle clock
+)
 
-type Connection = iface.Connection
+const (
+	vehicleServiceUUID = "00000211-b2d1-43f0-9b88-960cebf8b91e"
+	toVehicleUUID      = "00000212-b2d1-43f0-9b88-960cebf8b91e"
+	fromVehicleUUID    = "00000213-b2d1-43f0-9b88-960cebf8b91e"
+)
 
 func VehicleLocalName(vin string) string {
 	vinBytes := []byte(vin)
@@ -37,68 +36,48 @@ func VehicleLocalName(vin string) string {
 	return fmt.Sprintf("S%02xC", digest[:8])
 }
 
-// InitAdapterWithID initializes the BLE adapter with the given ID.
-// Currently, this is only supported on Linux. It is not necessary to
-// call this function if using the default adapter, but if not, it
-// must be called before making any other BLE calls.
-// Linux:
-//   - id is in the form "hciX" where X is the number of the adapter.
-func InitAdapterWithID(id string) error {
-	mu.Lock()
-	defer mu.Unlock()
-	return impl.InitAdapter(id)
+type Connection struct {
+	vin    string
+	inbox  chan []byte
+	device Device
+	writer Writer
+
+	blockLength int
+	inputBuffer []byte
+	lastRx      time.Time
+	lock        sync.Mutex
 }
 
-func InitAdapter() error {
-	return InitAdapterWithID("")
+func ScanVehicleBeacon(ctx context.Context, vin string, adapter Adapter) (*Beacon, error) {
+	return adapter.ScanBeacon(ctx, VehicleLocalName(vin))
 }
 
-// CloseAdapter unsets the BLE adapter so that a new one can be created
-// on the next call to InitAdapter. This does not disconnect any existing
-// connections or stop any ongoing scans and must be done separately.
-func CloseAdapter() error {
-	mu.Lock()
-	defer mu.Unlock()
-	return impl.CloseAdapter()
-}
-
-func ScanVehicleBeacon(ctx context.Context, vin string) (*ScanResult, error) {
-	mu.Lock()
-	defer mu.Unlock()
-
-	if err := impl.InitAdapter(""); err != nil {
+func NewConnection(ctx context.Context, vin string, adapter Adapter) (*Connection, error) {
+	beacon, err := adapter.ScanBeacon(ctx, VehicleLocalName(vin))
+	if err != nil {
 		return nil, err
 	}
-
-	result, err := impl.ScanVehicleBeacon(ctx, VehicleLocalName(vin))
-	if err != nil {
-		return nil, fmt.Errorf("ble: failed to scan for %s: %s", vin, err)
-	}
-	return result, nil
+	return NewConnectionFromBeacon(ctx, vin, beacon, adapter)
 }
 
-func NewConnection(ctx context.Context, vin string) (*Connection, error) {
-	return NewConnectionFromScanResult(ctx, vin, nil)
-}
-
-// NewConnectionFromScanResult creates a new BLE connection to the given target.
-// If target is nil, the vehicle will be scanned for.
-//
-// NOTE(Linux/tinygo/bluez): If target is specified the user must make sure that the
-// time between scanning and connecting is no longer than ~10 seconds as if
-// it is, bluez will not allow the connection to be established until it is
-// rescanned.
-func NewConnectionFromScanResult(ctx context.Context, vin string, target *ScanResult) (*Connection, error) {
+func NewConnectionFromBeacon(ctx context.Context, vin string, beacon *Beacon, adapter Adapter) (*Connection, error) {
 	var lastError error
+
+	if beacon.LocalName != VehicleLocalName(vin) {
+		return nil, fmt.Errorf("ble: beacon with unexpected local name: '%s'", beacon.LocalName)
+	}
+
+	if !beacon.Connectable {
+		return nil, ErrMaxConnectionsExceeded
+	}
+
 	for {
-		conn, retry, err := tryToConnect(ctx, vin, target)
+		conn, err := tryToConnect(ctx, vin, beacon, adapter)
 		if err == nil {
 			return conn, nil
 		}
-		if !retry || impl.IsAdapterError(err) {
-			return nil, err
-		}
-		log.Warning("BLE connection attempt failed: %s", err)
+
+		log.Warning("BLE connection attempt failed: %+v", err)
 		if err := ctx.Err(); err != nil {
 			if lastError != nil {
 				return nil, lastError
@@ -109,39 +88,130 @@ func NewConnectionFromScanResult(ctx context.Context, vin string, target *ScanRe
 	}
 }
 
-func IsAdapterError(err error) bool {
-	return impl.IsAdapterError(err)
-}
-
-func AdapterErrorHelpMessage(err error) string {
-	return impl.AdapterErrorHelpMessage(err)
-}
-
-func tryToConnect(ctx context.Context, vin string, target *ScanResult) (*Connection, bool, error) {
-	var err error
-	mu.Lock()
-	defer mu.Unlock()
-
-	if err = impl.InitAdapter(""); err != nil {
-		return nil, false, err
+func tryToConnect(ctx context.Context, vin string, beacon *Beacon, adapter Adapter) (*Connection, error) {
+	device, err := adapter.Connect(ctx, beacon)
+	if err != nil {
+		return nil, err
 	}
 
-	localName := VehicleLocalName(vin)
+	service, err := device.Service(ctx, vehicleServiceUUID)
+	if err != nil {
+		return nil, err
+	}
 
-	if target == nil {
-		target, err = impl.ScanVehicleBeacon(ctx, localName)
+	writer, err := service.Tx(toVehicleUUID)
+	if err != nil {
+		return nil, err
+	}
+
+	txMtu, err := writer.MTU(maxBLEMTUSize)
+	if err != nil {
+		txMtu = defaultMTU - 3 // Fallback to default MTU size
+	} else {
+		txMtu = min(txMtu, maxBLEMessageSize) - 3 // 3 bytes for header
+	}
+
+	conn := &Connection{
+		vin:    vin,
+		inbox:  make(chan []byte, 5),
+		device: device,
+		writer: writer,
+
+		blockLength: txMtu,
+	}
+
+	err = service.Rx(fromVehicleUUID, conn.rx)
+	if err != nil {
+		return nil, err
+	}
+
+	return conn, nil
+}
+
+func (c *Connection) Receive() <-chan []byte {
+	return c.inbox
+}
+
+func (c *Connection) Send(ctx context.Context, buffer []byte) error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	var out []byte
+	log.Debug("TX: %02x", buffer)
+	out = append(out, uint8(len(buffer)>>8), uint8(len(buffer)))
+	out = append(out, buffer...)
+	blockLength := c.blockLength
+	for len(out) > 0 {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		if blockLength > len(out) {
+			blockLength = len(out)
+		}
+
+		n, err := c.writer.Write(out[:blockLength])
 		if err != nil {
-			return nil, true, fmt.Errorf("ble: failed to scan for %s: %s", vin, err)
+			return err
+		} else if n != blockLength {
+			return fmt.Errorf("ble: failed to write %d bytes", blockLength)
+		}
+
+		out = out[blockLength:]
+	}
+	return nil
+}
+
+func (c *Connection) VIN() string {
+	return c.vin
+}
+
+func (c *Connection) Close() {
+	if err := c.device.Close(); err != nil {
+		log.Warning("ble: failed to close device: %s", err)
+	}
+}
+
+func (c *Connection) PreferredAuthMethod() connector.AuthMethod {
+	return connector.AuthMethodGCM
+}
+
+func (c *Connection) RetryInterval() time.Duration {
+	return time.Second
+}
+
+func (c *Connection) AllowedLatency() time.Duration {
+	return maxLatency
+}
+
+func (c *Connection) rx(p []byte) {
+	if time.Since(c.lastRx) > rxTimeout {
+		c.inputBuffer = []byte{}
+	}
+	c.lastRx = time.Now()
+	c.inputBuffer = append(c.inputBuffer, p...)
+	for c.flush() {
+	}
+}
+
+func (c *Connection) flush() bool {
+	if len(c.inputBuffer) >= 2 {
+		msgLength := 256*int(c.inputBuffer[0]) + int(c.inputBuffer[1])
+		if msgLength > maxBLEMessageSize {
+			c.inputBuffer = []byte{}
+			return false
+		}
+		if len(c.inputBuffer) >= 2+msgLength {
+			buffer := c.inputBuffer[2 : 2+msgLength]
+			log.Debug("RX: %02x", buffer)
+			c.inputBuffer = c.inputBuffer[2+msgLength:]
+			select {
+			case c.inbox <- buffer:
+			default:
+				return false
+			}
+			return true
 		}
 	}
-
-	if target.LocalName != localName {
-		return nil, false, fmt.Errorf("ble: beacon with unexpected local name: '%s'", target.LocalName)
-	}
-
-	if !target.Connectable {
-		return nil, false, ErrMaxConnectionsExceeded
-	}
-
-	return impl.TryToConnect(ctx, vin, target)
+	return false
 }

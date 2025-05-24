@@ -1,15 +1,13 @@
 package goble
 
 import (
-	"github.com/teslamotors/vehicle-command/pkg/connector/ble/iface"
+	"github.com/zlymeda/go-ble"
+	"github.com/zlymeda/go-ble/linux"
+	"github.com/zlymeda/go-ble/linux/hci/cmd"
 	"os"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/zlymeda/go-ble"
-	"github.com/zlymeda/go-ble/linux"
-	"github.com/zlymeda/go-ble/linux/hci/cmd"
 )
 
 func IsAdapterError(err error) bool {
@@ -44,12 +42,12 @@ func newAdapter(id string) (ble.Device, error) {
 	}
 	if id != "" {
 		if !strings.HasPrefix(id, "hci") {
-			return nil, iface.ErrAdapterInvalidID
+			return nil, ErrAdapterInvalidID
 		}
 		hciStr := strings.TrimPrefix(id, "hci")
 		hciID, err := strconv.Atoi(hciStr)
 		if err != nil || hciID < 0 || hciID > 15 {
-			return nil, iface.ErrAdapterInvalidID
+			return nil, ErrAdapterInvalidID
 		}
 		opts = append(opts, ble.OptDeviceID(hciID))
 	}

@@ -1,7 +1,6 @@
 package tinygo
 
 import (
-	"github.com/teslamotors/vehicle-command/internal/log"
 	"tinygo.org/x/bluetooth"
 )
 
@@ -17,7 +16,7 @@ func AdapterErrorHelpMessage(err error) string {
 func newAdapter(id string) (*bluetooth.Adapter, error) {
 	if id != "" {
 		// TODO: Add support for Windows
-		return nil, iface.ErrAdapterInvalidID
+		return nil, ErrAdapterInvalidID
 	}
 
 	return bluetooth.DefaultAdapter, nil
@@ -26,9 +25,3 @@ func newAdapter(id string) (*bluetooth.Adapter, error) {
 var (
 	deviceCharacteristicWrite = bluetooth.DeviceCharacteristic.WriteWithoutResponse
 )
-
-func (w *writer) Close() {
-	if err := c.device.Disconnect(); err != nil {
-		log.Warning("ble: failed to disconnect: %s", err)
-	}
-}
