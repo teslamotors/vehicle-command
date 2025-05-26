@@ -1,13 +1,14 @@
 package goble
 
 import (
-	"github.com/zlymeda/go-ble"
-	"github.com/zlymeda/go-ble/linux"
-	"github.com/zlymeda/go-ble/linux/hci/cmd"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/zlymeda/go-ble"
+	"github.com/zlymeda/go-ble/linux"
+	"github.com/zlymeda/go-ble/linux/hci/cmd"
 )
 
 func IsAdapterError(err error) bool {

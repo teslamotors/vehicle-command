@@ -3,6 +3,7 @@ package goble
 import (
 	"bytes"
 	"fmt"
+
 	"github.com/teslamotors/vehicle-command/pkg/connector/ble"
 	goble "github.com/zlymeda/go-ble"
 )

@@ -3,11 +3,12 @@ package tinygo
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/teslamotors/vehicle-command/internal/log"
 	"github.com/teslamotors/vehicle-command/pkg/connector/ble"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
-	"strings"
-	"time"
 	"tinygo.org/x/bluetooth"
 )
 

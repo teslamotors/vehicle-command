@@ -3,6 +3,7 @@ package tinygo
 import (
 	"context"
 	"fmt"
+
 	"github.com/teslamotors/vehicle-command/pkg/connector/ble"
 	"tinygo.org/x/bluetooth"
 )
@@ -24,6 +25,10 @@ func (c *device) Service(_ context.Context, uuid string) (ble.Service, error) {
 }
 
 func (c *device) Close() error {
+	if c.client == nil {
+		return nil
+	}
+
 	client := c.client
 	c.client = nil
 	return client.Disconnect()

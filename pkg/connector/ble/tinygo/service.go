@@ -2,6 +2,7 @@ package tinygo
 
 import (
 	"fmt"
+
 	"github.com/teslamotors/vehicle-command/pkg/connector/ble"
 	"tinygo.org/x/bluetooth"
 )

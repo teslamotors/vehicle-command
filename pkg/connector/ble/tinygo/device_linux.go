@@ -2,6 +2,7 @@ package tinygo
 
 import (
 	"strings"
+
 	"tinygo.org/x/bluetooth"
 )
 

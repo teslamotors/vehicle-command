@@ -2,6 +2,7 @@ package goble
 
 import (
 	"context"
+
 	"github.com/teslamotors/vehicle-command/pkg/connector/ble"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
 	goble "github.com/zlymeda/go-ble"
@@ -57,6 +58,10 @@ func (s *adapter) Connect(ctx context.Context, beacon *ble.Beacon) (ble.Device, 
 }
 
 func (s *adapter) Close() error {
+	if s.device == nil {
+		return nil
+	}
+
 	device := s.device
 	s.device = nil
 	return device.Stop()

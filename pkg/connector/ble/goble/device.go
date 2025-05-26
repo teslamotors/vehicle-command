@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/teslamotors/vehicle-command/pkg/connector/ble"
 	goble "github.com/zlymeda/go-ble"
 )
@@ -25,6 +26,10 @@ func (c *device) Service(_ context.Context, uuid string) (ble.Service, error) {
 }
 
 func (c *device) Close() error {
+	if c.client == nil {
+		return nil
+	}
+
 	client := c.client
 	c.client = nil
 
