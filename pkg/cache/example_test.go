@@ -3,10 +3,10 @@ package cache_test
 import (
 	"context"
 	"fmt"
-	"github.com/teslamotors/vehicle-command/pkg/connector/ble/goble"
 
 	"github.com/teslamotors/vehicle-command/pkg/cache"
 	"github.com/teslamotors/vehicle-command/pkg/connector/ble"
+	"github.com/teslamotors/vehicle-command/pkg/connector/ble/goble"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
 	"github.com/teslamotors/vehicle-command/pkg/vehicle"
 )

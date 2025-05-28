@@ -52,22 +52,21 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/teslamotors/vehicle-command/pkg/connector/ble"
-	"github.com/teslamotors/vehicle-command/pkg/connector/ble/goble"
-	"github.com/teslamotors/vehicle-command/pkg/connector/ble/tinygo"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
+	"github.com/99designs/keyring"
 	"github.com/teslamotors/vehicle-command/internal/log"
 	"github.com/teslamotors/vehicle-command/pkg/account"
 	"github.com/teslamotors/vehicle-command/pkg/cache"
+	"github.com/teslamotors/vehicle-command/pkg/connector/ble"
+	"github.com/teslamotors/vehicle-command/pkg/connector/ble/goble"
+	"github.com/teslamotors/vehicle-command/pkg/connector/ble/tinygo"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
 	"github.com/teslamotors/vehicle-command/pkg/vehicle"
-
-	"github.com/99designs/keyring"
 )
 
 var DomainsByName = map[string]protocol.Domain{
@@ -103,6 +102,36 @@ func (d *DomainList) String() string {
 		}
 	}
 	return strings.Join(names, ",")
+}
+
+type BleImpl int
+
+const (
+	Goble BleImpl = iota
+	TinyGo
+)
+
+func (b *BleImpl) String() string {
+	switch *b {
+	case Goble:
+		return "goble"
+	case TinyGo:
+		return "tinygo"
+	default:
+		return "unknown"
+	}
+}
+
+func (b *BleImpl) Set(value string) error {
+	switch value {
+	case "goble":
+		*b = Goble
+	case "tinygo":
+		*b = TinyGo
+	default:
+		return fmt.Errorf("invalid BLE adapter: %s (valid options: goble, tinygo)", value)
+	}
+	return nil
 }
 
 // Environment variable names used are used by [Config.ReadFromEnvironment] to set common parameters.
@@ -147,7 +176,7 @@ type Config struct {
 	KeyringTokenName string // Username for OAuth token in system keyring
 	VIN              string
 	BtAdapterID      string // ID of Bluetooth adapter to use (Linux only)
-	BtTinyGo         bool
+	BtImpl           BleImpl
 	TokenFilename    string
 	KeyFilename      string
 	CacheFilename    string
@@ -211,8 +240,9 @@ func (c *Config) RegisterCommandLineFlags() {
 		flag.StringVar(&c.Backend.FileDir, "keyring-file-dir", keyringDirectory, "keyring `directory` for file-backed keyring types")
 		flag.BoolVar(&c.Debug, "keyring-debug", false, "Enable keyring debug logging")
 	}
-	if c.Flags.isSet(FlagBLE) && c.Flags.isSet(FlagVIN) {
-		flag.BoolVar(&c.BtTinyGo, "tinygo", false, "Use tinygo ble impl (go-ble is the default.")
+	if c.Flags.isSet(FlagBLE) {
+		flag.Var(&c.BtImpl, "bt-impl", "ble impl to use: goble/tinygo")
+
 	}
 	c.registerCommandLineFlagsOsSpecific()
 }
@@ -480,10 +510,13 @@ func (c *Config) ConnectLocal(ctx context.Context, skey protocol.ECDHPrivateKey)
 	var adapter ble.Adapter
 	var err error
 
-	if c.BtTinyGo {
-		adapter, err = tinygo.NewAdapter(c.BtAdapterID)
-	} else {
+	switch c.BtImpl {
+	case Goble:
 		adapter, err = goble.NewAdapter(c.BtAdapterID)
+	case TinyGo:
+		adapter, err = tinygo.NewAdapter(c.BtAdapterID)
+	default:
+		return nil, fmt.Errorf("unsupported BLE impl: %s", c.BtImpl.String())
 	}
 
 	if err != nil {
