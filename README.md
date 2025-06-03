@@ -149,6 +149,9 @@ tool](cmd/tesla-control) to start sending commands to your personal vehicle
 over BLE! Alternatively, continue reading below to learn how to build an
 application that can send commands over the Internet using a REST API.
 
+Note: if either of `TESLA_HTTP_PROXY_TLS_KEY` (`-tls-key`) or `TESLA_HTTP_PROXY_TLS_CERT` (`-cert`),
+are omitted the proxy will serve traffic over http instead of https.
+
 ## Using the HTTP proxy
 
 This section describes how to set up and use the HTTP proxy, which allows
