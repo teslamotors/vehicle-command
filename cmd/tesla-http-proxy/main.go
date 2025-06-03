@@ -128,14 +128,22 @@ func main() {
 	}
 	p.Timeout = httpConfig.timeout
 	addr := fmt.Sprintf("%s:%d", httpConfig.host, httpConfig.port)
-	log.Info("Listening on %s", addr)
 
 	// To add more application logic requests, such as alternative client authentication, create
 	// a http.HandleFunc implementation (https://pkg.go.dev/net/http#HandlerFunc). The ServeHTTP
 	// method of your implementation can perform your business logic and then, if the request is
 	// authorized, invoke p.ServeHTTP. Finally, replace p in the below ListenAndServeTLS call with
 	// an object of your newly created type.
-	log.Error("Server stopped: %s", http.ListenAndServeTLS(addr, httpConfig.certFilename, httpConfig.keyFilename, p))
+
+	// Allow http traffic when serving in e.g. Azure Container Apps, 
+	// which does not support TLS termination for health checks to work
+	if httpConfig.certFilename == "" || httpConfig.keyFilename == "" {
+		log.Info("Listening on http: %s", addr)
+		log.Error("Server stopped: %s", http.ListenAndServe(addr, p))
+	} else {
+		log.Info("Listening on https: %s", addr)
+		log.Error("Server stopped: %s", http.ListenAndServeTLS(addr, httpConfig.certFilename, httpConfig.keyFilename, p))
+	}
 }
 
 // readConfig applies configuration from environment variables.
