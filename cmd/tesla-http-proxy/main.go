@@ -69,6 +69,18 @@ func Usage() {
 }
 
 func main() {
+	// ******************************************************************************************
+	// WHY IS THERE NO OPTION FOR DISABLING TLS?
+	// ******************************************************************************************
+	// In the past, we have had problems with third-party applications that made it easy for DIY
+	// enthusiasts to inadvertently expose their vehicles to the public Internet. In order to
+	// protect users who do not understand the risks of disabling TLS, we decided to omit an
+	// --insecure flag or similar.
+	//
+	// Expert users who need to disable TLS can do so without forking this repository by using the
+	// pkg/proxy package, which is agnostic to TLS. This application is a very thin wrapper around
+	// that package.
+
 	config, err := cli.NewConfig(cli.FlagPrivateKey)
 
 	if err != nil {
