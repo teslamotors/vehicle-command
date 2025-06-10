@@ -236,6 +236,14 @@ openssl req -x509 -nodes -newkey ec \
 
 This command creates an unencrypted private key, `config/tls-key.pem`.
 
+The proxy server requires TLS. We do not offer an option to disable TLS because
+this greatly increases the risk of non-experts creating insecure deployments.
+Expert users who need a non-TLS version can create one without forking the
+repository by using
+[pkg/proxy](https://pkg.go.dev/github.com/teslamotors/vehicle-command/pkg/proxy);
+the [proxy source code](cmd/tesla-http-proxy/main.go) may be a helpful starting
+point.
+
 ### Running the proxy server
 
 The proxy server can be run using the following command:
