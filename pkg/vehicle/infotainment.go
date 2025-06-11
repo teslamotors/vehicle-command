@@ -99,6 +99,50 @@ func (v *Vehicle) ToggleMediaPlayback(ctx context.Context) error {
 		})
 }
 
+func (v *Vehicle) MediaNextFavorite(ctx context.Context) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_MediaNextFavorite{
+					MediaNextFavorite: &carserver.MediaNextFavorite{},
+				},
+			},
+		})
+}
+
+func (v *Vehicle) MediaPreviousFavorite(ctx context.Context) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_MediaPreviousFavorite{
+					MediaPreviousFavorite: &carserver.MediaPreviousFavorite{},
+				},
+			},
+		})
+}
+
+func (v *Vehicle) MediaNextTrack(ctx context.Context) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_MediaNextTrack{
+					MediaNextTrack: &carserver.MediaNextTrack{},
+				},
+			},
+		})
+}
+
+func (v *Vehicle) MediaPreviousTrack(ctx context.Context) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_MediaPreviousTrack{
+					MediaPreviousTrack: &carserver.MediaPreviousTrack{},
+				},
+			},
+		})
+}
+
 func (v *Vehicle) ScheduleSoftwareUpdate(ctx context.Context, delay time.Duration) error {
 	seconds := int32(delay / time.Second)
 	return v.executeCarServerAction(ctx,
