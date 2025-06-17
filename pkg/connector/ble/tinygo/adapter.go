@@ -63,6 +63,10 @@ func (s *adapter) ScanBeacon(ctx context.Context, name string) (*ble.Beacon, err
 		}
 	})
 
+	if err != nil {
+		return nil, err
+	}
+
 	if result == nil {
 		return nil, scanCtx.Err()
 	}
