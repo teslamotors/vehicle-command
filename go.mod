@@ -10,7 +10,7 @@ require (
 	github.com/zlymeda/go-ble v0.0.0-20250503163836-ac689226ee0c
 	golang.org/x/term v0.32.0
 	google.golang.org/protobuf v1.36.6
-	tinygo.org/x/bluetooth v0.11.1-0.20250505124847-38847b0d22b1
+	tinygo.org/x/bluetooth v0.12.0
 )
 
 require (
@@ -34,6 +34,6 @@ require (
 	github.com/soypat/seqs v0.0.0-20250124201400-0d65bc7c1710 // indirect
 	github.com/tinygo-org/cbgo v0.0.4 // indirect
 	github.com/tinygo-org/pio v0.2.0 // indirect
-	golang.org/x/exp v0.0.0-20250506013437-ce4c2cf36ca6 // indirect
+	golang.org/x/exp v0.0.0-20250606033433-dcc06ee1d476 // indirect
 	golang.org/x/sys v0.33.0 // indirect
 )
