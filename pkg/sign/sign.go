@@ -1,3 +1,4 @@
+//revive:disable:exported
 package sign
 
 import (

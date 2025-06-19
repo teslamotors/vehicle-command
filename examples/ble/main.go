@@ -15,6 +15,8 @@ import (
 	debugger "github.com/teslamotors/vehicle-command/internal/log"
 
 	"github.com/teslamotors/vehicle-command/pkg/connector/ble"
+	"github.com/teslamotors/vehicle-command/pkg/connector/ble/goble"
+	"github.com/teslamotors/vehicle-command/pkg/connector/ble/tinygo"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
 	"github.com/teslamotors/vehicle-command/pkg/vehicle"
 )
@@ -23,6 +25,7 @@ func main() {
 	logger := log.New(os.Stderr, "", 0)
 	status := 1
 	debug := false
+	useTinyGo := false
 	defer func() {
 		os.Exit(status)
 	}()
@@ -38,6 +41,7 @@ func main() {
 	flag.StringVar(&privateKeyFile, "key", "", "Private key `file` for authorizing commands (PEM PKCS8 NIST-P256)")
 	flag.StringVar(&vin, "vin", "", "Vehicle Identification Number (`VIN`) of the car")
 	flag.BoolVar(&debug, "debug", false, "Enable debugging of TX/RX BLE packets")
+	flag.BoolVar(&useTinyGo, "tinygo", false, "Use tinygo BLE implementation instead of go-ble")
 	if runtime.GOOS == "linux" {
 		flag.StringVar(&btAdapter, "bt-adapter", "", "Optional ID of Bluetooth adapter to use")
 	}
@@ -48,13 +52,21 @@ func main() {
 		debugger.SetLevel(debugger.LevelDebug)
 	}
 
-	err := ble.InitAdapterWithID(btAdapter)
-	if err != nil {
-		if ble.IsAdapterError(err) {
-			logger.Print(ble.AdapterErrorHelpMessage(err))
-		} else {
-			logger.Printf("Failed to initialize BLE adapter: %s", err)
+	var adapter ble.Adapter
+	var err error
+
+	if useTinyGo {
+		adapter, err = tinygo.NewAdapter(btAdapter)
+	} else {
+		adapter, err = goble.NewAdapter(btAdapter)
+		if err != nil && goble.IsAdapterError(err) {
+			logger.Print(goble.AdapterErrorHelpMessage(err))
+			return
 		}
+	}
+
+	if err != nil {
+		logger.Printf("Failed to initialize BLE adapter: %s", err)
 		return
 	}
 
@@ -68,7 +80,7 @@ func main() {
 		defer cancel()
 		doneChan := make(chan struct{})
 		go func() {
-			_, err := ble.ScanVehicleBeacon(ctx, vin)
+			_, err := ble.ScanVehicleBeacon(ctx, vin, adapter)
 			if err != nil && ctx.Err() == nil {
 				logger.Printf("Scan failed: %s", err)
 			} else if ctx.Err() == nil {
@@ -105,14 +117,14 @@ func main() {
 		}
 	}
 
-	scan, err := ble.ScanVehicleBeacon(ctx, vin)
+	beacon, err := ble.ScanVehicleBeacon(ctx, vin, adapter)
 	if err != nil {
 		logger.Println(err)
 		return
 	}
-	logger.Printf("Found vehicle: %s (%s) %ddBm", scan.LocalName, scan.Address, scan.RSSI)
+	logger.Printf("Found vehicle: %s (%s) %ddBm", beacon.LocalName, beacon.Address, beacon.RSSI)
 
-	conn, err := ble.NewConnectionFromScanResult(ctx, vin, scan)
+	conn, err := ble.NewConnectionFromBeacon(ctx, vin, beacon, adapter)
 	if err != nil {
 		logger.Printf("Failed to connect to vehicle: %s", err)
 		return

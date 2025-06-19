@@ -58,14 +58,15 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/99designs/keyring"
 	"github.com/teslamotors/vehicle-command/internal/log"
 	"github.com/teslamotors/vehicle-command/pkg/account"
 	"github.com/teslamotors/vehicle-command/pkg/cache"
 	"github.com/teslamotors/vehicle-command/pkg/connector/ble"
+	"github.com/teslamotors/vehicle-command/pkg/connector/ble/goble"
+	"github.com/teslamotors/vehicle-command/pkg/connector/ble/tinygo"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
 	"github.com/teslamotors/vehicle-command/pkg/vehicle"
-
-	"github.com/99designs/keyring"
 )
 
 var DomainsByName = map[string]protocol.Domain{
@@ -101,6 +102,36 @@ func (d *DomainList) String() string {
 		}
 	}
 	return strings.Join(names, ",")
+}
+
+type BleImpl int
+
+const (
+	Goble BleImpl = iota
+	TinyGo
+)
+
+func (b *BleImpl) String() string {
+	switch *b {
+	case Goble:
+		return "goble"
+	case TinyGo:
+		return "tinygo"
+	default:
+		return "unknown"
+	}
+}
+
+func (b *BleImpl) Set(value string) error {
+	switch value {
+	case "goble":
+		*b = Goble
+	case "tinygo":
+		*b = TinyGo
+	default:
+		return fmt.Errorf("invalid BLE adapter: %s (valid options: goble, tinygo)", value)
+	}
+	return nil
 }
 
 // Environment variable names used are used by [Config.ReadFromEnvironment] to set common parameters.
@@ -145,6 +176,7 @@ type Config struct {
 	KeyringTokenName string // Username for OAuth token in system keyring
 	VIN              string
 	BtAdapterID      string // ID of Bluetooth adapter to use (Linux only)
+	BtImpl           BleImpl
 	TokenFilename    string
 	KeyFilename      string
 	CacheFilename    string
@@ -207,6 +239,9 @@ func (c *Config) RegisterCommandLineFlags() {
 		flag.Var(&c.BackendType, "keyring-type", "Keyring `type` ("+strings.Join(names, "|")+"). Defaults to $TESLA_KEYRING_TYPE.")
 		flag.StringVar(&c.Backend.FileDir, "keyring-file-dir", keyringDirectory, "keyring `directory` for file-backed keyring types")
 		flag.BoolVar(&c.Debug, "keyring-debug", false, "Enable keyring debug logging")
+	}
+	if c.Flags.isSet(FlagBLE) {
+		flag.Var(&c.BtImpl, "bt-impl", "BLE implementation to use. Allowed values are \"tinygo\" and \"goble\" (default)")
 	}
 	c.registerCommandLineFlagsOsSpecific()
 }
@@ -347,7 +382,7 @@ func (c *Config) Connect(ctx context.Context) (acct *account.Account, car *vehic
 	// provided ones.
 	var skey protocol.ECDHPrivateKey
 	skey, err = c.PrivateKey()
-	if err != nil && err != ErrNoKeySpecified {
+	if err != nil && !errors.Is(err, ErrNoKeySpecified) {
 		return nil, nil, err
 	}
 
@@ -470,20 +505,27 @@ func (c *Config) ConnectRemote(ctx context.Context, skey protocol.ECDHPrivateKey
 }
 
 // ConnectLocal connects to a vehicle over BLE.
-func (c *Config) ConnectLocal(ctx context.Context, skey protocol.ECDHPrivateKey) (car *vehicle.Vehicle, err error) {
-	err = ble.InitAdapterWithID(c.BtAdapterID)
+func (c *Config) ConnectLocal(ctx context.Context, skey protocol.ECDHPrivateKey) (*vehicle.Vehicle, error) {
+	var adapter ble.Adapter
+	var err error
+
+	switch c.BtImpl {
+	case Goble:
+		adapter, err = goble.NewAdapter(c.BtAdapterID)
+	case TinyGo:
+		adapter, err = tinygo.NewAdapter(c.BtAdapterID)
+	default:
+		return nil, fmt.Errorf("unsupported BLE impl: %s", c.BtImpl.String())
+	}
+
 	if err != nil {
 		return nil, err
 	}
 
-	conn, err := ble.NewConnection(ctx, c.VIN)
+	conn, err := ble.NewConnection(ctx, c.VIN, adapter)
 	if err != nil {
 		return nil, err
 	}
 
-	car, err = vehicle.NewVehicle(conn, skey, c.sessions)
-	if err != nil {
-		return nil, err
-	}
-	return
+	return vehicle.NewVehicle(conn, skey, c.sessions)
 }
