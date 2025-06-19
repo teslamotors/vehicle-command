@@ -110,17 +110,3 @@ func advertisementToBeacon(result bluetooth.ScanResult) *ble.Beacon {
 		Connectable: true,
 	}
 }
-
-func parseAddress(address string) (bluetooth.Address, error) {
-	mac, err := bluetooth.ParseMAC(address)
-	if err != nil {
-
-		return bluetooth.Address{}, fmt.Errorf("ble: failed to parse MAC address: %s", err)
-	}
-
-	return bluetooth.Address{
-		MACAddress: bluetooth.MACAddress{
-			MAC: mac,
-		},
-	}, nil
-}

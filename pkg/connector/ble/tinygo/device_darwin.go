@@ -1,6 +1,7 @@
 package tinygo
 
 import (
+	"fmt"
 	"tinygo.org/x/bluetooth"
 )
 
@@ -19,9 +20,20 @@ func newAdapter(id string) (*bluetooth.Adapter, error) {
 		return nil, ErrAdapterInvalidID
 	}
 
-	return bluetooth.DefaultAdapter
+	return bluetooth.DefaultAdapter, nil
 }
 
 var (
 	deviceCharacteristicWrite = bluetooth.DeviceCharacteristic.Write
 )
+
+func parseAddress(address string) (bluetooth.Address, error) {
+	uuid, err := bluetooth.ParseUUID(address)
+	if err != nil {
+		return bluetooth.Address{}, fmt.Errorf("ble: failed to parse MAC address: %s", err)
+	}
+
+	return bluetooth.Address{
+		UUID: uuid,
+	}, nil
+}
