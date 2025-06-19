@@ -41,7 +41,7 @@ func main() {
 	flag.StringVar(&privateKeyFile, "key", "", "Private key `file` for authorizing commands (PEM PKCS8 NIST-P256)")
 	flag.StringVar(&vin, "vin", "", "Vehicle Identification Number (`VIN`) of the car")
 	flag.BoolVar(&debug, "debug", false, "Enable debugging of TX/RX BLE packets")
-	flag.BoolVar(&useTinyGo, "tinygo", false, "Use tinygo ble impl (go-ble is the default")
+	flag.BoolVar(&useTinyGo, "tinygo", false, "Use tinygo BLE implementation instead of go-ble")
 	if runtime.GOOS == "linux" {
 		flag.StringVar(&btAdapter, "bt-adapter", "", "Optional ID of Bluetooth adapter to use")
 	}

@@ -241,8 +241,7 @@ func (c *Config) RegisterCommandLineFlags() {
 		flag.BoolVar(&c.Debug, "keyring-debug", false, "Enable keyring debug logging")
 	}
 	if c.Flags.isSet(FlagBLE) {
-		flag.Var(&c.BtImpl, "bt-impl", "ble impl to use: goble/tinygo")
-
+		flag.Var(&c.BtImpl, "bt-impl", "BLE implementation to use. Allowed values are \"tinygo\" and \"goble\" (default)")
 	}
 	c.registerCommandLineFlagsOsSpecific()
 }
