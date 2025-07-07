@@ -1,0 +1,85 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vehicle-command-proxy
+  labels:
+    app: vehicle-command-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vehicle-command-proxy
+  template:
+    metadata:
+      labels:
+        app: vehicle-command-proxy
+    spec:
+      containers:
+      - name: vehicle-command-proxy
+        image: drevkubeacr.azurecr.io/vehicle-command-proxy:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            cpu: "200m"       
+            memory: "0.2Gi"
+                 
+        env:
+        - name: TESLA_HTTP_PROXY_HOST
+          value: "0.0.0.0"
+        - name: TESLA_HTTP_PROXY_PORT
+          value: "8080"
+        - name: TESLA_HTTP_PROXY_TIMEOUT
+          value: "10s"
+        - name: TESLA_KEY_FILE
+          value: "/config/private_key"
+        - name: TESLA_VERBOSE
+          value: "true"
+        volumeMounts:
+        - name: config-volume
+          mountPath: /config
+      volumes:
+      - name: config-volume
+        secret:
+          secretName: tesla-key-secret
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vehicle-command-proxy-service
+spec:
+  selector:
+    app: vehicle-command-proxy
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8080
+  type: ClusterIP
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: vehicle-command-proxy-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: vehicle-command-proxy
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 90
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 90
