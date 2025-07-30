@@ -625,6 +625,55 @@ var commands = map[string]*Command{
 			return car.SetVolume(ctx, float32(volume))
 		},
 	},
+	"media-volume-up": {
+		help:             "Increase volume",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, _ map[string]string) error {
+			return car.VolumeUp(ctx)
+		},
+	},
+	"media-volume-down": {
+		help:             "Decrease volume",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, _ map[string]string) error {
+			return car.VolumeDown(ctx)
+		},
+	},
+	"media-next-favorite": {
+		help:             "Next favorite",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, _ map[string]string) error {
+			return car.MediaNextFavorite(ctx)
+		},
+	},
+	"media-next-track": {
+		help:             "Next track",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, _ map[string]string) error {
+			return car.MediaNextTrack(ctx)
+		},
+	},
+	"media-previous-track": {
+		help:             "Previous track",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, _ map[string]string) error {
+			return car.MediaPreviousTrack(ctx)
+		},
+	},
+
+	"media-previous-favorite": {
+		help:             "Previous favorite",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, _ map[string]string) error {
+			return car.MediaPreviousFavorite(ctx)
+		},
+	},
 	"media-toggle-playback": {
 		help:             "Toggle between play/pause",
 		requiresAuth:     true,

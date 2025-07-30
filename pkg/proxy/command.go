@@ -69,6 +69,18 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		return func(v *vehicle.Vehicle) error { return v.SetVolume(ctx, float32(volume)) }, nil
 	case "remote_boombox":
 		return nil, ErrCommandNotImplemented
+	case "media_next_fav":
+		return func(v *vehicle.Vehicle) error { return v.MediaNextFavorite(ctx) }, nil
+	case "media_prev_fav":
+		return func(v *vehicle.Vehicle) error { return v.MediaPreviousFavorite(ctx) }, nil
+	case "media_next_track":
+		return func(v *vehicle.Vehicle) error { return v.MediaNextTrack(ctx) }, nil
+	case "media_prev_track":
+		return func(v *vehicle.Vehicle) error { return v.MediaPreviousTrack(ctx) }, nil
+	case "media_volume_down":
+		return func(v *vehicle.Vehicle) error { return v.VolumeDown(ctx) }, nil
+	case "media_volume_up":
+		return func(v *vehicle.Vehicle) error { return v.VolumeUp(ctx) }, nil
 	case "media_toggle_playback":
 		return func(v *vehicle.Vehicle) error { return v.ToggleMediaPlayback(ctx) }, nil
 	// Climate Controls
