@@ -67,6 +67,8 @@ message VehicleAction {
         EraseUserDataAction eraseUserDataAction = 72;
         VehicleControlSetPinToDriveAction vehicleControlSetPinToDriveAction = 77;
         VehicleControlResetPinToDriveAction vehicleControlResetPinToDriveAction = 78;
+        DrivingClearSpeedLimitPinAdminAction drivingClearSpeedLimitPinAdminAction = 79;
+        VehicleControlResetPinToDriveAdminAction vehicleControlResetPinToDriveAdminAction = 89;
         ChargeSchedule addChargeScheduleAction = 97;
         RemoveChargeScheduleAction removeChargeScheduleAction = 98;
         PreconditionSchedule addPreconditionScheduleAction = 99;
@@ -183,6 +185,9 @@ message ChargingStartStopAction {
 
 message DrivingClearSpeedLimitPinAction {
     string pin = 1;
+}
+
+message DrivingClearSpeedLimitPinAdminAction {
 }
 
 message DrivingSetSpeedLimitAction {
@@ -495,4 +500,7 @@ message VehicleControlSetPinToDriveAction {
 }
 
 message VehicleControlResetPinToDriveAction {
+}
+
+message VehicleControlResetPinToDriveAdminAction {
 }

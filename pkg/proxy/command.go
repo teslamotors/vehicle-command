@@ -389,6 +389,9 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		return nil, ErrCommandUseRESTAPI
 	case "set_managed_scheduled_charging_time":
 		return nil, ErrCommandUseRESTAPI
+	case "wake_up":
+		return func(v *vehicle.Vehicle) error { return v.Wakeup(ctx) }, nil
+	// Security
 	case "set_pin_to_drive":
 		on, err := params.getBool("on", true)
 		if err != nil {
@@ -399,9 +402,8 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 			return nil, err
 		}
 		return func(v *vehicle.Vehicle) error { return v.SetPINToDrive(ctx, on, password) }, nil
-	case "wake_up":
-		return func(v *vehicle.Vehicle) error { return v.Wakeup(ctx) }, nil
-	// Security
+	case "clear_pin_to_drive_admin":
+		return func(v *vehicle.Vehicle) error { return v.ClearPINToDrive(ctx) }, nil
 	case "door_lock":
 		return func(v *vehicle.Vehicle) error { return v.Lock(ctx) }, nil
 	case "door_unlock":
@@ -409,7 +411,7 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 	case "erase_user_data":
 		return func(v *vehicle.Vehicle) error { return v.EraseGuestData(ctx) }, nil
 	case "reset_pin_to_drive_pin":
-		return func(v *vehicle.Vehicle) error { return v.ResetPIN(ctx) }, nil
+		return func(v *vehicle.Vehicle) error { return v.ResetPIN(ctx) }, nil //nolint:all
 	case "reset_valet_pin":
 		return func(v *vehicle.Vehicle) error { return v.ResetValetPin(ctx) }, nil
 	case "guest_mode":
@@ -461,6 +463,8 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 			return nil, err
 		}
 		return func(v *vehicle.Vehicle) error { return v.ClearSpeedLimitPIN(ctx, pin) }, nil
+	case "speed_limit_clear_pin_admin":
+		return func(v *vehicle.Vehicle) error { return v.ClearSpeedLimitPINAdminAction(ctx) }, nil
 	case "speed_limit_set_limit":
 		speedMPH, err := params.getNumber("limit_mph", true)
 		if err != nil {
