@@ -44,7 +44,7 @@ func (v *Vehicle) DisableValetMode(ctx context.Context) error {
 // SetValetMode enables or disables Valet Mode. A password must be provided when turning valet mode
 // on, and should be empty when turning valet mode off.
 //
-// Deprecated: Use EnableValetMode or DisableValetMode.
+// Deprecated: Use [Vehicle.EnableValetMode] or [Vehicle.DisableValetMode].
 func (v *Vehicle) SetValetMode(ctx context.Context, on bool, valetPassword string) error {
 	if on && !IsValidPIN(valetPassword) {
 		return ErrInvalidPIN
@@ -78,7 +78,9 @@ func (v *Vehicle) ResetValetPin(ctx context.Context) error {
 }
 
 // ResetPIN clears the saved PIN. You must disable PIN to drive before clearing the PIN. This allows
-// setting a new PIN using SetPINToDrive.
+// setting a new PIN using [Vehicle.SetPINToDrive].
+//
+// Deprecated: Use [Vehicle.ClearPINToDrive].
 func (v *Vehicle) ResetPIN(ctx context.Context) error {
 	return v.executeCarServerAction(ctx,
 		&carserver.Action_VehicleAction{
@@ -113,6 +115,17 @@ func (v *Vehicle) DeactivateSpeedLimit(ctx context.Context, speedLimitPin string
 						Activate: false,
 						Pin:      speedLimitPin,
 					},
+				},
+			},
+		})
+}
+
+func (v *Vehicle) ClearSpeedLimitPINAdminAction(ctx context.Context) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_DrivingClearSpeedLimitPinAdminAction{
+					DrivingClearSpeedLimitPinAdminAction: &carserver.DrivingClearSpeedLimitPinAdminAction{},
 				},
 			},
 		})
@@ -175,12 +188,24 @@ func (v *Vehicle) SetGuestMode(ctx context.Context, enabled bool) error {
 		})
 }
 
+// ClearPINToDrive disables the PIN to Drive feature and clears the saved PIN.
+func (v *Vehicle) ClearPINToDrive(ctx context.Context) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_VehicleControlResetPinToDriveAdminAction{
+					VehicleControlResetPinToDriveAdminAction: &carserver.VehicleControlResetPinToDriveAdminAction{},
+				},
+			},
+		})
+}
+
 // SetPINToDrive controls whether the PIN to Drive feature is enabled or not. It is also used to set
 // the PIN.
 //
 // Once a PIN is set, the vehicle remembers its value even when PIN to Drive is disabled and
-// discards any new PIN provided using this method. To change an existing PIN, first call
-// v.ResetPIN.
+// discards any new PIN provided using this method. To change an existing PIN, use
+// [vehicle.ClearPINToDrive].
 func (v *Vehicle) SetPINToDrive(ctx context.Context, enabled bool, pin string) error {
 	if _, ok := v.conn.(connector.FleetAPIConnector); !ok {
 		return protocol.ErrRequiresEncryption
