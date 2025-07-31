@@ -94,6 +94,47 @@ func (v *Vehicle) VentWindows(ctx context.Context) error {
 		})
 }
 
+func (v *Vehicle) VentSunRoof(ctx context.Context) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_VehicleControlSunroofOpenCloseAction{
+					VehicleControlSunroofOpenCloseAction: &carserver.VehicleControlSunroofOpenCloseAction{
+						Action: &carserver.VehicleControlSunroofOpenCloseAction_Vent{
+							Vent: &carserver.Void{},
+						},
+					},
+				},
+			},
+		})
+}
+
+func (v *Vehicle) CloseSunRoof(ctx context.Context) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_VehicleControlSunroofOpenCloseAction{
+					VehicleControlSunroofOpenCloseAction: &carserver.VehicleControlSunroofOpenCloseAction{
+						Action: &carserver.VehicleControlSunroofOpenCloseAction_Close{
+							Close: &carserver.Void{},
+						},
+					},
+				},
+			},
+		})
+}
+
+func (v *Vehicle) StopSunRoof(ctx context.Context) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_VehicleControlSunroofOpenCloseAction{
+					VehicleControlSunroofOpenCloseAction: &carserver.VehicleControlSunroofOpenCloseAction{},
+				},
+			},
+		})
+}
+
 func (v *Vehicle) ChargePortClose(ctx context.Context) error {
 	return v.executeCarServerAction(ctx,
 		&carserver.Action_VehicleAction{
