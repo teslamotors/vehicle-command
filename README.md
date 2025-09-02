@@ -226,7 +226,7 @@ OpenSSL:
 ```
 mkdir config
 openssl req -x509 -nodes -newkey ec \
-    -pkeyopt ec_paramgen_curve:secp521r1 \
+    -pkeyopt ec_paramgen_curve:secp384r1 \
     -pkeyopt ec_param_enc:named_curve  \
     -subj '/CN=localhost' \
     -keyout config/tls-key.pem -out config/tls-cert.pem -sha256 -days 3650 \
@@ -235,6 +235,14 @@ openssl req -x509 -nodes -newkey ec \
 ```
 
 This command creates an unencrypted private key, `config/tls-key.pem`.
+
+The proxy server requires TLS. We do not offer an option to disable TLS because
+this greatly increases the risk of non-experts creating insecure deployments.
+Expert users who need a non-TLS version can create one without forking the
+repository by using
+[pkg/proxy](https://pkg.go.dev/github.com/teslamotors/vehicle-command/pkg/proxy);
+the [proxy source code](cmd/tesla-http-proxy/main.go) may be a helpful starting
+point.
 
 ### Running the proxy server
 
