@@ -383,6 +383,34 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 			return nil, err
 		}
 		return func(v *vehicle.Vehicle) error { return v.RemovePreconditionSchedule(ctx, uint64(id)) }, nil
+	case "batch_remove_charge_schedules":
+		home, err := params.getBool("home", false)
+		if err != nil {
+			return nil, err
+		}
+		work, err := params.getBool("work", false)
+		if err != nil {
+			return nil, err
+		}
+		other, err := params.getBool("other", false)
+		if err != nil {
+			return nil, err
+		}
+		return func(v *vehicle.Vehicle) error { return v.BatchRemoveChargeSchedules(ctx, home, work, other) }, nil
+	case "batch_remove_precondition_schedules":
+		home, err := params.getBool("home", false)
+		if err != nil {
+			return nil, err
+		}
+		work, err := params.getBool("work", false)
+		if err != nil {
+			return nil, err
+		}
+		other, err := params.getBool("other", false)
+		if err != nil {
+			return nil, err
+		}
+		return func(v *vehicle.Vehicle) error { return v.BatchRemovePreconditionSchedules(ctx, home, work, other) }, nil
 	case "set_managed_charge_current_request":
 		return nil, ErrCommandUseRESTAPI
 	case "set_managed_charger_location":
