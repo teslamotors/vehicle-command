@@ -209,10 +209,15 @@ cannot authorize commands that change the vehicle's state.
 A **Charging Manager** can read vehicle data and authorize commands that affect
 vehicle charging.
 
+A **Guest** key is essentially a temporary Driver key, with an automated
+lifecycle intended to facilitate vehicle rentals. See
+[Fleet API documentation](https://developer.tesla.com/docs/fleet-api/endpoints/vehicle-commands#guest-mode).
+
 A **Service** key bootstraps pairing other keys and authorizes commands on
 behalf of service technicians. Service keys can remotely (un)lock vehicles in
-order to provide roadside assistance, but vehicles in their default state
-prevent Service keys from authorizing other commands over the Internet.
+order to provide roadside assistance, as well as remotely delete (but not add)
+Driver, Guest, and Fleet Manager keys. Vehicles in their default state prevent
+Service keys from authorizing other commands over the Internet.
 
 ### Metadata serialization
 
