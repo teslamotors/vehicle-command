@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/teslamotors/vehicle-command/internal/authentication"
-	"github.com/teslamotors/vehicle-command/internal/log"
 	"github.com/teslamotors/vehicle-command/pkg/connector"
+	"github.com/teslamotors/vehicle-command/pkg/log"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
 
 	"google.golang.org/protobuf/proto"
