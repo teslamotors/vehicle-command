@@ -219,6 +219,12 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 			return nil, err
 		}
 		return func(v *vehicle.Vehicle) error { return v.SetLowPowerMode(ctx, on) }, nil
+	case "keep_accessory_power_mode":
+		on, err := params.getBool("enable", true)
+		if err != nil {
+			return nil, err
+		}
+		return func(v *vehicle.Vehicle) error { return v.SetKeepAccessoryPowerMode(ctx, on) }, nil
 	case "charge_standard":
 		return func(v *vehicle.Vehicle) error { return v.ChargeStandardRange(ctx) }, nil
 	case "charge_start":

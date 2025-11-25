@@ -539,6 +539,26 @@ var commands = map[string]*Command{
 			return car.FlashLights(ctx)
 		},
 	},
+	"keep-accessory-power": {
+		help:             "Set keep accessory power mode to STATE ('on' or 'off')",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		args: []Argument{
+			{name: "STATE", help: "'on' or 'off'"},
+		},
+		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			var state bool
+			switch args["STATE"] {
+			case "on":
+				state = true
+			case "off":
+				state = false
+			default:
+				return fmt.Errorf("accessory power mode state must be 'on' or 'off'")
+			}
+			return car.SetKeepAccessoryPowerMode(ctx, state)
+		},
+	},
 	"low-power-mode": {
 		help:             "Set low power mode to STATE ('on' or 'off')",
 		requiresAuth:     true,

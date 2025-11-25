@@ -6,6 +6,9 @@ ifneq (,$(wildcard /etc/alpine-release))
 LINTER_FLAGS += --build-tags=musl
 endif
 
+PROTO_DIR=./pkg/protocol/protobuf
+PROTO_FILES=$(wildcard $(PROTO_DIR)/*.proto)
+
 all: build
 
 linters:
@@ -32,4 +35,7 @@ install:
 doc-images:
 	docker run -v ./:/data plantuml/plantuml "doc"
 
-.PHONY: install build linters test format set-version doc-images
+proto-gen: $(PROTO_FILES)
+	protoc --proto_path $(PROTO_DIR) --go_out $(PROTO_DIR) --go_opt=module=github.com/teslamotors/vehicle-command/pkg/protocol/protobuf ${PROTO_FILES}
+
+.PHONY: install build linters test format set-version doc-images protoc-gen

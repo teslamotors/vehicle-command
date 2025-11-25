@@ -313,3 +313,19 @@ func (v *Vehicle) SetLowPowerMode(ctx context.Context, enable bool) error {
 			},
 		})
 }
+
+// SetKeepAccessoryPowerMode enables or disables accessory power mode. Phone chargers, USB ports,
+// and low voltage outlets remain powered after exit until the vehicle enters Low Power Mode. When
+// enabled, this feature consumes additional energy even if no devices are connected.
+func (v *Vehicle) SetKeepAccessoryPowerMode(ctx context.Context, enable bool) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_SetKeepAccessoryPowerModeAction{
+					SetKeepAccessoryPowerModeAction: &carserver.SetKeepAccessoryPowerModeAction{
+						KeepAccessoryPowerMode: enable,
+					},
+				},
+			},
+		})
+}

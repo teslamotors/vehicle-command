@@ -76,6 +76,7 @@ message VehicleAction {
         BatchRemovePreconditionSchedulesAction batchRemovePreconditionSchedulesAction = 107;
         BatchRemoveChargeSchedulesAction batchRemoveChargeSchedulesAction = 108;
         SetLowPowerModeAction setLowPowerModeAction = 130;
+        SetKeepAccessoryPowerModeAction setKeepAccessoryPowerModeAction = 138;
     }
 }
 
@@ -508,4 +509,8 @@ message VehicleControlResetPinToDriveAdminAction {
 
 message SetLowPowerModeAction {
     bool low_power_mode = 1;
+}
+
+message SetKeepAccessoryPowerModeAction {
+    bool keep_accessory_power_mode = 1;
 }
