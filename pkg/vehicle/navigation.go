@@ -20,13 +20,28 @@ import (
 // See https://developer.tesla.com/docs/fleet-api/endpoints/vehicle-commands
 // (navigation_waypoints_request).
 func (v *Vehicle) NavigateToWaypoints(ctx context.Context, waypoints string) error {
+	return v.NavigateToWaypointsWithOptions(ctx, waypoints, 0, 0)
+}
+
+// NavigateToWaypointsWithOptions is like NavigateToWaypoints but allows the
+// caller to set the optional `TripPlanOptions.destination_start_soe` and
+// `TripPlanOptions.destination_arrival_soe` fields (both in integer
+// percent). Pass 0 to leave a field unset (Tesla will use its own default).
+func (v *Vehicle) NavigateToWaypointsWithOptions(ctx context.Context, waypoints string, startSoePct, arrivalSoePct int32) error {
+	req := &carserver.NavigationWaypointsRequest{
+		Waypoints: waypoints,
+	}
+	if startSoePct != 0 || arrivalSoePct != 0 {
+		req.TripPlanOptions = &carserver.NavigationWaypointsRequest_TripPlanOptions{
+			DestinationStartSoe:   startSoePct,
+			DestinationArrivalSoe: arrivalSoePct,
+		}
+	}
 	return v.executeCarServerAction(ctx,
 		&carserver.Action_VehicleAction{
 			VehicleAction: &carserver.VehicleAction{
 				VehicleActionMsg: &carserver.VehicleAction_NavigationWaypointsRequest{
-					NavigationWaypointsRequest: &carserver.NavigationWaypointsRequest{
-						Waypoints: waypoints,
-					},
+					NavigationWaypointsRequest: req,
 				},
 			},
 		})

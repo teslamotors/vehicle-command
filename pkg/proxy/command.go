@@ -517,8 +517,11 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		if err != nil {
 			return nil, err
 		}
+		// Optional: trip_plan_options.destination_start_soe / destination_arrival_soe
+		startSoe, _ := params.getNumber("destination_start_soe", false)
+		arrivalSoe, _ := params.getNumber("destination_arrival_soe", false)
 		return func(v *vehicle.Vehicle) error {
-			return v.NavigateToWaypoints(ctx, waypoints)
+			return v.NavigateToWaypointsWithOptions(ctx, waypoints, int32(startSoe), int32(arrivalSoe))
 		}, nil
 	case "window_control":
 		// Latitude and longitude are not required for vehicles that support this protocol.
