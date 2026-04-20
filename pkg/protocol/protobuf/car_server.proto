@@ -77,6 +77,17 @@ message VehicleAction {
         BatchRemoveChargeSchedulesAction batchRemoveChargeSchedulesAction = 108;
         SetLowPowerModeAction setLowPowerModeAction = 130;
         SetKeepAccessoryPowerModeAction setKeepAccessoryPowerModeAction = 138;
+        NavigationWaypointsRequest navigationWaypointsRequest = 90;
+    }
+}
+
+message NavigationWaypointsRequest {
+    string waypoints = 1;
+    TripPlanOptions trip_plan_options = 2;
+
+    message TripPlanOptions {
+        int32 destination_start_soe = 1;
+        int32 destination_arrival_soe = 2;
     }
 }
 

@@ -508,6 +508,18 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 	// end-to-end authentication.
 	case "navigation_request":
 		return nil, ErrCommandUseRESTAPI
+	case "navigation_waypoints_request":
+		// Tesla's Fleet API documents this endpoint with the body shape
+		//   {"waypoints": "refId:<placeId>,refId:<placeId>,..."}
+		// The message IS signed (unlike navigation_request), so we must
+		// construct and dispatch it through the vehicle-command protocol.
+		waypoints, err := params.getString("waypoints", true)
+		if err != nil {
+			return nil, err
+		}
+		return func(v *vehicle.Vehicle) error {
+			return v.NavigateToWaypoints(ctx, waypoints)
+		}, nil
 	case "window_control":
 		// Latitude and longitude are not required for vehicles that support this protocol.
 		cmd, err := params.getString("command", true)
