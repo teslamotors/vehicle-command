@@ -6,7 +6,7 @@ import (
 	carserver "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/carserver"
 )
 
-// NavigateToWaypoints sends an ordered list of stops to the car's
+// NavigateToWaypoints sends an ordered list of stops to the vehicle's
 // built-in navigation using the signed Vehicle Command Protocol.
 //
 // The `waypoints` argument follows Tesla's documented format:
@@ -15,10 +15,9 @@ import (
 //	"refId:ChIJxxx,refId:ChIJyyy,refId:ChIJzzz"
 //
 // The last place in the list is the final destination; preceding entries are
-// intermediate stops. The car will route through all of them in order.
+// intermediate stops. The vehicle will route through all of them in order.
 //
-// See https://developer.tesla.com/docs/fleet-api/endpoints/vehicle-commands
-// (navigation_waypoints_request).
+// See https://developer.tesla.com/docs/fleet-api/endpoints/vehicle-commands#navigation-waypoints-request
 func (v *Vehicle) NavigateToWaypoints(ctx context.Context, waypoints string) error {
 	return v.NavigateToWaypointsWithOptions(ctx, waypoints, 0, 0)
 }

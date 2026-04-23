@@ -69,6 +69,7 @@ message VehicleAction {
         VehicleControlResetPinToDriveAction vehicleControlResetPinToDriveAction = 78;
         DrivingClearSpeedLimitPinAdminAction drivingClearSpeedLimitPinAdminAction = 79;
         VehicleControlResetPinToDriveAdminAction vehicleControlResetPinToDriveAdminAction = 89;
+        NavigationWaypointsRequest navigationWaypointsRequest = 90;
         ChargeSchedule addChargeScheduleAction = 97;
         RemoveChargeScheduleAction removeChargeScheduleAction = 98;
         PreconditionSchedule addPreconditionScheduleAction = 99;
@@ -77,18 +78,16 @@ message VehicleAction {
         BatchRemoveChargeSchedulesAction batchRemoveChargeSchedulesAction = 108;
         SetLowPowerModeAction setLowPowerModeAction = 130;
         SetKeepAccessoryPowerModeAction setKeepAccessoryPowerModeAction = 138;
-        NavigationWaypointsRequest navigationWaypointsRequest = 90;
     }
 }
 
 message NavigationWaypointsRequest {
-    string waypoints = 1;
-    TripPlanOptions trip_plan_options = 2;
-
     message TripPlanOptions {
         int32 destination_start_soe = 1;
         int32 destination_arrival_soe = 2;
     }
+    string waypoints = 1;
+    TripPlanOptions trip_plan_options = 2;
 }
 
 message GetVehicleData {
