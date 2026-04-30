@@ -1,0 +1,38 @@
+# Dockerfile.protoc — reproducible protoc + protoc-gen-go toolchain.
+#
+# The versions below are pinned to match the headers of the committed
+# *.pb.go files in pkg/protocol/protobuf/ (the runtime version printed
+# by protoc is "3.21.9", which corresponds to the upstream release
+# tag "v21.9"). Bumping either ARG will typically produce a diff in the
+# regenerated code; run `make proto-gen-docker` and commit the result
+# in the same change.
+
+FROM golang:1.23-bookworm AS toolchain
+
+ARG PROTOC_VERSION=21.9
+ARG PROTOC_GEN_GO_VERSION=1.28.1
+ARG TARGETARCH
+
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y curl unzip ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# protoc release archives use x86_64 / aarch_64 in their file names.
+RUN case "${TARGETARCH:-amd64}" in \
+        amd64) PROTOC_ARCH=x86_64 ;; \
+        arm64) PROTOC_ARCH=aarch_64 ;; \
+        *) echo "unsupported TARGETARCH=${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+    && curl -fsSL -o /tmp/protoc.zip \
+        "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-${PROTOC_ARCH}.zip" \
+    && unzip -q /tmp/protoc.zip -d /usr/local/protoc \
+    && rm /tmp/protoc.zip \
+    && chmod +x /usr/local/protoc/bin/protoc
+
+RUN go install "google.golang.org/protobuf/cmd/protoc-gen-go@v${PROTOC_GEN_GO_VERSION}"
+
+ENV PATH="/usr/local/protoc/bin:/go/bin:${PATH}"
+
+WORKDIR /workspace
+
+ENTRYPOINT ["protoc"]

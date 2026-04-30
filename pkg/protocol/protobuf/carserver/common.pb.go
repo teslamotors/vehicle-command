@@ -263,6 +263,7 @@ type ChargePortLatchState struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Type:
+	//
 	//	*ChargePortLatchState_SNA
 	//	*ChargePortLatchState_Disengaged
 	//	*ChargePortLatchState_Engaged
@@ -371,6 +372,7 @@ type PreconditioningTimes struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Times:
+	//
 	//	*PreconditioningTimes_AllWeek
 	//	*PreconditioningTimes_Weekdays
 	Times isPreconditioningTimes_Times `protobuf_oneof:"times"`
@@ -451,6 +453,7 @@ type OffPeakChargingTimes struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Times:
+	//
 	//	*OffPeakChargingTimes_AllWeek
 	//	*OffPeakChargingTimes_Weekdays
 	Times isOffPeakChargingTimes_Times `protobuf_oneof:"times"`
