@@ -61,6 +61,7 @@ proto-builder:
 # installed protoc version.
 proto-gen-docker: proto-builder
 	docker run --rm \
+	    --user "$$(id -u):$$(id -g)" \
 	    -v "$(CURDIR):/workspace" \
 	    -w /workspace \
 	    $(PROTOC_IMAGE) \
