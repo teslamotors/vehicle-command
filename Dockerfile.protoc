@@ -7,10 +7,15 @@
 # regenerated code; run `make proto-gen-docker` and commit the result
 # in the same change.
 
-FROM golang:1.23-bookworm AS toolchain
+FROM golang:1.23.0-bookworm AS toolchain
 
 ARG PROTOC_VERSION=21.9
 ARG PROTOC_GEN_GO_VERSION=1.28.1
+# SHA256 sums for the official protoc release archives. Update these when
+# bumping PROTOC_VERSION; values can be recomputed with `sha256sum` against
+# the assets at https://github.com/protocolbuffers/protobuf/releases.
+ARG PROTOC_SHA256_X86_64=3cd951aff8ce713b94cde55e12378f505f2b89d47bf080508cf77e3934f680b6
+ARG PROTOC_SHA256_AARCH_64=a584286dfa8ebb17032ece206ed74d5e9931e2edb9016e427be2a0dab3b21071
 ARG TARGETARCH
 
 RUN apt-get update \
@@ -19,12 +24,13 @@ RUN apt-get update \
 
 # protoc release archives use x86_64 / aarch_64 in their file names.
 RUN case "${TARGETARCH:-amd64}" in \
-        amd64) PROTOC_ARCH=x86_64 ;; \
-        arm64) PROTOC_ARCH=aarch_64 ;; \
+        amd64) PROTOC_ARCH=x86_64;       PROTOC_SHA256="${PROTOC_SHA256_X86_64}" ;; \
+        arm64) PROTOC_ARCH=aarch_64;     PROTOC_SHA256="${PROTOC_SHA256_AARCH_64}" ;; \
         *) echo "unsupported TARGETARCH=${TARGETARCH}" >&2; exit 1 ;; \
     esac \
     && curl -fsSL -o /tmp/protoc.zip \
         "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-${PROTOC_ARCH}.zip" \
+    && echo "${PROTOC_SHA256}  /tmp/protoc.zip" | sha256sum -c - \
     && unzip -q /tmp/protoc.zip -d /usr/local/protoc \
     && rm /tmp/protoc.zip \
     && chmod +x /usr/local/protoc/bin/protoc
