@@ -17,6 +17,20 @@ import (
 
 type ECDHPrivateKey authentication.ECDHPrivateKey
 
+// Session is a type alias for authentication.Session, exposed here so that
+// external packages can implement ECDHPrivateKey. The Exchange method on
+// ECDHPrivateKey returns Session, and without this alias external code cannot
+// reference the return type of that method, which makes ECDHPrivateKey
+// effectively unimplementable from outside this module.
+//
+// This matters for HSM and enclave integrations: code that holds the private
+// key in protected memory (Nitro Enclave, KMS, hardware HSM) needs to provide
+// its own ECDHPrivateKey implementation that proxies to the protected boundary.
+// The package comment in internal/authentication/ecdh.go specifically calls
+// out HSM integration as the reason ECDHPrivateKey is an interface rather
+// than a concrete type, so re-exporting Session restores that capability.
+type Session = authentication.Session
+
 // LoadPrivateKey loads a P256 EC private key from a file.
 func LoadPrivateKey(filename string) (ECDHPrivateKey, error) {
 	return authentication.LoadExternalECDHKey(filename)
