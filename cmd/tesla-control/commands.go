@@ -1074,6 +1074,14 @@ var commands = map[string]*Command{
 				schedule.Enabled = enabledStr == "true"
 			}
 
+			if idStr, ok := args["ID"]; ok {
+				id, err := strconv.ParseUint(idStr, 10, 64)
+				if err != nil {
+					return errors.New("expected numeric ID")
+				}
+				schedule.Id = id
+			}
+
 			schedule.DaysOfWeek, err = GetDays(args["DAYS"])
 			if err != nil {
 				return err
