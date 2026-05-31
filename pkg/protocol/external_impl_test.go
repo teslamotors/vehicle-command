@@ -14,8 +14,8 @@ import (
 // from external code.
 type externalKey struct{}
 
-func (e *externalKey) PublicBytes() []byte                              { return nil }
-func (e *externalKey) SchnorrSignature(message []byte) ([]byte, error)  { return nil, nil }
+func (e *externalKey) PublicBytes() []byte                             { return nil }
+func (e *externalKey) SchnorrSignature(message []byte) ([]byte, error) { return nil, nil }
 func (e *externalKey) Exchange(remotePublicBytes []byte) (protocol.Session, error) {
 	return &externalSession{}, nil
 }
@@ -31,7 +31,7 @@ func (e *externalSession) Encrypt(plaintext, associatedData []byte) ([]byte, []b
 func (e *externalSession) Decrypt(nonce, ciphertext, associatedData, tag []byte) ([]byte, error) {
 	return nil, nil
 }
-func (e *externalSession) LocalPublicBytes() []byte    { return nil }
+func (e *externalSession) LocalPublicBytes() []byte       { return nil }
 func (e *externalSession) NewHMAC(label string) hash.Hash { return nil }
 
 func TestExternalECDHPrivateKeyImplementation(t *testing.T) {
