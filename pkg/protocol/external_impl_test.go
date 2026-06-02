@@ -14,27 +14,27 @@ import (
 // from external code.
 type externalKey struct{}
 
-func (e *externalKey) PublicBytes() []byte                             { return nil }
-func (e *externalKey) SchnorrSignature(message []byte) ([]byte, error) { return nil, nil }
-func (e *externalKey) Exchange(remotePublicBytes []byte) (protocol.Session, error) {
+func (e *externalKey) PublicBytes() []byte                       { return nil }
+func (e *externalKey) SchnorrSignature(_ []byte) ([]byte, error) { return nil, nil }
+func (e *externalKey) Exchange(_ []byte) (protocol.Session, error) {
 	return &externalSession{}, nil
 }
 
 type externalSession struct{}
 
-func (e *externalSession) SessionInfoHMAC(id, challenge, encodedInfo []byte) ([]byte, error) {
+func (e *externalSession) SessionInfoHMAC(_, _, _ []byte) ([]byte, error) {
 	return nil, nil
 }
-func (e *externalSession) Encrypt(plaintext, associatedData []byte) ([]byte, []byte, []byte, error) {
+func (e *externalSession) Encrypt(_, _ []byte) ([]byte, []byte, []byte, error) {
 	return nil, nil, nil, nil
 }
-func (e *externalSession) Decrypt(nonce, ciphertext, associatedData, tag []byte) ([]byte, error) {
+func (e *externalSession) Decrypt(_, _, _, _ []byte) ([]byte, error) {
 	return nil, nil
 }
-func (e *externalSession) LocalPublicBytes() []byte       { return nil }
-func (e *externalSession) NewHMAC(label string) hash.Hash { return nil }
+func (e *externalSession) LocalPublicBytes() []byte   { return nil }
+func (e *externalSession) NewHMAC(_ string) hash.Hash { return nil }
 
-func TestExternalECDHPrivateKeyImplementation(t *testing.T) {
+func TestExternalECDHPrivateKeyImplementation(_ *testing.T) {
 	var _ protocol.ECDHPrivateKey = (*externalKey)(nil)
 	var _ protocol.Session = (*externalSession)(nil)
 }
