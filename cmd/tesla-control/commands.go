@@ -1048,6 +1048,85 @@ var commands = map[string]*Command{
 			return car.EraseGuestData(ctx)
 		},
 	},
+	"parental-controls-on": {
+		help:             "Activate parental controls. The command will fail if parental controls are already set with a different PIN.",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		args: []Argument{
+			{name: "PIN", help: "Four-digit PIN; if a PIN was set before, use that same PIN when re-enabling"},
+		},
+		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			return car.ParentalControlsActivate(ctx, args["PIN"])
+		},
+	},
+	"parental-controls-off": {
+		help:             "Deactivate parental controls",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		args: []Argument{
+			{name: "PIN", help: "Four-digit parental controls PIN"},
+		},
+		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			return car.ParentalControlsDeactivate(ctx, args["PIN"])
+		},
+	},
+	"parental-controls-set-speed-limit": {
+		help:             "Set parental controls speed limit in MPH. Fails if parental controls are already active.",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		args: []Argument{
+			{name: "MPH", help: "Speed limit in miles per hour"},
+		},
+		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			mph, err := strconv.ParseFloat(args["MPH"], 64)
+			if err != nil {
+				return fmt.Errorf("error parsing MPH")
+			}
+			return car.ParentalControlsSetSpeedLimit(ctx, mph)
+		},
+	},
+	"parental-controls-enable-setting": {
+		help:             "Enable or disable a parental controls setting. Fails if parental controls are already active.",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		args: []Argument{
+			{name: "SETTING", help: "One of: speed-limit, acceleration, safety-features, curfew, browser-blocked, theater-blocked, arcade-blocked"},
+			{name: "STATE", help: "'on' or 'off'"},
+		},
+		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			settings := map[string]vehicle.ParentalControlsSetting{
+				"speed-limit":     vehicle.ParentalControlsSettingSpeedLimit,
+				"acceleration":    vehicle.ParentalControlsSettingAcceleration,
+				"safety-features": vehicle.ParentalControlsSettingSafetyFeatures,
+				"curfew":          vehicle.ParentalControlsSettingCurfew,
+				"browser-blocked": vehicle.ParentalControlsSettingBrowserBlocked,
+				"theater-blocked": vehicle.ParentalControlsSettingTheaterBlocked,
+				"arcade-blocked":  vehicle.ParentalControlsSettingArcadeBlocked,
+			}
+			setting, ok := settings[strings.ToLower(args["SETTING"])]
+			if !ok {
+				return fmt.Errorf("invalid parental controls setting")
+			}
+			var enable bool
+			switch strings.ToLower(args["STATE"]) {
+			case "on":
+				enable = true
+			case "off":
+				enable = false
+			default:
+				return fmt.Errorf("state must be 'on' or 'off'")
+			}
+			return car.ParentalControlsEnableSetting(ctx, setting, enable)
+		},
+	},
+	"parental-controls-clear-pin-admin": {
+		help:             "Clear the stored parental controls PIN",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, _ map[string]string) error {
+			return car.ParentalControlsClearPIN(ctx)
+		},
+	},
 	"charging-schedule-add": {
 		help:             "Schedule charge for DAYS START_TIME-END_TIME at LATITUDE LONGITUDE. The END_TIME may be on the following day.",
 		requiresAuth:     true,
