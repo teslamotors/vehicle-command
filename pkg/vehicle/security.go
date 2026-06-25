@@ -359,6 +359,106 @@ func (v *Vehicle) SendAddKeyRequestWithRole(ctx context.Context, publicKey *ecdh
 	return v.conn.Send(ctx, encodedEnvelope)
 }
 
+// ParentalControlsActivate enables parental controls with the given PIN.
+//
+// Parental control policies cannot be updated when parental controls are
+// active. Use ParentalControlsEnableSetting and ParentalControlsSetSpeedLimit
+// to update the default policy as needed before activation.
+//
+// If a PIN was set earlier, the same PIN must be used when re-enabling. Clear
+// the PIN with ParentalControlsClearPIN.
+func (v *Vehicle) ParentalControlsActivate(ctx context.Context, pin string) error {
+	if !IsValidPIN(pin) {
+		return ErrInvalidPIN
+	}
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_ParentalControlsAction{
+					ParentalControlsAction: &carserver.ParentalControlsAction{
+						Activate: true,
+						Pin:      pin,
+					},
+				},
+			},
+		})
+}
+
+// ParentalControlsDeactivate disables parental controls. Requires the current PIN.
+func (v *Vehicle) ParentalControlsDeactivate(ctx context.Context, pin string) error {
+	if !IsValidPIN(pin) {
+		return ErrInvalidPIN
+	}
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_ParentalControlsAction{
+					ParentalControlsAction: &carserver.ParentalControlsAction{
+						Activate: false,
+						Pin:      pin,
+					},
+				},
+			},
+		})
+}
+
+// ParentalControlsSetting identifies an individual parental controls setting.
+type ParentalControlsSetting = carserver.ParentalControlsEnableSettingsAction_ParentalControlsSetting_E
+
+const (
+	ParentalControlsSettingSpeedLimit     = carserver.ParentalControlsEnableSettingsAction_SpeedLimit
+	ParentalControlsSettingAcceleration   = carserver.ParentalControlsEnableSettingsAction_Acceleration
+	ParentalControlsSettingSafetyFeatures = carserver.ParentalControlsEnableSettingsAction_SafetyFeatures
+	ParentalControlsSettingCurfew         = carserver.ParentalControlsEnableSettingsAction_Curfew
+	ParentalControlsSettingBrowserBlocked = carserver.ParentalControlsEnableSettingsAction_BrowserBlocked
+	ParentalControlsSettingTheaterBlocked = carserver.ParentalControlsEnableSettingsAction_TheaterBlocked
+	ParentalControlsSettingArcadeBlocked  = carserver.ParentalControlsEnableSettingsAction_ArcadeBlocked
+)
+
+// ParentalControlsEnableSetting enables or disables an individual parental
+// controls setting. See ParentalControlsSetting for valid setting values.
+// Fails with parental_controls_active if parental controls are already active.
+func (v *Vehicle) ParentalControlsEnableSetting(ctx context.Context, setting ParentalControlsSetting, enable bool) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_ParentalControlsEnableSettingsAction{
+					ParentalControlsEnableSettingsAction: &carserver.ParentalControlsEnableSettingsAction{
+						Setting: setting,
+						Enable:  enable,
+					},
+				},
+			},
+		})
+}
+
+// ParentalControlsSetSpeedLimit sets the parental controls speed limit in MPH.
+// Fails with parental_controls_active if parental controls are already active.
+func (v *Vehicle) ParentalControlsSetSpeedLimit(ctx context.Context, limitMPH float64) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_ParentalControlsSetSpeedLimitAction{
+					ParentalControlsSetSpeedLimitAction: &carserver.ParentalControlsSetSpeedLimitAction{
+						LimitMph: limitMPH,
+					},
+				},
+			},
+		})
+}
+
+// ParentalControlsClearPIN clears the stored parental controls PIN.
+func (v *Vehicle) ParentalControlsClearPIN(ctx context.Context) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_ParentalControlsClearPinAdminAction{
+					ParentalControlsClearPinAdminAction: &carserver.ParentalControlsClearPinAdminAction{},
+				},
+			},
+		})
+}
+
 // EraseGuestData erases user data created while in Guest Mode. This command has no effect unless
 // the vehicle is currently in Guest Mode.
 func (v *Vehicle) EraseGuestData(ctx context.Context) error {

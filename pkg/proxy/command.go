@@ -483,6 +483,42 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 			return nil, err
 		}
 		return func(v *vehicle.Vehicle) error { return v.SpeedLimitSetLimitMPH(ctx, speedMPH) }, nil
+	case "parental_controls_activate":
+		pin, err := params.getString("pin", true)
+		if err != nil {
+			return nil, err
+		}
+		return func(v *vehicle.Vehicle) error { return v.ParentalControlsActivate(ctx, pin) }, nil
+	case "parental_controls_deactivate":
+		pin, err := params.getString("pin", true)
+		if err != nil {
+			return nil, err
+		}
+		return func(v *vehicle.Vehicle) error { return v.ParentalControlsDeactivate(ctx, pin) }, nil
+	case "parental_controls_enable_setting":
+		settingStr, err := params.getString("setting", true)
+		if err != nil {
+			return nil, err
+		}
+		settingVal, ok := carserver.ParentalControlsEnableSettingsAction_ParentalControlsSetting_E_value[settingStr]
+		if !ok {
+			return nil, &protocol.NominalError{Details: fmt.Errorf("invalid setting: %s", settingStr)}
+		}
+		enable, err := params.getBool("enable", true)
+		if err != nil {
+			return nil, err
+		}
+		return func(v *vehicle.Vehicle) error {
+			return v.ParentalControlsEnableSetting(ctx, vehicle.ParentalControlsSetting(settingVal), enable)
+		}, nil
+	case "parental_controls_set_speed_limit":
+		limitMPH, err := params.getNumber("limit_mph", true)
+		if err != nil {
+			return nil, err
+		}
+		return func(v *vehicle.Vehicle) error { return v.ParentalControlsSetSpeedLimit(ctx, limitMPH) }, nil
+	case "parental_controls_clear_pin_admin":
+		return func(v *vehicle.Vehicle) error { return v.ParentalControlsClearPIN(ctx) }, nil
 	case "trigger_homelink":
 		lat, err := params.getNumber("lat", true)
 		if err != nil {

@@ -75,6 +75,11 @@ message VehicleAction {
         RemovePreconditionScheduleAction removePreconditionScheduleAction = 100;
         BatchRemovePreconditionSchedulesAction batchRemovePreconditionSchedulesAction = 107;
         BatchRemoveChargeSchedulesAction batchRemoveChargeSchedulesAction = 108;
+        ParentalControlsClearPinAction parentalControlsClearPinAction = 109;
+        ParentalControlsClearPinAdminAction parentalControlsClearPinAdminAction = 110;
+        ParentalControlsAction parentalControlsAction = 111;
+        ParentalControlsEnableSettingsAction parentalControlsEnableSettingsAction = 112;
+        ParentalControlsSetSpeedLimitAction parentalControlsSetSpeedLimitAction = 113;
         SetLowPowerModeAction setLowPowerModeAction = 130;
         SetKeepAccessoryPowerModeAction setKeepAccessoryPowerModeAction = 138;
     }
@@ -502,6 +507,39 @@ message VehicleControlSetPinToDriveAction {
 }
 
 message VehicleControlResetPinToDriveAction {
+}
+
+message ParentalControlsClearPinAction {
+    string pin = 1;
+}
+
+message ParentalControlsClearPinAdminAction {
+}
+
+message ParentalControlsAction {
+    // If a PIN was set previously, it must be provided whenever this command
+    // is used. For example, after parental controls are disabled, re-enabling
+    // requires the original PIN.
+    bool activate = 1;
+    string pin = 2;
+}
+
+message ParentalControlsEnableSettingsAction {
+    enum ParentalControlsSetting_E {
+        SpeedLimit = 0;
+        Acceleration = 1;
+        SafetyFeatures = 2;
+        Curfew = 3;
+        BrowserBlocked = 4;
+        TheaterBlocked = 5;
+        ArcadeBlocked = 6;
+    }
+    ParentalControlsSetting_E setting = 1;
+    bool enable = 2;
+}
+
+message ParentalControlsSetSpeedLimitAction {
+    double limit_mph = 1;
 }
 
 message VehicleControlResetPinToDriveAdminAction {
