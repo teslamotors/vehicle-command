@@ -14,8 +14,8 @@ type Level int
 
 const (
 	LevelNone    Level = iota // Disables logging.
-	LevelError                // Logs anamolies that are not expected to occur during normal use.
-	LevelWarning              // Logs anamolies that are expected to occur occasionally during normal use.
+	LevelError                // Logs anomalies that are not expected to occur during normal use.
+	LevelWarning              // Logs anomalies that are expected to occur occasionally during normal use.
 	LevelInfo                 // Logs major events.
 	LevelDebug                // Logs detailed IO
 )
