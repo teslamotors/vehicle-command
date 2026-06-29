@@ -1161,6 +1161,7 @@ type InformationRequest struct {
 
 	InformationRequestType InformationRequestType `protobuf:"varint,1,opt,name=informationRequestType,proto3,enum=VCSEC.InformationRequestType" json:"informationRequestType,omitempty"`
 	// Types that are assignable to Key:
+	//
 	//	*InformationRequest_KeyId
 	//	*InformationRequest_PublicKey
 	//	*InformationRequest_Slot
@@ -1428,6 +1429,7 @@ type ReplaceKey struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to KeyToReplace:
+	//
 	//	*ReplaceKey_PublicKeyToReplace
 	//	*ReplaceKey_SlotToReplace
 	KeyToReplace isReplaceKey_KeyToReplace `protobuf_oneof:"keyToReplace"`
@@ -1532,6 +1534,7 @@ type WhitelistOperation struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to SubMessage:
+	//
 	//	*WhitelistOperation_AddPublicKeyToWhitelist
 	//	*WhitelistOperation_RemovePublicKeyFromWhitelist
 	//	*WhitelistOperation_AddPermissionsToPublicKey
@@ -1851,6 +1854,7 @@ type CommandStatus struct {
 
 	OperationStatus OperationStatus_E `protobuf:"varint,1,opt,name=operationStatus,proto3,enum=VCSEC.OperationStatus_E" json:"operationStatus,omitempty"`
 	// Types that are assignable to SubMessage:
+	//
 	//	*CommandStatus_SignedMessageStatus
 	//	*CommandStatus_WhitelistOperationStatus
 	SubMessage isCommandStatus_SubMessage `protobuf_oneof:"sub_message"`
@@ -1938,6 +1942,7 @@ type UnsignedMessage struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to SubMessage:
+	//
 	//	*UnsignedMessage_InformationRequest
 	//	*UnsignedMessage_RKEAction
 	//	*UnsignedMessage_ClosureMoveRequest
@@ -2275,6 +2280,7 @@ type FromVCSECMessage struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to SubMessage:
+	//
 	//	*FromVCSECMessage_VehicleStatus
 	//	*FromVCSECMessage_CommandStatus
 	//	*FromVCSECMessage_WhitelistInfo

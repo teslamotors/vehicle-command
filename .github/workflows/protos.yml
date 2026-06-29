@@ -1,0 +1,26 @@
+name: Protos
+
+on:
+  pull_request:
+    paths:
+      - 'pkg/protocol/protobuf/**'
+      - 'Dockerfile.protoc'
+      - 'Makefile'
+      - '.github/workflows/protos.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'pkg/protocol/protobuf/**'
+      - 'Dockerfile.protoc'
+      - 'Makefile'
+      - '.github/workflows/protos.yml'
+
+jobs:
+  check:
+    name: Verify generated protos are up to date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run proto-check
+        run: make proto-check
