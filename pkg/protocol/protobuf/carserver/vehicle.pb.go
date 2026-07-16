@@ -1064,69 +1064,89 @@ type ClosuresState struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to OptionalDoorOpenDriverFront:
+	//
 	//	*ClosuresState_DoorOpenDriverFront
 	OptionalDoorOpenDriverFront isClosuresState_OptionalDoorOpenDriverFront `protobuf_oneof:"optional_door_open_driver_front"`
 	// Types that are assignable to OptionalDoorOpenDriverRear:
+	//
 	//	*ClosuresState_DoorOpenDriverRear
 	OptionalDoorOpenDriverRear isClosuresState_OptionalDoorOpenDriverRear `protobuf_oneof:"optional_door_open_driver_rear"`
 	// Types that are assignable to OptionalDoorOpenPassengerFront:
+	//
 	//	*ClosuresState_DoorOpenPassengerFront
 	OptionalDoorOpenPassengerFront isClosuresState_OptionalDoorOpenPassengerFront `protobuf_oneof:"optional_door_open_passenger_front"`
 	// Types that are assignable to OptionalDoorOpenPassengerRear:
+	//
 	//	*ClosuresState_DoorOpenPassengerRear
 	OptionalDoorOpenPassengerRear isClosuresState_OptionalDoorOpenPassengerRear `protobuf_oneof:"optional_door_open_passenger_rear"`
 	// Types that are assignable to OptionalDoorOpenTrunkFront:
+	//
 	//	*ClosuresState_DoorOpenTrunkFront
 	OptionalDoorOpenTrunkFront isClosuresState_OptionalDoorOpenTrunkFront `protobuf_oneof:"optional_door_open_trunk_front"`
 	// Types that are assignable to OptionalDoorOpenTrunkRear:
+	//
 	//	*ClosuresState_DoorOpenTrunkRear
 	OptionalDoorOpenTrunkRear isClosuresState_OptionalDoorOpenTrunkRear `protobuf_oneof:"optional_door_open_trunk_rear"`
 	// Types that are assignable to OptionalWindowOpenDriverFront:
+	//
 	//	*ClosuresState_WindowOpenDriverFront
 	OptionalWindowOpenDriverFront isClosuresState_OptionalWindowOpenDriverFront `protobuf_oneof:"optional_window_open_driver_front"`
 	// Types that are assignable to OptionalWindowOpenPassengerFront:
+	//
 	//	*ClosuresState_WindowOpenPassengerFront
 	OptionalWindowOpenPassengerFront isClosuresState_OptionalWindowOpenPassengerFront `protobuf_oneof:"optional_window_open_passenger_front"`
 	// Types that are assignable to OptionalWindowOpenDriverRear:
+	//
 	//	*ClosuresState_WindowOpenDriverRear
 	OptionalWindowOpenDriverRear isClosuresState_OptionalWindowOpenDriverRear `protobuf_oneof:"optional_window_open_driver_rear"`
 	// Types that are assignable to OptionalWindowOpenPassengerRear:
+	//
 	//	*ClosuresState_WindowOpenPassengerRear
 	OptionalWindowOpenPassengerRear isClosuresState_OptionalWindowOpenPassengerRear `protobuf_oneof:"optional_window_open_passenger_rear"`
 	SunRoofState                    *ClosuresState_SunRoofState                     `protobuf:"bytes,11,opt,name=sun_roof_state,json=sunRoofState,proto3" json:"sun_roof_state,omitempty"` // only set when sunroof installed
 	// Types that are assignable to OptionalSunRoofPercentOpen:
+	//
 	//	*ClosuresState_SunRoofPercentOpen
 	OptionalSunRoofPercentOpen isClosuresState_OptionalSunRoofPercentOpen `protobuf_oneof:"optional_sun_roof_percent_open"`
 	// Types that are assignable to OptionalLocked:
+	//
 	//	*ClosuresState_Locked
 	OptionalLocked isClosuresState_OptionalLocked `protobuf_oneof:"optional_locked"`
 	// Types that are assignable to OptionalIsUserPresent:
+	//
 	//	*ClosuresState_IsUserPresent
 	OptionalIsUserPresent isClosuresState_OptionalIsUserPresent `protobuf_oneof:"optional_is_user_present"`
 	CenterDisplayState    *ClosuresState_DisplayState           `protobuf:"bytes,15,opt,name=center_display_state,json=centerDisplayState,proto3" json:"center_display_state,omitempty"`
 	// `true` when remote start is active.
 	//
 	// Types that are assignable to OptionalRemoteStart:
+	//
 	//	*ClosuresState_RemoteStart
 	OptionalRemoteStart isClosuresState_OptionalRemoteStart `protobuf_oneof:"optional_remote_start"`
 	// Types that are assignable to OptionalValetMode:
+	//
 	//	*ClosuresState_ValetMode
 	OptionalValetMode isClosuresState_OptionalValetMode `protobuf_oneof:"optional_valet_mode"`
 	// Types that are assignable to OptionalValetPinNeeded:
+	//
 	//	*ClosuresState_ValetPinNeeded
 	OptionalValetPinNeeded isClosuresState_OptionalValetPinNeeded `protobuf_oneof:"optional_valet_pin_needed"`
 	SentryModeState        *ClosuresState_SentryModeState         `protobuf:"bytes,19,opt,name=sentry_mode_state,json=sentryModeState,proto3" json:"sentry_mode_state,omitempty"` // only set when sentry mode supported
 	// Types that are assignable to OptionalSentryModeAvailable:
+	//
 	//	*ClosuresState_SentryModeAvailable
 	OptionalSentryModeAvailable isClosuresState_OptionalSentryModeAvailable `protobuf_oneof:"optional_sentry_mode_available"`
 	SpeedLimitMode              *SpeedLimitMode                             `protobuf:"bytes,22,opt,name=speed_limit_mode,json=speedLimitMode,proto3" json:"speed_limit_mode,omitempty"` // only set when speed limit mode supported
 	// Types that are assignable to OptionalTonneauState:
+	//
 	//	*ClosuresState_TonneauState
 	OptionalTonneauState isClosuresState_OptionalTonneauState `protobuf_oneof:"optional_tonneau_state"`
 	// Types that are assignable to OptionalTonneauPercentOpen:
+	//
 	//	*ClosuresState_TonneauPercentOpen
 	OptionalTonneauPercentOpen isClosuresState_OptionalTonneauPercentOpen `protobuf_oneof:"optional_tonneau_percent_open"`
 	// Types that are assignable to OptionalTonneauInMotion:
+	//
 	//	*ClosuresState_TonneauInMotion
 	OptionalTonneauInMotion isClosuresState_OptionalTonneauInMotion `protobuf_oneof:"optional_tonneau_in_motion"`
 	Timestamp               *timestamppb.Timestamp                  `protobuf:"bytes,2000,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
@@ -1686,18 +1706,23 @@ type ChargeScheduleState struct {
 
 	ChargeSchedules []*ChargeSchedule `protobuf:"bytes,1,rep,name=charge_schedules,json=chargeSchedules,proto3" json:"charge_schedules,omitempty"`
 	// Types that are assignable to OptionalChargeScheduleWindow:
+	//
 	//	*ChargeScheduleState_ChargeScheduleWindow
 	OptionalChargeScheduleWindow isChargeScheduleState_OptionalChargeScheduleWindow `protobuf_oneof:"optional_charge_schedule_window"`
 	// Types that are assignable to OptionalChargeBuffer:
+	//
 	//	*ChargeScheduleState_ChargeBuffer
 	OptionalChargeBuffer isChargeScheduleState_OptionalChargeBuffer `protobuf_oneof:"optional_charge_buffer"`
 	// Types that are assignable to OptionalMaxNumChargeSchedules:
+	//
 	//	*ChargeScheduleState_MaxNumChargeSchedules
 	OptionalMaxNumChargeSchedules isChargeScheduleState_OptionalMaxNumChargeSchedules `protobuf_oneof:"optional_max_num_charge_schedules"`
 	// Types that are assignable to OptionalNextSchedule:
+	//
 	//	*ChargeScheduleState_NextSchedule
 	OptionalNextSchedule isChargeScheduleState_OptionalNextSchedule `protobuf_oneof:"optional_next_schedule"`
 	// Types that are assignable to OptionalShowScheduleCompleteState:
+	//
 	//	*ChargeScheduleState_ShowScheduleCompleteState
 	OptionalShowScheduleCompleteState isChargeScheduleState_OptionalShowScheduleCompleteState `protobuf_oneof:"optional_show_schedule_complete_state"`
 	Timestamp                         *timestamppb.Timestamp                                  `protobuf:"bytes,2000,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
@@ -1879,12 +1904,15 @@ type PreconditioningScheduleState struct {
 
 	PreconditionSchedules []*PreconditionSchedule `protobuf:"bytes,1,rep,name=precondition_schedules,json=preconditionSchedules,proto3" json:"precondition_schedules,omitempty"`
 	// Types that are assignable to OptionalPreconditioningScheduleWindow:
+	//
 	//	*PreconditioningScheduleState_PreconditioningScheduleWindow
 	OptionalPreconditioningScheduleWindow isPreconditioningScheduleState_OptionalPreconditioningScheduleWindow `protobuf_oneof:"optional_preconditioning_schedule_window"`
 	// Types that are assignable to OptionalMaxNumPreconditionSchedules:
+	//
 	//	*PreconditioningScheduleState_MaxNumPreconditionSchedules
 	OptionalMaxNumPreconditionSchedules isPreconditioningScheduleState_OptionalMaxNumPreconditionSchedules `protobuf_oneof:"optional_max_num_precondition_schedules"`
 	// Types that are assignable to OptionalNextSchedule:
+	//
 	//	*PreconditioningScheduleState_NextSchedule
 	OptionalNextSchedule isPreconditioningScheduleState_OptionalNextSchedule `protobuf_oneof:"optional_next_schedule"`
 	Timestamp            *timestamppb.Timestamp                              `protobuf:"bytes,2000,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
@@ -2017,18 +2045,23 @@ type SpeedLimitMode struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to OptionalActive:
+	//
 	//	*SpeedLimitMode_Active
 	OptionalActive isSpeedLimitMode_OptionalActive `protobuf_oneof:"optional_active"`
 	// Types that are assignable to OptionalPinCodeSet:
+	//
 	//	*SpeedLimitMode_PinCodeSet
 	OptionalPinCodeSet isSpeedLimitMode_OptionalPinCodeSet `protobuf_oneof:"optional_pin_code_set"`
 	// Types that are assignable to OptionalMaxLimitMph:
+	//
 	//	*SpeedLimitMode_MaxLimitMph
 	OptionalMaxLimitMph isSpeedLimitMode_OptionalMaxLimitMph `protobuf_oneof:"optional_max_limit_mph"`
 	// Types that are assignable to OptionalMinLimitMph:
+	//
 	//	*SpeedLimitMode_MinLimitMph
 	OptionalMinLimitMph isSpeedLimitMode_OptionalMinLimitMph `protobuf_oneof:"optional_min_limit_mph"`
 	// Types that are assignable to OptionalCurrentLimitMph:
+	//
 	//	*SpeedLimitMode_CurrentLimitMph
 	OptionalCurrentLimitMph isSpeedLimitMode_OptionalCurrentLimitMph `protobuf_oneof:"optional_current_limit_mph"`
 }
@@ -2191,30 +2224,39 @@ type ParentalControlsSettings struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to OptionalSpeedLimitEnabled:
+	//
 	//	*ParentalControlsSettings_SpeedLimitEnabled
 	OptionalSpeedLimitEnabled isParentalControlsSettings_OptionalSpeedLimitEnabled `protobuf_oneof:"optional_speed_limit_enabled"`
 	// Types that are assignable to OptionalMaxLimitMph:
+	//
 	//	*ParentalControlsSettings_MaxLimitMph
 	OptionalMaxLimitMph isParentalControlsSettings_OptionalMaxLimitMph `protobuf_oneof:"optional_max_limit_mph"`
 	// Types that are assignable to OptionalMinLimitMph:
+	//
 	//	*ParentalControlsSettings_MinLimitMph
 	OptionalMinLimitMph isParentalControlsSettings_OptionalMinLimitMph `protobuf_oneof:"optional_min_limit_mph"`
 	// Types that are assignable to OptionalCurrentLimitMph:
+	//
 	//	*ParentalControlsSettings_CurrentLimitMph
 	OptionalCurrentLimitMph isParentalControlsSettings_OptionalCurrentLimitMph `protobuf_oneof:"optional_current_limit_mph"`
 	// Types that are assignable to OptionalChillAccelerationEnabled:
+	//
 	//	*ParentalControlsSettings_ChillAccelerationEnabled
 	OptionalChillAccelerationEnabled isParentalControlsSettings_OptionalChillAccelerationEnabled `protobuf_oneof:"optional_chill_acceleration_enabled"`
 	// Types that are assignable to OptionalRequireSafetySettingsEnabled:
+	//
 	//	*ParentalControlsSettings_RequireSafetySettingsEnabled
 	OptionalRequireSafetySettingsEnabled isParentalControlsSettings_OptionalRequireSafetySettingsEnabled `protobuf_oneof:"optional_require_safety_settings_enabled"`
 	// Types that are assignable to OptionalCurfewEnabled:
+	//
 	//	*ParentalControlsSettings_CurfewEnabled
 	OptionalCurfewEnabled isParentalControlsSettings_OptionalCurfewEnabled `protobuf_oneof:"optional_curfew_enabled"`
 	// Types that are assignable to OptionalCurfewStartTime:
+	//
 	//	*ParentalControlsSettings_CurfewStartTime
 	OptionalCurfewStartTime isParentalControlsSettings_OptionalCurfewStartTime `protobuf_oneof:"optional_curfew_start_time"`
 	// Types that are assignable to OptionalCurfewEndTime:
+	//
 	//	*ParentalControlsSettings_CurfewEndTime
 	OptionalCurfewEndTime isParentalControlsSettings_OptionalCurfewEndTime `protobuf_oneof:"optional_curfew_end_time"`
 }
@@ -2479,9 +2521,11 @@ type ParentalControlsState struct {
 
 	Timestamp *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	// Types that are assignable to OptionalParentalControlsActive:
+	//
 	//	*ParentalControlsState_ParentalControlsActive
 	OptionalParentalControlsActive isParentalControlsState_OptionalParentalControlsActive `protobuf_oneof:"optional_parental_controls_active"`
 	// Types that are assignable to OptionalParentalControlsPinSet:
+	//
 	//	*ParentalControlsState_ParentalControlsPinSet
 	OptionalParentalControlsPinSet isParentalControlsState_OptionalParentalControlsPinSet `protobuf_oneof:"optional_parental_controls_pin_set"`
 	ParentalControlsSettings       *ParentalControlsSettings                              `protobuf:"bytes,4,opt,name=parental_controls_settings,json=parentalControlsSettings,proto3" json:"parental_controls_settings,omitempty"`
@@ -2590,21 +2634,27 @@ type SoftwareUpdateState struct {
 
 	Status *SoftwareUpdateState_SoftwareUpdateStatus `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
 	// Types that are assignable to OptionalScheduledTimeMs:
+	//
 	//	*SoftwareUpdateState_ScheduledTimeMs
 	OptionalScheduledTimeMs isSoftwareUpdateState_OptionalScheduledTimeMs `protobuf_oneof:"optional_scheduled_time_ms"`
 	// Types that are assignable to OptionalWarningTimeRemainingMs:
+	//
 	//	*SoftwareUpdateState_WarningTimeRemainingMs
 	OptionalWarningTimeRemainingMs isSoftwareUpdateState_OptionalWarningTimeRemainingMs `protobuf_oneof:"optional_warning_time_remaining_ms"`
 	// Types that are assignable to OptionalExpectedDurationSec:
+	//
 	//	*SoftwareUpdateState_ExpectedDurationSec
 	OptionalExpectedDurationSec isSoftwareUpdateState_OptionalExpectedDurationSec `protobuf_oneof:"optional_expected_duration_sec"`
 	// Types that are assignable to OptionalDownloadPerc:
+	//
 	//	*SoftwareUpdateState_DownloadPerc
 	OptionalDownloadPerc isSoftwareUpdateState_OptionalDownloadPerc `protobuf_oneof:"optional_download_perc"`
 	// Types that are assignable to OptionalInstallPerc:
+	//
 	//	*SoftwareUpdateState_InstallPerc
 	OptionalInstallPerc isSoftwareUpdateState_OptionalInstallPerc `protobuf_oneof:"optional_install_perc"`
 	// Types that are assignable to OptionalVersion:
+	//
 	//	*SoftwareUpdateState_Version
 	OptionalVersion isSoftwareUpdateState_OptionalVersion `protobuf_oneof:"optional_version"`
 	Timestamp       *timestamppb.Timestamp                `protobuf:"bytes,108,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
@@ -2808,34 +2858,44 @@ type DriveState struct {
 
 	ShiftState *ShiftState `protobuf:"bytes,1,opt,name=shift_state,json=shiftState,proto3" json:"shift_state,omitempty"`
 	// Types that are assignable to OptionalSpeed:
+	//
 	//	*DriveState_Speed
 	OptionalSpeed isDriveState_OptionalSpeed `protobuf_oneof:"optional_speed"`
 	// Types that are assignable to OptionalPower:
+	//
 	//	*DriveState_Power
 	OptionalPower isDriveState_OptionalPower `protobuf_oneof:"optional_power"`
 	Timestamp     *timestamppb.Timestamp     `protobuf:"bytes,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	// Types that are assignable to OptionalOdometerInHundredthsOfAMile:
+	//
 	//	*DriveState_OdometerInHundredthsOfAMile
 	OptionalOdometerInHundredthsOfAMile isDriveState_OptionalOdometerInHundredthsOfAMile `protobuf_oneof:"optional_odometer_in_hundredths_of_a_mile"`
 	// Types that are assignable to OptionalSpeedFloat:
+	//
 	//	*DriveState_SpeedFloat
 	OptionalSpeedFloat isDriveState_OptionalSpeedFloat `protobuf_oneof:"optional_speed_float"`
 	// Types that are assignable to OptionalActiveRouteDestination:
+	//
 	//	*DriveState_ActiveRouteDestination
 	OptionalActiveRouteDestination isDriveState_OptionalActiveRouteDestination `protobuf_oneof:"optional_active_route_destination"`
 	// Types that are assignable to OptionalActiveRouteMinutesToArrival:
+	//
 	//	*DriveState_ActiveRouteMinutesToArrival
 	OptionalActiveRouteMinutesToArrival isDriveState_OptionalActiveRouteMinutesToArrival `protobuf_oneof:"optional_active_route_minutes_to_arrival"`
 	// Types that are assignable to OptionalActiveRouteMilesToArrival:
+	//
 	//	*DriveState_ActiveRouteMilesToArrival
 	OptionalActiveRouteMilesToArrival isDriveState_OptionalActiveRouteMilesToArrival `protobuf_oneof:"optional_active_route_miles_to_arrival"`
 	// Types that are assignable to OptionalActiveRouteTrafficMinutesDelay:
+	//
 	//	*DriveState_ActiveRouteTrafficMinutesDelay
 	OptionalActiveRouteTrafficMinutesDelay isDriveState_OptionalActiveRouteTrafficMinutesDelay `protobuf_oneof:"optional_active_route_traffic_minutes_delay"`
 	// Types that are assignable to OptionalActiveRouteEnergyAtArrival:
+	//
 	//	*DriveState_ActiveRouteEnergyAtArrival
 	OptionalActiveRouteEnergyAtArrival isDriveState_OptionalActiveRouteEnergyAtArrival `protobuf_oneof:"optional_active_route_energy_at_arrival"`
 	// Types that are assignable to OptionalLastRouteUpdate:
+	//
 	//	*DriveState_LastRouteUpdate
 	OptionalLastRouteUpdate isDriveState_OptionalLastRouteUpdate `protobuf_oneof:"optional_last_route_update"`
 	LastTrafficUpdate       *timestamppb.Timestamp               `protobuf:"bytes,15,opt,name=last_traffic_update,json=lastTrafficUpdate,proto3" json:"last_traffic_update,omitempty"`
@@ -3152,211 +3212,276 @@ type ChargeState struct {
 	FastChargerType  *ChargeState_ChargerType   `protobuf:"bytes,2,opt,name=fast_charger_type,json=fastChargerType,proto3" json:"fast_charger_type,omitempty"`
 	FastChargerBrand *ChargeState_ChargerBrand  `protobuf:"bytes,3,opt,name=fast_charger_brand,json=fastChargerBrand,proto3" json:"fast_charger_brand,omitempty"`
 	// Types that are assignable to OptionalChargeLimitSoc:
+	//
 	//	*ChargeState_ChargeLimitSoc
 	OptionalChargeLimitSoc isChargeState_OptionalChargeLimitSoc `protobuf_oneof:"optional_charge_limit_soc"`
 	// Types that are assignable to OptionalChargeLimitSocStd:
+	//
 	//	*ChargeState_ChargeLimitSocStd
 	OptionalChargeLimitSocStd isChargeState_OptionalChargeLimitSocStd `protobuf_oneof:"optional_charge_limit_soc_std"`
 	// Types that are assignable to OptionalChargeLimitSocMin:
+	//
 	//	*ChargeState_ChargeLimitSocMin
 	OptionalChargeLimitSocMin isChargeState_OptionalChargeLimitSocMin `protobuf_oneof:"optional_charge_limit_soc_min"`
 	// Types that are assignable to OptionalChargeLimitSocMax:
+	//
 	//	*ChargeState_ChargeLimitSocMax
 	OptionalChargeLimitSocMax isChargeState_OptionalChargeLimitSocMax `protobuf_oneof:"optional_charge_limit_soc_max"`
 	// Types that are assignable to OptionalMaxRangeChargeCounter:
+	//
 	//	*ChargeState_MaxRangeChargeCounter
 	OptionalMaxRangeChargeCounter isChargeState_OptionalMaxRangeChargeCounter `protobuf_oneof:"optional_max_range_charge_counter"`
 	// Types that are assignable to OptionalFastChargerPresent:
+	//
 	//	*ChargeState_FastChargerPresent
 	OptionalFastChargerPresent isChargeState_OptionalFastChargerPresent `protobuf_oneof:"optional_fast_charger_present"`
 	// 2 decimals
 	//
 	// Types that are assignable to OptionalBatteryRange:
+	//
 	//	*ChargeState_BatteryRange
 	OptionalBatteryRange isChargeState_OptionalBatteryRange `protobuf_oneof:"optional_battery_range"`
 	// Types that are assignable to OptionalEstBatteryRange:
+	//
 	//	*ChargeState_EstBatteryRange
 	OptionalEstBatteryRange isChargeState_OptionalEstBatteryRange `protobuf_oneof:"optional_est_battery_range"`
 	// Types that are assignable to OptionalIdealBatteryRange:
+	//
 	//	*ChargeState_IdealBatteryRange
 	OptionalIdealBatteryRange isChargeState_OptionalIdealBatteryRange `protobuf_oneof:"optional_ideal_battery_range"`
 	// Types that are assignable to OptionalBatteryLevel:
+	//
 	//	*ChargeState_BatteryLevel
 	OptionalBatteryLevel isChargeState_OptionalBatteryLevel `protobuf_oneof:"optional_battery_level"`
 	// Types that are assignable to OptionalUsableBatteryLevel:
+	//
 	//	*ChargeState_UsableBatteryLevel
 	OptionalUsableBatteryLevel isChargeState_OptionalUsableBatteryLevel `protobuf_oneof:"optional_usable_battery_level"`
 	// 1 decimal
 	//
 	// Types that are assignable to OptionalChargeEnergyAdded:
+	//
 	//	*ChargeState_ChargeEnergyAdded
 	OptionalChargeEnergyAdded isChargeState_OptionalChargeEnergyAdded `protobuf_oneof:"optional_charge_energy_added"`
 	// Types that are assignable to OptionalChargeMilesAddedRated:
+	//
 	//	*ChargeState_ChargeMilesAddedRated
 	OptionalChargeMilesAddedRated isChargeState_OptionalChargeMilesAddedRated `protobuf_oneof:"optional_charge_miles_added_rated"`
 	// Types that are assignable to OptionalChargeMilesAddedIdeal:
+	//
 	//	*ChargeState_ChargeMilesAddedIdeal
 	OptionalChargeMilesAddedIdeal isChargeState_OptionalChargeMilesAddedIdeal `protobuf_oneof:"optional_charge_miles_added_ideal"`
 	// Types that are assignable to OptionalChargerVoltage:
+	//
 	//	*ChargeState_ChargerVoltage
 	OptionalChargerVoltage isChargeState_OptionalChargerVoltage `protobuf_oneof:"optional_charger_voltage"`
 	// Types that are assignable to OptionalChargerPilotCurrent:
+	//
 	//	*ChargeState_ChargerPilotCurrent
 	OptionalChargerPilotCurrent isChargeState_OptionalChargerPilotCurrent `protobuf_oneof:"optional_charger_pilot_current"`
 	// Types that are assignable to OptionalChargerActualCurrent:
+	//
 	//	*ChargeState_ChargerActualCurrent
 	OptionalChargerActualCurrent isChargeState_OptionalChargerActualCurrent `protobuf_oneof:"optional_charger_actual_current"`
 	// Types that are assignable to OptionalChargerPower:
+	//
 	//	*ChargeState_ChargerPower
 	OptionalChargerPower isChargeState_OptionalChargerPower `protobuf_oneof:"optional_charger_power"`
 	// Types that are assignable to OptionalMinutesToFullCharge:
+	//
 	//	*ChargeState_MinutesToFullCharge
 	OptionalMinutesToFullCharge isChargeState_OptionalMinutesToFullCharge `protobuf_oneof:"optional_minutes_to_full_charge"`
 	// Types that are assignable to OptionalMinutesToChargeLimit:
+	//
 	//	*ChargeState_MinutesToChargeLimit
 	OptionalMinutesToChargeLimit isChargeState_OptionalMinutesToChargeLimit `protobuf_oneof:"optional_minutes_to_charge_limit"`
 	// Types that are assignable to OptionalTripCharging:
+	//
 	//	*ChargeState_TripCharging
 	OptionalTripCharging isChargeState_OptionalTripCharging `protobuf_oneof:"optional_trip_charging"`
 	// Types that are assignable to OptionalChargeRateMph:
+	//
 	//	*ChargeState_ChargeRateMph
 	OptionalChargeRateMph isChargeState_OptionalChargeRateMph `protobuf_oneof:"optional_charge_rate_mph"`
 	// Types that are assignable to OptionalChargePortDoorOpen:
+	//
 	//	*ChargeState_ChargePortDoorOpen
 	OptionalChargePortDoorOpen isChargeState_OptionalChargePortDoorOpen `protobuf_oneof:"optional_charge_port_door_open"`
 	ConnChargeCable            *ChargeState_CableType                   `protobuf:"bytes,28,opt,name=conn_charge_cable,json=connChargeCable,proto3" json:"conn_charge_cable,omitempty"`
 	// seconds / datetime
 	//
 	// Types that are assignable to OptionalScheduledChargingStartTime:
+	//
 	//	*ChargeState_ScheduledChargingStartTime
 	OptionalScheduledChargingStartTime isChargeState_OptionalScheduledChargingStartTime `protobuf_oneof:"optional_scheduled_charging_start_time"`
 	// Types that are assignable to OptionalScheduledChargingPending:
+	//
 	//	*ChargeState_ScheduledChargingPending
 	OptionalScheduledChargingPending isChargeState_OptionalScheduledChargingPending `protobuf_oneof:"optional_scheduled_charging_pending"`
 	ScheduledDepartureTime           *timestamppb.Timestamp                         `protobuf:"bytes,31,opt,name=scheduled_departure_time,json=scheduledDepartureTime,proto3" json:"scheduled_departure_time,omitempty"`
 	// Types that are assignable to OptionalUserChargeEnableRequest:
+	//
 	//	*ChargeState_UserChargeEnableRequest
 	OptionalUserChargeEnableRequest isChargeState_OptionalUserChargeEnableRequest `protobuf_oneof:"optional_user_charge_enable_request"`
 	// Types that are assignable to OptionalChargeEnableRequest:
+	//
 	//	*ChargeState_ChargeEnableRequest
 	OptionalChargeEnableRequest isChargeState_OptionalChargeEnableRequest `protobuf_oneof:"optional_charge_enable_request"`
 	// Types that are assignable to OptionalChargerPhases:
+	//
 	//	*ChargeState_ChargerPhases
 	OptionalChargerPhases isChargeState_OptionalChargerPhases `protobuf_oneof:"optional_charger_phases"`
 	ChargePortLatch       *ChargePortLatchState               `protobuf:"bytes,35,opt,name=charge_port_latch,json=chargePortLatch,proto3" json:"charge_port_latch,omitempty"`
 	// Types that are assignable to OptionalChargePortColdWeatherMode:
+	//
 	//	*ChargeState_ChargePortColdWeatherMode
 	OptionalChargePortColdWeatherMode isChargeState_OptionalChargePortColdWeatherMode `protobuf_oneof:"optional_charge_port_cold_weather_mode"`
 	// Types that are assignable to OptionalChargeCurrentRequest:
+	//
 	//	*ChargeState_ChargeCurrentRequest
 	OptionalChargeCurrentRequest isChargeState_OptionalChargeCurrentRequest `protobuf_oneof:"optional_charge_current_request"`
 	// Types that are assignable to OptionalChargeCurrentRequestMax:
+	//
 	//	*ChargeState_ChargeCurrentRequestMax
 	OptionalChargeCurrentRequestMax isChargeState_OptionalChargeCurrentRequestMax `protobuf_oneof:"optional_charge_current_request_max"`
 	// Types that are assignable to OptionalManagedChargingActive:
+	//
 	//	*ChargeState_ManagedChargingActive
 	OptionalManagedChargingActive isChargeState_OptionalManagedChargingActive `protobuf_oneof:"optional_managed_charging_active"`
 	// Types that are assignable to OptionalManagedChargingUserCanceled:
+	//
 	//	*ChargeState_ManagedChargingUserCanceled
 	OptionalManagedChargingUserCanceled isChargeState_OptionalManagedChargingUserCanceled `protobuf_oneof:"optional_managed_charging_user_canceled"`
 	// Types that are assignable to OptionalManagedChargingStartTime:
+	//
 	//	*ChargeState_ManagedChargingStartTime
 	OptionalManagedChargingStartTime isChargeState_OptionalManagedChargingStartTime `protobuf_oneof:"optional_managed_charging_start_time"`
 	Timestamp                        *timestamppb.Timestamp                         `protobuf:"bytes,44,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	PreconditioningTimes             *PreconditioningTimes                          `protobuf:"bytes,45,opt,name=preconditioning_times,json=preconditioningTimes,proto3" json:"preconditioning_times,omitempty"`
 	OffPeakChargingTimes             *OffPeakChargingTimes                          `protobuf:"bytes,46,opt,name=off_peak_charging_times,json=offPeakChargingTimes,proto3" json:"off_peak_charging_times,omitempty"`
 	// Types that are assignable to OptionalOffPeakHoursEndTime:
+	//
 	//	*ChargeState_OffPeakHoursEndTime
 	OptionalOffPeakHoursEndTime isChargeState_OptionalOffPeakHoursEndTime `protobuf_oneof:"optional_off_peak_hours_end_time"`
 	// Types that are assignable to OptionalScheduledChargingMode:
+	//
 	//	*ChargeState_ScheduledChargingMode_
 	OptionalScheduledChargingMode isChargeState_OptionalScheduledChargingMode `protobuf_oneof:"optional_scheduled_charging_mode"`
 	// Types that are assignable to OptionalChargingAmps:
+	//
 	//	*ChargeState_ChargingAmps
 	OptionalChargingAmps isChargeState_OptionalChargingAmps `protobuf_oneof:"optional_charging_amps"`
 	// Types that are assignable to OptionalScheduledChargingStartTimeMinutes:
+	//
 	//	*ChargeState_ScheduledChargingStartTimeMinutes
 	OptionalScheduledChargingStartTimeMinutes isChargeState_OptionalScheduledChargingStartTimeMinutes `protobuf_oneof:"optional_scheduled_charging_start_time_minutes"`
 	// Types that are assignable to OptionalScheduledDepartureTimeMinutes:
+	//
 	//	*ChargeState_ScheduledDepartureTimeMinutes
 	OptionalScheduledDepartureTimeMinutes isChargeState_OptionalScheduledDepartureTimeMinutes `protobuf_oneof:"optional_scheduled_departure_time_minutes"`
 	// Types that are assignable to OptionalPreconditioningEnabled:
+	//
 	//	*ChargeState_PreconditioningEnabled
 	OptionalPreconditioningEnabled isChargeState_OptionalPreconditioningEnabled `protobuf_oneof:"optional_preconditioning_enabled"`
 	// Types that are assignable to OptionalScheduledChargingStartTimeApp:
+	//
 	//	*ChargeState_ScheduledChargingStartTimeApp
 	OptionalScheduledChargingStartTimeApp isChargeState_OptionalScheduledChargingStartTimeApp `protobuf_oneof:"optional_scheduled_charging_start_time_app"`
 	// Types that are assignable to OptionalSuperchargerSessionTripPlanner:
+	//
 	//	*ChargeState_SuperchargerSessionTripPlanner
 	OptionalSuperchargerSessionTripPlanner isChargeState_OptionalSuperchargerSessionTripPlanner `protobuf_oneof:"optional_supercharger_session_trip_planner"`
 	// Types that are assignable to OptionalChargePortColor:
+	//
 	//	*ChargeState_ChargePortColor
 	OptionalChargePortColor isChargeState_OptionalChargePortColor `protobuf_oneof:"optional_charge_port_color"`
 	// Types that are assignable to OptionalChargeRateMphFloat:
+	//
 	//	*ChargeState_ChargeRateMphFloat
 	OptionalChargeRateMphFloat isChargeState_OptionalChargeRateMphFloat `protobuf_oneof:"optional_charge_rate_mph_float"`
 	// Types that are assignable to OptionalChargeLimitReason:
+	//
 	//	*ChargeState_ChargeLimitReason_
 	OptionalChargeLimitReason isChargeState_OptionalChargeLimitReason `protobuf_oneof:"optional_charge_limit_reason"`
 	ManagedChargingState      *ManagedChargingState                   `protobuf:"bytes,158,opt,name=managed_charging_state,json=managedChargingState,proto3" json:"managed_charging_state,omitempty"`
 	// Types that are assignable to OptionalChargeCableUnlatched:
+	//
 	//	*ChargeState_ChargeCableUnlatched
 	OptionalChargeCableUnlatched isChargeState_OptionalChargeCableUnlatched `protobuf_oneof:"optional_charge_cable_unlatched"`
 	// Types that are assignable to OptionalOutletState:
+	//
 	//	*ChargeState_OutletState_
 	OptionalOutletState isChargeState_OptionalOutletState `protobuf_oneof:"optional_outlet_state"`
 	// Types that are assignable to OptionalPowerFeedState:
+	//
 	//	*ChargeState_PowerFeedState_
 	OptionalPowerFeedState isChargeState_OptionalPowerFeedState `protobuf_oneof:"optional_power_feed_state"`
 	// Types that are assignable to OptionOutletSocLimit:
+	//
 	//	*ChargeState_OutletSocLimit
 	OptionOutletSocLimit isChargeState_OptionOutletSocLimit `protobuf_oneof:"option_outlet_soc_limit"`
 	// Types that are assignable to OptionPowerFeedSocLimit:
+	//
 	//	*ChargeState_PowerFeedSocLimit
 	OptionPowerFeedSocLimit isChargeState_OptionPowerFeedSocLimit `protobuf_oneof:"option_power_feed_soc_limit"`
 	// Types that are assignable to OptionOutletTimeRemaining:
+	//
 	//	*ChargeState_OutletTimeRemaining
 	OptionOutletTimeRemaining isChargeState_OptionOutletTimeRemaining `protobuf_oneof:"option_outlet_time_remaining"`
 	// Types that are assignable to OptionPowerFeedTimeRemaining:
+	//
 	//	*ChargeState_PowerFeedTimeRemaining
 	OptionPowerFeedTimeRemaining isChargeState_OptionPowerFeedTimeRemaining `protobuf_oneof:"option_power_feed_time_remaining"`
 	// Types that are assignable to OptionalPowershareFeatureAllowed:
+	//
 	//	*ChargeState_PowershareFeatureAllowed
 	OptionalPowershareFeatureAllowed isChargeState_OptionalPowershareFeatureAllowed `protobuf_oneof:"optional_powershare_feature_allowed"`
 	// Types that are assignable to OptionalPowershareFeatureEnabled:
+	//
 	//	*ChargeState_PowershareFeatureEnabled
 	OptionalPowershareFeatureEnabled isChargeState_OptionalPowershareFeatureEnabled `protobuf_oneof:"optional_powershare_feature_enabled"`
 	// Types that are assignable to OptionalPowershareRequest:
+	//
 	//	*ChargeState_PowershareRequest
 	OptionalPowershareRequest isChargeState_OptionalPowershareRequest `protobuf_oneof:"optional_powershare_request"`
 	// Types that are assignable to OptionalPowershareType:
+	//
 	//	*ChargeState_PowershareType_
 	OptionalPowershareType isChargeState_OptionalPowershareType `protobuf_oneof:"optional_powershare_type"`
 	// Types that are assignable to OptionalPowershareStatus:
+	//
 	//	*ChargeState_PowershareStatus_
 	OptionalPowershareStatus isChargeState_OptionalPowershareStatus `protobuf_oneof:"optional_powershare_status"`
 	// Types that are assignable to OptionalPowershareStopReason:
+	//
 	//	*ChargeState_PowershareStopReason_
 	OptionalPowershareStopReason isChargeState_OptionalPowershareStopReason `protobuf_oneof:"optional_powershare_stop_reason"`
 	// Types that are assignable to OptionalPowershareInstantaneousLoadKw:
+	//
 	//	*ChargeState_PowershareInstantaneousLoadKw
 	OptionalPowershareInstantaneousLoadKw isChargeState_OptionalPowershareInstantaneousLoadKw `protobuf_oneof:"optional_powershare_instantaneous_load_kw"`
 	// Types that are assignable to OptionalPowershareVehicleEnergyLeftHr:
+	//
 	//	*ChargeState_PowershareVehicleEnergyLeftHr
 	OptionalPowershareVehicleEnergyLeftHr isChargeState_OptionalPowershareVehicleEnergyLeftHr `protobuf_oneof:"optional_powershare_vehicle_energy_left_hr"`
 	// Types that are assignable to OptionalPowershareSocLimit:
+	//
 	//	*ChargeState_PowershareSocLimit
 	OptionalPowershareSocLimit isChargeState_OptionalPowershareSocLimit `protobuf_oneof:"optional_powershare_soc_limit"`
 	// Types that are assignable to OptionalOneTimeSocLimit:
+	//
 	//	*ChargeState_OneTimeSocLimit
 	OptionalOneTimeSocLimit isChargeState_OptionalOneTimeSocLimit `protobuf_oneof:"optional_one_time_soc_limit"`
 	// Types that are assignable to OptionalHomeLocation:
+	//
 	//	*ChargeState_HomeLocation
 	OptionalHomeLocation isChargeState_OptionalHomeLocation `protobuf_oneof:"optional_home_location"`
 	// Types that are assignable to OptionalWorkLocation:
+	//
 	//	*ChargeState_WorkLocation
 	OptionalWorkLocation isChargeState_OptionalWorkLocation `protobuf_oneof:"optional_work_location"`
 	// Types that are assignable to OptionalOutletMaxTimerMinutes:
+	//
 	//	*ChargeState_OutletMaxTimerMinutes
 	OptionalOutletMaxTimerMinutes isChargeState_OptionalOutletMaxTimerMinutes `protobuf_oneof:"optional_outlet_max_timer_minutes"`
 }
@@ -5036,12 +5161,15 @@ type ManagedChargingState struct {
 
 	ChargeOnSolarState *ChargeOnSolarState `protobuf:"bytes,1,opt,name=charge_on_solar_state,json=chargeOnSolarState,proto3" json:"charge_on_solar_state,omitempty"`
 	// Types that are assignable to OptionalChargeOnSolarGatewayDin:
+	//
 	//	*ManagedChargingState_ChargeOnSolarGatewayDin
 	OptionalChargeOnSolarGatewayDin isManagedChargingState_OptionalChargeOnSolarGatewayDin `protobuf_oneof:"optional_charge_on_solar_gateway_din"`
 	// Types that are assignable to OptionalTeslaElectricAssetId:
+	//
 	//	*ManagedChargingState_TeslaElectricAssetId
 	OptionalTeslaElectricAssetId isManagedChargingState_OptionalTeslaElectricAssetId `protobuf_oneof:"optional_tesla_electric_asset_id"`
 	// Types that are assignable to OptionalMinutesToLowerLimit:
+	//
 	//	*ManagedChargingState_MinutesToLowerLimit
 	OptionalMinutesToLowerLimit isManagedChargingState_OptionalMinutesToLowerLimit `protobuf_oneof:"optional_minutes_to_lower_limit"`
 }
@@ -5168,6 +5296,7 @@ type ChargeOnSolarState struct {
 	// The state of the charge on solar managed charging feature.
 	//
 	// Types that are assignable to State:
+	//
 	//	*ChargeOnSolarState_NotAllowed
 	//	*ChargeOnSolarState_NoChargeRecommended
 	//	*ChargeOnSolarState_ChargingOnExcessSolar
@@ -5684,59 +5813,77 @@ type LocationState struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to OptionalLatitude:
+	//
 	//	*LocationState_Latitude
 	OptionalLatitude isLocationState_OptionalLatitude `protobuf_oneof:"optional_latitude"`
 	// Types that are assignable to OptionalLongitude:
+	//
 	//	*LocationState_Longitude
 	OptionalLongitude isLocationState_OptionalLongitude `protobuf_oneof:"optional_longitude"`
 	// Types that are assignable to OptionalHeading:
+	//
 	//	*LocationState_Heading
 	OptionalHeading isLocationState_OptionalHeading `protobuf_oneof:"optional_heading"`
 	// Types that are assignable to OptionalGpsAsOf:
+	//
 	//	*LocationState_GpsAsOf
 	OptionalGpsAsOf isLocationState_OptionalGpsAsOf `protobuf_oneof:"optional_gps_as_of"`
 	// Types that are assignable to OptionalNativeLocationSupported:
+	//
 	//	*LocationState_NativeLocationSupported
 	OptionalNativeLocationSupported isLocationState_OptionalNativeLocationSupported `protobuf_oneof:"optional_native_location_supported"`
 	// Types that are assignable to OptionalNativeLatitude:
+	//
 	//	*LocationState_NativeLatitude
 	OptionalNativeLatitude isLocationState_OptionalNativeLatitude `protobuf_oneof:"optional_native_latitude"`
 	// Types that are assignable to OptionalNativeLongitude:
+	//
 	//	*LocationState_NativeLongitude
 	OptionalNativeLongitude isLocationState_OptionalNativeLongitude `protobuf_oneof:"optional_native_longitude"`
 	NativeType              *LocationState_GPSCoordinateType        `protobuf:"bytes,8,opt,name=native_type,json=nativeType,proto3" json:"native_type,omitempty"`
 	// Types that are assignable to OptionalCorrectedLatitude:
+	//
 	//	*LocationState_CorrectedLatitude
 	OptionalCorrectedLatitude isLocationState_OptionalCorrectedLatitude `protobuf_oneof:"optional_corrected_latitude"`
 	// Types that are assignable to OptionalCorrectedLongitude:
+	//
 	//	*LocationState_CorrectedLongitude
 	OptionalCorrectedLongitude isLocationState_OptionalCorrectedLongitude `protobuf_oneof:"optional_corrected_longitude"`
 	Timestamp                  *timestamppb.Timestamp                     `protobuf:"bytes,11,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	// Types that are assignable to OptionalHomelinkNearby:
+	//
 	//	*LocationState_HomelinkNearby
 	OptionalHomelinkNearby isLocationState_OptionalHomelinkNearby `protobuf_oneof:"optional_homelink_nearby"`
 	// Types that are assignable to OptionalLocationName:
+	//
 	//	*LocationState_LocationName
 	OptionalLocationName isLocationState_OptionalLocationName `protobuf_oneof:"optional_location_name"`
 	// Types that are assignable to OptionalGeoLatitude:
+	//
 	//	*LocationState_GeoLatitude
 	OptionalGeoLatitude isLocationState_OptionalGeoLatitude `protobuf_oneof:"optional_geo_latitude"`
 	// Types that are assignable to OptionalGeoLongitude:
+	//
 	//	*LocationState_GeoLongitude
 	OptionalGeoLongitude isLocationState_OptionalGeoLongitude `protobuf_oneof:"optional_geo_longitude"`
 	// Types that are assignable to OptionalGeoHeading:
+	//
 	//	*LocationState_GeoHeading
 	OptionalGeoHeading isLocationState_OptionalGeoHeading `protobuf_oneof:"optional_geo_heading"`
 	// Types that are assignable to OptionalGeoElevation:
+	//
 	//	*LocationState_GeoElevation
 	OptionalGeoElevation isLocationState_OptionalGeoElevation `protobuf_oneof:"optional_geo_elevation"`
 	// Types that are assignable to OptionalGeoAccuracy:
+	//
 	//	*LocationState_GeoAccuracy
 	OptionalGeoAccuracy isLocationState_OptionalGeoAccuracy `protobuf_oneof:"optional_geo_accuracy"`
 	// Types that are assignable to OptionalEstimatedGpsValid:
+	//
 	//	*LocationState_EstimatedGpsValid
 	OptionalEstimatedGpsValid isLocationState_OptionalEstimatedGpsValid `protobuf_oneof:"optional_estimated_gps_valid"`
 	// Types that are assignable to OptionalEstimatedToRawDistance:
+	//
 	//	*LocationState_EstimatedToRawDistance
 	OptionalEstimatedToRawDistance isLocationState_OptionalEstimatedToRawDistance `protobuf_oneof:"optional_estimated_to_raw_distance"`
 }
@@ -6272,135 +6419,178 @@ type ClimateState struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to OptionalInsideTempCelsius:
+	//
 	//	*ClimateState_InsideTempCelsius
 	OptionalInsideTempCelsius isClimateState_OptionalInsideTempCelsius `protobuf_oneof:"optional_inside_temp_celsius"`
 	// Types that are assignable to OptionalOutsideTempCelsius:
+	//
 	//	*ClimateState_OutsideTempCelsius
 	OptionalOutsideTempCelsius isClimateState_OptionalOutsideTempCelsius `protobuf_oneof:"optional_outside_temp_celsius"`
 	// Types that are assignable to OptionalDriverTempSetting:
+	//
 	//	*ClimateState_DriverTempSetting
 	OptionalDriverTempSetting isClimateState_OptionalDriverTempSetting `protobuf_oneof:"optional_driver_temp_setting"`
 	// Types that are assignable to OptionalPassengerTempSetting:
+	//
 	//	*ClimateState_PassengerTempSetting
 	OptionalPassengerTempSetting isClimateState_OptionalPassengerTempSetting `protobuf_oneof:"optional_passenger_temp_setting"`
 	// Types that are assignable to OptionalLeftTempDirection:
+	//
 	//	*ClimateState_LeftTempDirection
 	OptionalLeftTempDirection isClimateState_OptionalLeftTempDirection `protobuf_oneof:"optional_left_temp_direction"`
 	// Types that are assignable to OptionalRightTempDirection:
+	//
 	//	*ClimateState_RightTempDirection
 	OptionalRightTempDirection isClimateState_OptionalRightTempDirection `protobuf_oneof:"optional_right_temp_direction"`
 	// Types that are assignable to OptionalIsFrontDefrosterOn:
+	//
 	//	*ClimateState_IsFrontDefrosterOn
 	OptionalIsFrontDefrosterOn isClimateState_OptionalIsFrontDefrosterOn `protobuf_oneof:"optional_is_front_defroster_on"`
 	// Types that are assignable to OptionalIsRearDefrosterOn:
+	//
 	//	*ClimateState_IsRearDefrosterOn
 	OptionalIsRearDefrosterOn isClimateState_OptionalIsRearDefrosterOn `protobuf_oneof:"optional_is_rear_defroster_on"`
 	// Types that are assignable to OptionalFanStatus:
+	//
 	//	*ClimateState_FanStatus
 	OptionalFanStatus isClimateState_OptionalFanStatus `protobuf_oneof:"optional_fan_status"`
 	// Types that are assignable to OptionalIsClimateOn:
+	//
 	//	*ClimateState_IsClimateOn
 	OptionalIsClimateOn isClimateState_OptionalIsClimateOn `protobuf_oneof:"optional_is_climate_on"`
 	// Types that are assignable to OptionalMinAvailTempCelsius:
+	//
 	//	*ClimateState_MinAvailTempCelsius
 	OptionalMinAvailTempCelsius isClimateState_OptionalMinAvailTempCelsius `protobuf_oneof:"optional_min_avail_temp_celsius"`
 	// Types that are assignable to OptionalMaxAvailTempCelsius:
+	//
 	//	*ClimateState_MaxAvailTempCelsius
 	OptionalMaxAvailTempCelsius isClimateState_OptionalMaxAvailTempCelsius `protobuf_oneof:"optional_max_avail_temp_celsius"`
 	// Types that are assignable to OptionalSeatHeaterLeft:
+	//
 	//	*ClimateState_SeatHeaterLeft
 	OptionalSeatHeaterLeft isClimateState_OptionalSeatHeaterLeft `protobuf_oneof:"optional_seat_heater_left"`
 	// Types that are assignable to OptionalSeatHeaterRight:
+	//
 	//	*ClimateState_SeatHeaterRight
 	OptionalSeatHeaterRight isClimateState_OptionalSeatHeaterRight `protobuf_oneof:"optional_seat_heater_right"`
 	// Types that are assignable to OptionalSeatHeaterRearLeft:
+	//
 	//	*ClimateState_SeatHeaterRearLeft
 	OptionalSeatHeaterRearLeft isClimateState_OptionalSeatHeaterRearLeft `protobuf_oneof:"optional_seat_heater_rear_left"`
 	// Types that are assignable to OptionalSeatHeaterRearRight:
+	//
 	//	*ClimateState_SeatHeaterRearRight
 	OptionalSeatHeaterRearRight isClimateState_OptionalSeatHeaterRearRight `protobuf_oneof:"optional_seat_heater_rear_right"`
 	// Types that are assignable to OptionalSeatHeaterRearCenter:
+	//
 	//	*ClimateState_SeatHeaterRearCenter
 	OptionalSeatHeaterRearCenter isClimateState_OptionalSeatHeaterRearCenter `protobuf_oneof:"optional_seat_heater_rear_center"`
 	// Types that are assignable to OptionalSeatHeaterRearRightBack:
+	//
 	//	*ClimateState_SeatHeaterRearRightBack
 	OptionalSeatHeaterRearRightBack isClimateState_OptionalSeatHeaterRearRightBack `protobuf_oneof:"optional_seat_heater_rear_right_back"`
 	// Types that are assignable to OptionalSeatHeaterRearLeftBack:
+	//
 	//	*ClimateState_SeatHeaterRearLeftBack
 	OptionalSeatHeaterRearLeftBack isClimateState_OptionalSeatHeaterRearLeftBack `protobuf_oneof:"optional_seat_heater_rear_left_back"`
 	// Types that are assignable to OptionalSeatHeaterThirdRowRight:
+	//
 	//	*ClimateState_SeatHeaterThirdRowRight
 	OptionalSeatHeaterThirdRowRight isClimateState_OptionalSeatHeaterThirdRowRight `protobuf_oneof:"optional_seat_heater_third_row_right"`
 	// Types that are assignable to OptionalSeatHeaterThirdRowLeft:
+	//
 	//	*ClimateState_SeatHeaterThirdRowLeft
 	OptionalSeatHeaterThirdRowLeft isClimateState_OptionalSeatHeaterThirdRowLeft `protobuf_oneof:"optional_seat_heater_third_row_left"`
 	// Types that are assignable to OptionalBatteryHeater:
+	//
 	//	*ClimateState_BatteryHeater
 	OptionalBatteryHeater isClimateState_OptionalBatteryHeater `protobuf_oneof:"optional_battery_heater"`
 	// Types that are assignable to OptionalBatteryHeaterNoPower:
+	//
 	//	*ClimateState_BatteryHeaterNoPower
 	OptionalBatteryHeaterNoPower isClimateState_OptionalBatteryHeaterNoPower `protobuf_oneof:"optional_battery_heater_no_power"`
 	// Types that are assignable to OptionalSteeringWheelHeater:
+	//
 	//	*ClimateState_SteeringWheelHeater
 	OptionalSteeringWheelHeater isClimateState_OptionalSteeringWheelHeater `protobuf_oneof:"optional_steering_wheel_heater"`
 	// Types that are assignable to OptionalWiperBladeHeater:
+	//
 	//	*ClimateState_WiperBladeHeater
 	OptionalWiperBladeHeater isClimateState_OptionalWiperBladeHeater `protobuf_oneof:"optional_wiper_blade_heater"`
 	// Types that are assignable to OptionalSideMirrorHeaters:
+	//
 	//	*ClimateState_SideMirrorHeaters
 	OptionalSideMirrorHeaters isClimateState_OptionalSideMirrorHeaters `protobuf_oneof:"optional_side_mirror_heaters"`
 	// Types that are assignable to OptionalIsPreconditioning:
+	//
 	//	*ClimateState_IsPreconditioning
 	OptionalIsPreconditioning isClimateState_OptionalIsPreconditioning `protobuf_oneof:"optional_is_preconditioning"`
 	// Types that are assignable to OptionalRemoteHeaterControlEnabled:
+	//
 	//	*ClimateState_RemoteHeaterControlEnabled
 	OptionalRemoteHeaterControlEnabled isClimateState_OptionalRemoteHeaterControlEnabled `protobuf_oneof:"optional_remote_heater_control_enabled"`
 	ClimateKeeperMode                  *ClimateState_ClimateKeeperMode                   `protobuf:"bytes,30,opt,name=climate_keeper_mode,json=climateKeeperMode,proto3" json:"climate_keeper_mode,omitempty"`
 	Timestamp                          *timestamppb.Timestamp                            `protobuf:"bytes,33,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	// Types that are assignable to OptionalBioweaponModeOn:
+	//
 	//	*ClimateState_BioweaponModeOn
 	OptionalBioweaponModeOn isClimateState_OptionalBioweaponModeOn `protobuf_oneof:"optional_bioweapon_mode_on"`
 	DefrostMode             *ClimateState_DefrostMode              `protobuf:"bytes,35,opt,name=defrost_mode,json=defrostMode,proto3" json:"defrost_mode,omitempty"`
 	// Types that are assignable to OptionalIsAutoConditioningOn:
+	//
 	//	*ClimateState_IsAutoConditioningOn
 	OptionalIsAutoConditioningOn isClimateState_OptionalIsAutoConditioningOn `protobuf_oneof:"optional_is_auto_conditioning_on"`
 	// Types that are assignable to OptionalAutoSeatClimateLeft:
+	//
 	//	*ClimateState_AutoSeatClimateLeft
 	OptionalAutoSeatClimateLeft isClimateState_OptionalAutoSeatClimateLeft `protobuf_oneof:"optional_auto_seat_climate_left"`
 	// Types that are assignable to OptionalAutoSeatClimateRight:
+	//
 	//	*ClimateState_AutoSeatClimateRight
 	OptionalAutoSeatClimateRight isClimateState_OptionalAutoSeatClimateRight `protobuf_oneof:"optional_auto_seat_climate_right"`
 	// Types that are assignable to OptionalSeatFanFrontLeft:
+	//
 	//	*ClimateState_SeatFanFrontLeft
 	OptionalSeatFanFrontLeft isClimateState_OptionalSeatFanFrontLeft `protobuf_oneof:"optional_seat_fan_front_left"`
 	// Types that are assignable to OptionalSeatFanFrontRight:
+	//
 	//	*ClimateState_SeatFanFrontRight
 	OptionalSeatFanFrontRight isClimateState_OptionalSeatFanFrontRight `protobuf_oneof:"optional_seat_fan_front_right"`
 	// Types that are assignable to OptionalAllowCabinOverheatProtection:
+	//
 	//	*ClimateState_AllowCabinOverheatProtection
 	OptionalAllowCabinOverheatProtection isClimateState_OptionalAllowCabinOverheatProtection `protobuf_oneof:"optional_allow_cabin_overheat_protection"`
 	// Types that are assignable to OptionalSupportsFanOnlyCabinOverheatProtection:
+	//
 	//	*ClimateState_SupportsFanOnlyCabinOverheatProtection
 	OptionalSupportsFanOnlyCabinOverheatProtection isClimateState_OptionalSupportsFanOnlyCabinOverheatProtection `protobuf_oneof:"optional_supports_fan_only_cabin_overheat_protection"`
 	// Types that are assignable to OptionalCabinOverheatProtection:
+	//
 	//	*ClimateState_CabinOverheatProtection
 	OptionalCabinOverheatProtection isClimateState_OptionalCabinOverheatProtection `protobuf_oneof:"optional_cabin_overheat_protection"`
 	// Types that are assignable to OptionalCabinOverheatProtectionActivelyCooling:
+	//
 	//	*ClimateState_CabinOverheatProtectionActivelyCooling
 	OptionalCabinOverheatProtectionActivelyCooling isClimateState_OptionalCabinOverheatProtectionActivelyCooling `protobuf_oneof:"optional_cabin_overheat_protection_actively_cooling"`
 	// Types that are assignable to OptionalCopActivationTemperature:
+	//
 	//	*ClimateState_CopActivationTemperature
 	OptionalCopActivationTemperature isClimateState_OptionalCopActivationTemperature `protobuf_oneof:"optional_cop_activation_temperature"`
 	// Types that are assignable to OptionalAutoSteeringWheelHeat:
+	//
 	//	*ClimateState_AutoSteeringWheelHeat
 	OptionalAutoSteeringWheelHeat isClimateState_OptionalAutoSteeringWheelHeat `protobuf_oneof:"optional_auto_steering_wheel_heat"`
 	// Types that are assignable to OptionalSteeringWheelHeatLevel:
+	//
 	//	*ClimateState_SteeringWheelHeatLevel
 	OptionalSteeringWheelHeatLevel isClimateState_OptionalSteeringWheelHeatLevel `protobuf_oneof:"optional_steering_wheel_heat_level"`
 	// Types that are assignable to OptionalHvacAutoRequest:
+	//
 	//	*ClimateState_HvacAutoRequest_
 	OptionalHvacAutoRequest isClimateState_OptionalHvacAutoRequest `protobuf_oneof:"optional_hvac_auto_request"`
 	// Types that are assignable to OptionalCopNotRunningReason:
+	//
 	//	*ClimateState_CopNotRunningReason
 	OptionalCopNotRunningReason isClimateState_OptionalCopNotRunningReason `protobuf_oneof:"optional_cop_not_running_reason"`
 }
@@ -7501,15 +7691,19 @@ type TirePressureState struct {
 	// tpms pressure values in bar
 	Timestamp *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	// Types that are assignable to OptionalTpmsPressureFl:
+	//
 	//	*TirePressureState_TpmsPressureFl
 	OptionalTpmsPressureFl isTirePressureState_OptionalTpmsPressureFl `protobuf_oneof:"optional_tpms_pressure_fl"`
 	// Types that are assignable to OptionalTpmsPressureFr:
+	//
 	//	*TirePressureState_TpmsPressureFr
 	OptionalTpmsPressureFr isTirePressureState_OptionalTpmsPressureFr `protobuf_oneof:"optional_tpms_pressure_fr"`
 	// Types that are assignable to OptionalTpmsPressureRl:
+	//
 	//	*TirePressureState_TpmsPressureRl
 	OptionalTpmsPressureRl isTirePressureState_OptionalTpmsPressureRl `protobuf_oneof:"optional_tpms_pressure_rl"`
 	// Types that are assignable to OptionalTpmsPressureRr:
+	//
 	//	*TirePressureState_TpmsPressureRr
 	OptionalTpmsPressureRr     isTirePressureState_OptionalTpmsPressureRr `protobuf_oneof:"optional_tpms_pressure_rr"`
 	TpmsLastSeenPressureTimeFl *timestamppb.Timestamp                     `protobuf:"bytes,6,opt,name=tpms_last_seen_pressure_time_fl,json=tpmsLastSeenPressureTimeFl,proto3" json:"tpms_last_seen_pressure_time_fl,omitempty"`
@@ -7517,35 +7711,45 @@ type TirePressureState struct {
 	TpmsLastSeenPressureTimeRl *timestamppb.Timestamp                     `protobuf:"bytes,8,opt,name=tpms_last_seen_pressure_time_rl,json=tpmsLastSeenPressureTimeRl,proto3" json:"tpms_last_seen_pressure_time_rl,omitempty"`
 	TpmsLastSeenPressureTimeRr *timestamppb.Timestamp                     `protobuf:"bytes,9,opt,name=tpms_last_seen_pressure_time_rr,json=tpmsLastSeenPressureTimeRr,proto3" json:"tpms_last_seen_pressure_time_rr,omitempty"`
 	// Types that are assignable to OptionalTpmsHardWarningFl:
+	//
 	//	*TirePressureState_TpmsHardWarningFl
 	OptionalTpmsHardWarningFl isTirePressureState_OptionalTpmsHardWarningFl `protobuf_oneof:"optional_tpms_hard_warning_fl"`
 	// Types that are assignable to OptionalTpmsHardWarningFr:
+	//
 	//	*TirePressureState_TpmsHardWarningFr
 	OptionalTpmsHardWarningFr isTirePressureState_OptionalTpmsHardWarningFr `protobuf_oneof:"optional_tpms_hard_warning_fr"`
 	// Types that are assignable to OptionalTpmsHardWarningRl:
+	//
 	//	*TirePressureState_TpmsHardWarningRl
 	OptionalTpmsHardWarningRl isTirePressureState_OptionalTpmsHardWarningRl `protobuf_oneof:"optional_tpms_hard_warning_rl"`
 	// Types that are assignable to OptionalTpmsHardWarningRr:
+	//
 	//	*TirePressureState_TpmsHardWarningRr
 	OptionalTpmsHardWarningRr isTirePressureState_OptionalTpmsHardWarningRr `protobuf_oneof:"optional_tpms_hard_warning_rr"`
 	// Types that are assignable to OptionalTpmsSoftWarningFl:
+	//
 	//	*TirePressureState_TpmsSoftWarningFl
 	OptionalTpmsSoftWarningFl isTirePressureState_OptionalTpmsSoftWarningFl `protobuf_oneof:"optional_tpms_soft_warning_fl"`
 	// Types that are assignable to OptionalTpmsSoftWarningFr:
+	//
 	//	*TirePressureState_TpmsSoftWarningFr
 	OptionalTpmsSoftWarningFr isTirePressureState_OptionalTpmsSoftWarningFr `protobuf_oneof:"optional_tpms_soft_warning_fr"`
 	// Types that are assignable to OptionalTpmsSoftWarningRl:
+	//
 	//	*TirePressureState_TpmsSoftWarningRl
 	OptionalTpmsSoftWarningRl isTirePressureState_OptionalTpmsSoftWarningRl `protobuf_oneof:"optional_tpms_soft_warning_rl"`
 	// Types that are assignable to OptionalTpmsSoftWarningRr:
+	//
 	//	*TirePressureState_TpmsSoftWarningRr
 	OptionalTpmsSoftWarningRr isTirePressureState_OptionalTpmsSoftWarningRr `protobuf_oneof:"optional_tpms_soft_warning_rr"`
 	// rcp values in bar
 	//
 	// Types that are assignable to OptionalTpmsRcpFrontValue:
+	//
 	//	*TirePressureState_TpmsRcpFrontValue
 	OptionalTpmsRcpFrontValue isTirePressureState_OptionalTpmsRcpFrontValue `protobuf_oneof:"optional_tpms_rcp_front_value"`
 	// Types that are assignable to OptionalTpmsRcpRearValue:
+	//
 	//	*TirePressureState_TpmsRcpRearValue
 	OptionalTpmsRcpRearValue isTirePressureState_OptionalTpmsRcpRearValue `protobuf_oneof:"optional_tpms_rcp_rear_value"`
 }
@@ -7960,27 +8164,35 @@ type MediaState struct {
 
 	Timestamp *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	// Types that are assignable to OptionalRemoteControlEnabled:
+	//
 	//	*MediaState_RemoteControlEnabled
 	OptionalRemoteControlEnabled isMediaState_OptionalRemoteControlEnabled `protobuf_oneof:"optional_remote_control_enabled"`
 	// Types that are assignable to OptionalNowPlayingArtist:
+	//
 	//	*MediaState_NowPlayingArtist
 	OptionalNowPlayingArtist isMediaState_OptionalNowPlayingArtist `protobuf_oneof:"optional_now_playing_artist"`
 	// Types that are assignable to OptionalNowPlayingTitle:
+	//
 	//	*MediaState_NowPlayingTitle
 	OptionalNowPlayingTitle isMediaState_OptionalNowPlayingTitle `protobuf_oneof:"optional_now_playing_title"`
 	// Types that are assignable to OptionalAudioVolume:
+	//
 	//	*MediaState_AudioVolume
 	OptionalAudioVolume isMediaState_OptionalAudioVolume `protobuf_oneof:"optional_audio_volume"`
 	// Types that are assignable to OptionalAudioVolumeIncrement:
+	//
 	//	*MediaState_AudioVolumeIncrement
 	OptionalAudioVolumeIncrement isMediaState_OptionalAudioVolumeIncrement `protobuf_oneof:"optional_audio_volume_increment"`
 	// Types that are assignable to OptionalAudioVolumeMax:
+	//
 	//	*MediaState_AudioVolumeMax
 	OptionalAudioVolumeMax isMediaState_OptionalAudioVolumeMax `protobuf_oneof:"optional_audio_volume_max"`
 	// Types that are assignable to OptionalNowPlayingSource:
+	//
 	//	*MediaState_NowPlayingSource
 	OptionalNowPlayingSource isMediaState_OptionalNowPlayingSource `protobuf_oneof:"optional_now_playing_source"`
 	// Types that are assignable to OptionalMediaPlaybackStatus:
+	//
 	//	*MediaState_MediaPlaybackStatus
 	OptionalMediaPlaybackStatus isMediaState_OptionalMediaPlaybackStatus `protobuf_oneof:"optional_media_playback_status"`
 }
@@ -8223,21 +8435,27 @@ type MediaDetailState struct {
 
 	Timestamp *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	// Types that are assignable to OptionalNowPlayingDuration:
+	//
 	//	*MediaDetailState_NowPlayingDuration
 	OptionalNowPlayingDuration isMediaDetailState_OptionalNowPlayingDuration `protobuf_oneof:"optional_now_playing_duration"`
 	// Types that are assignable to OptionalNowPlayingElapsed:
+	//
 	//	*MediaDetailState_NowPlayingElapsed
 	OptionalNowPlayingElapsed isMediaDetailState_OptionalNowPlayingElapsed `protobuf_oneof:"optional_now_playing_elapsed"`
 	// Types that are assignable to OptionalNowPlayingSourceString:
+	//
 	//	*MediaDetailState_NowPlayingSourceString
 	OptionalNowPlayingSourceString isMediaDetailState_OptionalNowPlayingSourceString `protobuf_oneof:"optional_now_playing_source_string"`
 	// Types that are assignable to OptionalNowPlayingAlbum:
+	//
 	//	*MediaDetailState_NowPlayingAlbum
 	OptionalNowPlayingAlbum isMediaDetailState_OptionalNowPlayingAlbum `protobuf_oneof:"optional_now_playing_album"`
 	// Types that are assignable to OptionalNowPlayingStation:
+	//
 	//	*MediaDetailState_NowPlayingStation
 	OptionalNowPlayingStation isMediaDetailState_OptionalNowPlayingStation `protobuf_oneof:"optional_now_playing_station"`
 	// Types that are assignable to OptionalA2DpSourceName:
+	//
 	//	*MediaDetailState_A2DpSourceName
 	OptionalA2DpSourceName isMediaDetailState_OptionalA2DpSourceName `protobuf_oneof:"optional_a2dp_source_name"`
 }
@@ -8431,6 +8649,7 @@ type ShiftState struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Type:
+	//
 	//	*ShiftState_Invalid
 	//	*ShiftState_P
 	//	*ShiftState_R
@@ -8567,6 +8786,7 @@ type ClosuresState_SunRoofState struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Type:
+	//
 	//	*ClosuresState_SunRoofState_Unknown
 	//	*ClosuresState_SunRoofState_Calibrating
 	//	*ClosuresState_SunRoofState_Closed
@@ -8703,6 +8923,7 @@ type ClosuresState_DisplayState struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Type:
+	//
 	//	*ClosuresState_DisplayState_Off
 	//	*ClosuresState_DisplayState_Dim
 	//	*ClosuresState_DisplayState_Accessory
@@ -8895,6 +9116,7 @@ type ClosuresState_SentryModeState struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Type:
+	//
 	//	*ClosuresState_SentryModeState_Off
 	//	*ClosuresState_SentryModeState_Idle
 	//	*ClosuresState_SentryModeState_Armed
@@ -9031,6 +9253,7 @@ type SoftwareUpdateState_SoftwareUpdateStatus struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Type:
+	//
 	//	*SoftwareUpdateState_SoftwareUpdateStatus_Unknown
 	//	*SoftwareUpdateState_SoftwareUpdateStatus_Installing
 	//	*SoftwareUpdateState_SoftwareUpdateStatus_Scheduled
@@ -9173,6 +9396,7 @@ type ChargeState_CableType struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Type:
+	//
 	//	*ChargeState_CableType_SNA
 	//	*ChargeState_CableType_IEC
 	//	*ChargeState_CableType_SAE
@@ -9295,6 +9519,7 @@ type ChargeState_ChargerType struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Type:
+	//
 	//	*ChargeState_ChargerType_SNA
 	//	*ChargeState_ChargerType_Supercharger
 	//	*ChargeState_ChargerType_Chademo
@@ -9473,6 +9698,7 @@ type ChargeState_ChargingState struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Type:
+	//
 	//	*ChargeState_ChargingState_Unknown
 	//	*ChargeState_ChargingState_Disconnected
 	//	*ChargeState_ChargingState_NoPower
@@ -9637,6 +9863,7 @@ type ChargeState_ChargerBrand struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Type:
+	//
 	//	*ChargeState_ChargerBrand_Tesla
 	//	*ChargeState_ChargerBrand_SNA
 	Type isChargeState_ChargerBrand_Type `protobuf_oneof:"type"`
@@ -9717,6 +9944,7 @@ type LocationState_GPSCoordinateType struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Type:
+	//
 	//	*LocationState_GPSCoordinateType_GCJ
 	//	*LocationState_GPSCoordinateType_WGS
 	Type isLocationState_GPSCoordinateType_Type `protobuf_oneof:"type"`
@@ -9844,6 +10072,7 @@ type ClimateState_ClimateKeeperMode struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Type:
+	//
 	//	*ClimateState_ClimateKeeperMode_Unknown
 	//	*ClimateState_ClimateKeeperMode_Off
 	//	*ClimateState_ClimateKeeperMode_On
@@ -9966,6 +10195,7 @@ type ClimateState_DefrostMode struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Type:
+	//
 	//	*ClimateState_DefrostMode_Off
 	//	*ClimateState_DefrostMode_Normal
 	//	*ClimateState_DefrostMode_Max
