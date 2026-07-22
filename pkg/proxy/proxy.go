@@ -366,7 +366,7 @@ func (p *Proxy) handleFleetTelemetryConfig(acct *account.Account, w http.Respons
 
 	// Let the server validate the VINs and config, the proxy just needs to sign
 	if _, ok := params.Config["aud"]; ok {
-		log.Warning("Confuration 'aud' field will be overwritten")
+		log.Warning("Configuration 'aud' field will be overwritten")
 	}
 	if _, ok := params.Config["iss"]; ok {
 		log.Warning("Configuration 'iss' field will be overwritten")

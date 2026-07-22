@@ -31,7 +31,7 @@ plaintext file into the system keyring.
 
 The program writes the public key to stdout (except when deleting a key or setting the output
 location with -output). When using the create option, the program will not overwrite an existing
-unless invoked with -f.
+key unless invoked with -f.
 
 The type of keyring and name of the key inside that keyring are controlled by the command-line
 options below, or through the corresponding environment variables.`

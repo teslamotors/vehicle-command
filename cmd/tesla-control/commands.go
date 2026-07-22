@@ -379,7 +379,7 @@ var commands = map[string]*Command{
 		},
 	},
 	"add-key-request": {
-		help:             "Request NFC-card approval for a enrolling PUBLIC_KEY with ROLE and FORM_FACTOR",
+		help:             "Request NFC-card approval for an enrolling PUBLIC_KEY with ROLE and FORM_FACTOR",
 		requiresAuth:     false,
 		requiresFleetAPI: false,
 		args: []Argument{
@@ -423,7 +423,7 @@ var commands = map[string]*Command{
 		},
 	},
 	"rename-key": {
-		help:             "Change the human-readable metadata of PUBLIC_KEY to NAME, MODEL, KIND",
+		help:             "Change the human-readable name of PUBLIC_KEY to NAME",
 		requiresAuth:     false,
 		requiresFleetAPI: true,
 		args: []Argument{
@@ -655,7 +655,7 @@ var commands = map[string]*Command{
 		requiresAuth:     true,
 		requiresFleetAPI: false,
 		args: []Argument{
-			{name: "VOLUME", help: "Set volume (0.0-10.0"},
+			{name: "VOLUME", help: "Set volume (0.0-10.0)"},
 		},
 		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, args map[string]string) error {
 			volume, err := strconv.ParseFloat(args["VOLUME"], 32)
@@ -867,7 +867,6 @@ var commands = map[string]*Command{
 			{name: "DOMAIN", help: "'vcsec' or 'infotainment'"},
 		},
 		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			// See SeatPosition definition for controlling backrest heaters (limited models).
 			domains := map[string]protocol.Domain{
 				"vcsec":        protocol.DomainVCSEC,
 				"infotainment": protocol.DomainInfotainment,
@@ -889,7 +888,7 @@ var commands = map[string]*Command{
 		},
 	},
 	"seat-heater": {
-		help:             "Set seat heater at POSITION to LEVEL",
+		help:             "Set seat heater at SEAT to LEVEL",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
 		args: []Argument{
