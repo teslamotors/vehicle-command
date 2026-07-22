@@ -277,6 +277,7 @@ func (p *Proxy) forwardRequest(acct *account.Account, w http.ResponseWriter, req
 		attempts++
 		if attempts == MaxAttempts {
 			writeJSONError(w, http.StatusBadGateway, protocol.NewError("max retry exhausted", false, false))
+			return
 		}
 
 		log.Debug("Retrying transmission after error...")
