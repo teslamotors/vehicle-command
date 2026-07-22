@@ -9,7 +9,7 @@ import (
 type AuthMethod int32
 
 const (
-	// AuthMethodNone commnds are unauthenticated. They are typically used for handshake messages.
+	// AuthMethodNone commands are unauthenticated. They are typically used for handshake messages.
 	AuthMethodNone AuthMethod = iota
 
 	// AuthMethodGCM commands are authenticated and encrypted with AES-GCM-ECDH.

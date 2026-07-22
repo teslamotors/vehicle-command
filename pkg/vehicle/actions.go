@@ -23,7 +23,7 @@ func (v *Vehicle) CloseTrunk(ctx context.Context) error {
 	return v.executeClosureAction(ctx, vcsec.ClosureMoveType_E_CLOSURE_MOVE_TYPE_CLOSE, ClosureTrunk)
 }
 
-// OpenTrunk opens the frunk. There is no remote way to close the frunk!
+// OpenFrunk opens the frunk. There is no remote way to close the frunk!
 func (v *Vehicle) OpenFrunk(ctx context.Context) error {
 	return v.executeClosureAction(ctx, vcsec.ClosureMoveType_E_CLOSURE_MOVE_TYPE_MOVE, ClosureFrunk)
 }
