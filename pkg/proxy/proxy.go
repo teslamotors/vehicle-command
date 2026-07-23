@@ -130,6 +130,22 @@ type carResponse struct {
 	Reason string `json:"reason"`
 }
 
+// httpStatusCode maps errors to the HTTP status codes Fleet API uses for the
+// equivalent failures, defaulting to 500 for unrecognized errors.
+func httpStatusCode(err error) int {
+	switch {
+	case errors.Is(err, inet.ErrVehicleNotAwake):
+		// Fleet API returns 408 when the vehicle is offline or asleep.
+		return http.StatusRequestTimeout
+	case errors.Is(err, protocol.ErrKeyNotPaired):
+		// Not 401: the OAuth token was accepted, but the vehicle-side key
+		// pairing precondition failed.
+		return http.StatusPreconditionFailed
+	default:
+		return http.StatusInternalServerError
+	}
+}
+
 func writeJSONError(w http.ResponseWriter, code int, err error) {
 	reply := Response{}
 
@@ -414,7 +430,7 @@ func (p *Proxy) handleVehicleCommand(acct *account.Account, w http.ResponseWrite
 	}
 
 	if err := car.Connect(ctx); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err)
+		writeJSONError(w, httpStatusCode(err), err)
 		return err
 	}
 	defer car.Disconnect()
@@ -424,7 +440,7 @@ func (p *Proxy) handleVehicleCommand(acct *account.Account, w http.ResponseWrite
 		p.forwardRequest(acct, w, req)
 		return err
 	} else if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err)
+		writeJSONError(w, httpStatusCode(err), err)
 		return err
 	}
 	defer func() {
@@ -439,7 +455,7 @@ func (p *Proxy) handleVehicleCommand(acct *account.Account, w http.ResponseWrite
 		return err
 	}
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err)
+		writeJSONError(w, httpStatusCode(err), err)
 		return err
 	}
 
