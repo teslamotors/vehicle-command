@@ -596,7 +596,11 @@ To encrypt the plaintext protobuf `P` using AES-GCM:
 
 ***Example:*** We'll send an "Turn HVAC on" command using the above example
 with `VIN = 5YJ30123456789ABC` and the hex representation of the shared key `K
-= 1b2fce19967b79db696f909cff89ea9a`.
+= 1b2fce19967b79db696f909cff89ea9a`. The request sets the
+`UniversalMessage.FLAG_ENCRYPT_RESPONSE` flag, as recommended for all commands
+(see [Response decryption](#response-decryption)), so the flags bit mask is `1
+<< FLAG_ENCRYPT_RESPONSE = 2` and is included in both the metadata and the
+`RoutableMessage.flags` field.
 
 First we find the protobuf encoding for the command. Normally this is done
 using the language-specific bindings created by `protoc` from the `*.proto`
@@ -624,11 +628,15 @@ field of AES-GCM.
 |  `Signatures.TAG_EPOCH`          | `session_info.epoch`   | 03 10 4c463f9cc0d3d26906e982ed224adde6    |
 |  `Signatures.TAG_EXPIRES_AT`     | `t=2655` seconds       | 04 04 00000a5f                            |
 |  `Signatures.TAG_COUNTER`        | `session_info.counter` | 05 04 00000007                            |
+|  `Signatures.TAG_FLAGS`          | `1 << UniversalMessage.FLAG_ENCRYPT_RESPONSE = 0x02` | 07 04 00000002 |
+
+All values in the Encoding column are hex, including the leading tag and
+length bytes.
 
 Concatenating the above encoded values together with the terminal `0xff` byte gives:
 
 ```
-000105010103021135594a333031323334353637383941424303104c463f9cc0d3d26906e982ed224adde6040400000a5f050400000007ff
+000105010103021135594a333031323334353637383941424303104c463f9cc0d3d26906e982ed224adde6040400000a5f050400000007070400000002ff
 ```
 
 ```python
@@ -638,7 +646,7 @@ from cryptography.hazmat.primitives import hashes
 
 plaintext = bytes.fromhex("120452020801")
 
-metadata = bytes.fromhex("000105010103021135594a333031323334353637383941424303104c463f9cc0d3d26906e982ed224adde6040400000a5f050400000007ff")
+metadata = bytes.fromhex("000105010103021135594a333031323334353637383941424303104c463f9cc0d3d26906e982ed224adde6040400000a5f050400000007070400000002ff")
 aad = hashes.Hash(hashes.SHA256())
 
 aad.update(metadata)
@@ -653,7 +661,7 @@ print(f"Nonce: {nonce.hex()}, Ciphertext: {ct[:-16].hex()}, Tag: {ct[-16:].hex()
 Output (will be randomized each time by the nonce):
 
 ```
-Nonce: dbf79447fa156674dae1caed, Ciphertext: 38038e8c0f2e, Tag: 8e128da165f162f4d7d2c8da866cf82a
+Nonce: dbf79447fa156674dae1caed, Ciphertext: 38038e8c0f2e, Tag: c228e0ff64991481db3a7bbc133696c5
 ```
 
 Copying the above fields into a RoutableMessage protobuf yields:
@@ -675,9 +683,10 @@ signature_data {
     nonce: dbf79447fa156674dae1caed
     counter: 7
     expires_at: 2655
-    tag: 8e128da165f162f4d7d2c8da866cf82a
+    tag: c228e0ff64991481db3a7bbc133696c5
   }
 }
+flags: 2
 uuid: 58406580528b6a5301391800b4fe9b99
 ```
 
