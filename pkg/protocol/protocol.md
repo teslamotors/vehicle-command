@@ -43,7 +43,7 @@ above are for printability.
      Messages addressed to `DOMAIN_VEHICLE_SECURITY` (VCSEC) parse this as a
      [`vcsec.UnsignedMessage`](protobuf/vcsec.proto), while messages addressed to
      `DOMAIN_INFOTAINMENT` parse this as a
-     [`carsever.Action`](protobuf/car_server.proto).
+     [`carserver.Action`](protobuf/car_server.proto).
    * `payload.session_info_request` is a [handshake request](#Request) from a
      client. The client needs to complete a handshake before it can send commands.
    * `payload.session_info` is a [handshake response](#Response) from the vehicle.
@@ -534,7 +534,7 @@ The client serializes the following metadata values into a string `M`:
 | Value | Tag | Description |
 | ----- | --- | ----------- |
 | Signature type | `Signatures.TAG_SIGNATURE_TYPE` | Either `Signatures.SIGNATURE_TYPE_HMAC_PERSONALIZED` or `Signatures.SIGNATURE_TYPE_AES_GCM_PERSONALIZED`. See below. |
-| Domain         | `Signatures.TAG_DOMAIN`         | Typically `UniversalMesasge.DOMAIN_VEHICLE_SECURITY` or `UniversalMessage.DOMAIN_INFOTAINMENT` |
+| Domain         | `Signatures.TAG_DOMAIN`         | Typically `UniversalMessage.DOMAIN_VEHICLE_SECURITY` or `UniversalMessage.DOMAIN_INFOTAINMENT` |
 | VIN            | `Signatures.TAG_PERSONALIZATION`| 17-character vehicle identification number |
 | Epoch          | `Signatures.TAG_EPOCH`          | Copied from `session_info.epoch`           |
 | Expiration time| `Signatures.TAG_EXPIRES_AT`     | Time in seconds according to domain's clock |
@@ -567,7 +567,7 @@ To add HMAC-SHA256 authentication:
  - Derive an HMAC-SHA256 key `K' = HMAC-SHA256(K, "authenticated command")`.
    The "authenticated command" is a string literal.
  - Construct a RoutableMessage as described [above](#Message-encoding).
- - Set the `RoutableMessge.payload.protobuf_message_as_bytes` to `P`.
+ - Set the `RoutableMessage.payload.protobuf_message_as_bytes` to `P`.
  - Set the `RoutableMessage.signature_data.signer_identity.public_key` to
    `ENCODE_PUBLIC(C)` (see [Notation](#Notation)).
  - Compute the HMAC tag `tag = HMAC-SHA256(K', M || P)`.
@@ -585,7 +585,7 @@ To encrypt the plaintext protobuf `P` using AES-GCM:
  - Encrypt the `P` with the above parameters to obtain a ciphertext `x` and a
    message authentication `tag`.
  - Construct a RoutableMessage as described [above](#Message-encoding).
- - Set the `RoutableMessge.payload.protobuf_message_as_bytes` to `x`.
+ - Set the `RoutableMessage.payload.protobuf_message_as_bytes` to `x`.
  - Set the `RoutableMessage.signature_data.signer_identity.public_key` to
    `ENCODE_PUBLIC(C)` (see [Notation](#Notation)).
  - Populate
@@ -785,7 +785,7 @@ field obtained by [serializing](#Metadata serialization) the following metadata:
 | Value | Tag | Description |
 | ----- | --- | ----------- |
 | Signature type | `Signatures.TAG_SIGNATURE_TYPE` | `Signatures.SIGNATURE_TYPE_AES_GCM_RESPONSE` |
-| Domain         | `Signatures.TAG_DOMAIN`         | Typically `UniversalMesasge.DOMAIN_VEHICLE_SECURITY` or `UniversalMessage.DOMAIN_INFOTAINMENT` |
+| Domain         | `Signatures.TAG_DOMAIN`         | Typically `UniversalMessage.DOMAIN_VEHICLE_SECURITY` or `UniversalMessage.DOMAIN_INFOTAINMENT` |
 | VIN            | `Signatures.TAG_PERSONALIZATION`| 17-character vehicle identification number |
 | Counter        | `Signatures.TAG_COUNTER`        | Monotonic counter, initially `session_info.counter` |
 | Flags          | `Signatures.TAG_FLAGS`          | Flags field of the response, not the request |
