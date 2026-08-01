@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/teslamotors/vehicle-command/internal/log"
 	"github.com/teslamotors/vehicle-command/pkg/cli"
+	"github.com/teslamotors/vehicle-command/pkg/log"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
 	"github.com/teslamotors/vehicle-command/pkg/proxy"
 )

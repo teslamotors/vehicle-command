@@ -17,10 +17,10 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
-	"github.com/teslamotors/vehicle-command/internal/log"
 	"github.com/teslamotors/vehicle-command/pkg/account"
 	"github.com/teslamotors/vehicle-command/pkg/cache"
 	"github.com/teslamotors/vehicle-command/pkg/connector/inet"
+	"github.com/teslamotors/vehicle-command/pkg/log"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
 	"github.com/teslamotors/vehicle-command/pkg/sign"
 	"github.com/teslamotors/vehicle-command/pkg/vehicle"

@@ -12,7 +12,7 @@ import (
 	"runtime"
 	"time"
 
-	debugger "github.com/teslamotors/vehicle-command/internal/log"
+	debugger "github.com/teslamotors/vehicle-command/pkg/log"
 
 	"github.com/teslamotors/vehicle-command/pkg/connector/ble"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
