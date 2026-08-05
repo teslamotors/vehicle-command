@@ -1194,3 +1194,86 @@ func TestDefaultFetchVehicleAndLiveVehicle(t *testing.T) {
 		t.Fatalf("Execute: %v", err)
 	}
 }
+
+// outOfRegionBody mirrors the JSON error Tesla's Fleet API returns with HTTP 421. The correct
+// region is named in the body rather than in an Alt-Svc header.
+func outOfRegionBody(host string) string {
+	return fmt.Sprintf(`{"response":null,"error":"user out of region, use base URL: https://%s, see https://developer.tesla.com/docs/fleet-api#regional-requirements","error_description":""}`, host)
+}
+
+func TestForwardRequestRegionRedirectFromBody(t *testing.T) {
+	const altHost = "fleet-api.prd.eu.vn.cloud.tesla.com"
+	p := newTestProxy(t)
+	p.Timeout = 5 * time.Second
+	var hosts []string
+	var bodies []string
+	attempts := 0
+	p.client = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		attempts++
+		hosts = append(hosts, req.URL.Host)
+		body, _ := io.ReadAll(req.Body)
+		bodies = append(bodies, string(body))
+		if attempts == 1 {
+			return jsonResponse(http.StatusMisdirectedRequest, outOfRegionBody(altHost), nil), nil
+		}
+		return jsonResponse(http.StatusOK, `{"ok":true}`, nil), nil
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/1/vehicles/"+testVIN+"/wake_up", strings.NewReader(`{"n":1}`))
+	req.Header.Set("Authorization", authHeader())
+	p.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if len(hosts) != 2 || hosts[0] != testHost || hosts[1] != altHost {
+		t.Fatalf("hosts = %#v", hosts)
+	}
+	if bodies[0] != `{"n":1}` || bodies[1] != `{"n":1}` {
+		t.Fatalf("bodies = %#v", bodies)
+	}
+	if got := p.fetchDomainForSubject(testSubject); got != altHost {
+		t.Fatalf("cached domain = %q", got)
+	}
+}
+
+func TestForwardRequestIgnoresNonTeslaRedirect(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		header string
+		body   string
+	}{
+		{name: "AltSvc", header: h2Prefix + "attacker.example.com", body: `{}`},
+		{name: "Body", body: outOfRegionBody("attacker.example.com")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			p := newTestProxy(t)
+			p.Timeout = 5 * time.Second
+			var hosts []string
+			p.client = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				hosts = append(hosts, req.URL.Host)
+				header := make(http.Header)
+				if test.header != "" {
+					header.Set("Alt-Svc", test.header)
+				}
+				return jsonResponse(http.StatusMisdirectedRequest, test.body, header), nil
+			})
+
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, "/api/1/vehicles", nil)
+			req.Header.Set("Authorization", authHeader())
+			p.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusMisdirectedRequest {
+				t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+			}
+			if len(hosts) != 1 || hosts[0] != testHost {
+				t.Fatalf("hosts = %#v", hosts)
+			}
+			if got := p.fetchDomainForSubject(testSubject); got != "" {
+				t.Fatalf("cached domain = %q, want no update", got)
+			}
+		})
+	}
+}

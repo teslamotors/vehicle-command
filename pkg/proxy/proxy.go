@@ -217,6 +217,30 @@ var connectionHeaders = []string{
 	"Upgrade",
 }
 
+// validRedirectHost reports whether host, which may include a port, belongs to Tesla. The proxy
+// caches the host it is redirected to and reuses it for later requests from the same account, so
+// an untrusted value would divert subsequent traffic, including the client's OAuth token.
+func validRedirectHost(host string) bool {
+	if name, _, err := net.SplitHostPort(host); err == nil {
+		host = name
+	}
+	return inet.ValidTeslaDomainSuffix(host)
+}
+
+// regionRedirectHost returns the Fleet API host that an out-of-region response redirects to, or an
+// empty string if there is none to follow. Tesla names the correct region either in an Alt-Svc
+// header or in the JSON error body, so both are checked.
+func regionRedirectHost(header http.Header, body []byte) string {
+	altSvc := header.Values("Alt-Svc")
+	idx := slices.IndexFunc(altSvc, func(str string) bool { return strings.HasPrefix(str, h2Prefix) })
+	if idx >= 0 {
+		if host := altSvc[idx][len(h2Prefix):]; validRedirectHost(host) {
+			return host
+		}
+	}
+	return inet.RegionRedirectHost(string(body))
+}
+
 // forwardRequest is the fallback handler for "/api/1/*".
 // It forwards GET and POST requests to Tesla using the proxy's OAuth token.
 func (p *Proxy) forwardRequest(acct *account.Account, w http.ResponseWriter, req *http.Request) {
@@ -290,15 +314,12 @@ func (p *Proxy) forwardRequest(acct *account.Account, w http.ResponseWriter, req
 			return
 		}
 
-		if result.StatusCode == http.StatusMisdirectedRequest && result.Header.Get("Alt-Svc") != "" {
-			altSvc := result.Header.Values("Alt-Svc")
-			idx := slices.IndexFunc(altSvc, func(str string) bool { return strings.HasPrefix(str, h2Prefix) })
-			if idx == -1 {
-				writeJSONError(w, result.StatusCode, err)
-				return
-			}
+		var altHost string
+		if result.StatusCode == http.StatusMisdirectedRequest {
+			altHost = regionRedirectHost(result.Header, body)
+		}
 
-			altHost := altSvc[idx][len(h2Prefix):]
+		if altHost != "" {
 			log.Debug("Received HTTP Status 421. Updating server URL to %s", altHost)
 			acct.Host = altHost
 			p.updateDomainForSubject(acct.Subject, acct.Host)
