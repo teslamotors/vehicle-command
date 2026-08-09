@@ -823,28 +823,50 @@ func TestVehicleCommandProtocolNotSupportedFallsBack(t *testing.T) {
 }
 
 func TestVehicleCommandUseRESTAPIFallsBack(t *testing.T) {
-	p := newTestProxy(t)
-	var forwardedBody string
-	p.client = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		body, _ := io.ReadAll(req.Body)
-		forwardedBody = string(body)
-		return jsonResponse(http.StatusOK, `{"rest":true}`, nil), nil
-	})
-	p.fetchVehicle = func(context.Context, *account.Account, string) (vehicleSession, error) {
-		t.Fatal("REST-only command should not open a vehicle session")
-		return nil, nil
+	cases := []struct {
+		name    string
+		command string
+		body    string
+	}{
+		{"navigation_request", "navigation_request", `{"locale":"en"}`},
+		// GitHub #136: heat level is not in the signed VehicleAction protos.
+		{"steering_wheel_heat_level", "remote_steering_wheel_heat_level_request", `{"level":2}`},
+		{"auto_steering_wheel_heat", "remote_auto_steering_wheel_heat_climate_request", `{"on":true}`},
 	}
 
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/1/vehicles/"+testVIN+"/command/navigation_request", strings.NewReader(`{"locale":"en"}`))
-	req.Header.Set("Authorization", authHeader())
-	p.ServeHTTP(rec, req)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := newTestProxy(t)
+			var forwardedPath, forwardedBody string
+			p.client = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				forwardedPath = req.URL.Path
+				body, _ := io.ReadAll(req.Body)
+				forwardedBody = string(body)
+				return jsonResponse(http.StatusOK, `{"response":{"result":true,"reason":""}}`, nil), nil
+			})
+			p.fetchVehicle = func(context.Context, *account.Account, string) (vehicleSession, error) {
+				t.Fatal("REST-only command should not open a vehicle session")
+				return nil, nil
+			}
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	if forwardedBody != `{"locale":"en"}` {
-		t.Fatalf("forwarded body=%q", forwardedBody)
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/api/1/vehicles/"+testVIN+"/command/"+tc.command, strings.NewReader(tc.body))
+			req.Header.Set("Authorization", authHeader())
+			p.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+			}
+			if forwardedPath != "/api/1/vehicles/"+testVIN+"/command/"+tc.command {
+				t.Fatalf("path=%q", forwardedPath)
+			}
+			if forwardedBody != tc.body {
+				t.Fatalf("forwarded body=%q, want %q", forwardedBody, tc.body)
+			}
+			if !strings.Contains(rec.Body.String(), `"result":true`) {
+				t.Fatalf("proxy should return Fleet API REST response, got %s", rec.Body.String())
+			}
+		})
 	}
 }
 
