@@ -33,6 +33,10 @@ type session struct {
 	private     authentication.ECDHPrivateKey
 	ready       bool
 	readySignal chan struct{}
+	// helloError is set when the most recent session-info (hello) verification
+	// failed. Callers use it to surface crypto failures instead of waiting for
+	// a context deadline after a stale cached session can no longer be updated.
+	helloError error
 }
 
 // newSession creates a new session object that can authorize commands going to
@@ -65,9 +69,17 @@ func (s *session) authorize(ctx context.Context, command *universal.RoutableMess
 		lifetime = time.Until(deadline)
 	}
 	for {
+		s.lock.Lock()
+		if err := s.helloError; err != nil && !s.ready {
+			s.lock.Unlock()
+			return err
+		}
+		readySignal := s.readySignal
+		s.lock.Unlock()
+
 		attempted := false
 		select {
-		case <-s.readySignal:
+		case <-readySignal:
 			// Prevent a race condition where the goroutine may unblock but the
 			// session becomes invalid before it authorizes the command.
 			s.lock.Lock()
@@ -80,9 +92,13 @@ func (s *session) authorize(ctx context.Context, command *universal.RoutableMess
 				case connector.AuthMethodHMAC:
 					err = s.ctx.AuthorizeHMAC(command, lifetime)
 				default:
+					s.lock.Unlock()
 					return errors.New("unrecognized authentication method")
 				}
 				attempted = true
+			} else if err := s.helloError; err != nil {
+				s.lock.Unlock()
+				return err
 			}
 			s.lock.Unlock()
 			if err != nil {
@@ -92,6 +108,9 @@ func (s *session) authorize(ctx context.Context, command *universal.RoutableMess
 				return nil
 			}
 		case <-ctx.Done():
+			if err := s.lastHelloError(); err != nil {
+				return err
+			}
 			return ctx.Err()
 		}
 	}
@@ -114,6 +133,12 @@ func (s *session) export() []byte {
 //
 // The caller must verify that the challenge matches the UUID of a
 // recently-transmitted message.
+//
+// If verification fails for an established session (for example after a
+// vehicle security controller is replaced and the domain public key changes),
+// the local session is invalidated so the next handshake can trust-on-first-use
+// the new vehicle key. The verification error is retained for callers that
+// would otherwise block until their context deadline.
 func (s *session) processHello(challenge, info, tag []byte) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -122,15 +147,46 @@ func (s *session) processHello(challenge, info, tag []byte) error {
 	if s.ctx == nil {
 		s.ctx, err = authentication.NewAuthenticatedSigner(s.private, s.vin, challenge, info, tag)
 		if err != nil {
+			s.helloError = err
 			return err
 		}
 	} else {
 		err = s.ctx.UpdateSignedSessionInfo(challenge, info, tag)
+		if err != nil {
+			s.invalidateLocked(err)
+			return err
+		}
 	}
 
-	if err == nil && !s.ready {
+	s.helloError = nil
+	if !s.ready {
 		s.ready = true
 		close(s.readySignal) // Notifies blocked goroutines that we're ready to authorize commands
 	}
-	return err
+	return nil
+}
+
+// invalidateLocked drops a locally cached session so a fresh handshake is required.
+// Caller must hold s.lock.
+func (s *session) invalidateLocked(err error) {
+	s.ctx = nil
+	s.helloError = err
+	if s.ready {
+		s.ready = false
+		// readySignal was already closed when the session became ready; allocate a
+		// new channel for the next handshake.
+		s.readySignal = make(chan struct{}, 1)
+	}
+}
+
+func (s *session) lastHelloError() error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	return s.helloError
+}
+
+func (s *session) clearHelloError() {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	s.helloError = nil
 }

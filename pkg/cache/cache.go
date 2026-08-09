@@ -111,3 +111,16 @@ func (c *SessionCache) GetEntry(vin string) ([]dispatcher.CacheEntry, bool) {
 	session, ok := c.Vehicles[vin]
 	return session, ok
 }
+
+// Clear removes all cached sessions for vin.
+//
+// Clients should call this when session establishment fails due to a crypto
+// verification error (for example an invalid session-info HMAC after a vehicle
+// security controller is replaced). Clearing the entry forces the next
+// connection to perform a fresh handshake instead of repeatedly loading a
+// stale session that can never be updated.
+func (c *SessionCache) Clear(vin string) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	delete(c.Vehicles, vin)
+}

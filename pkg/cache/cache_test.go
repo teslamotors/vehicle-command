@@ -97,3 +97,11 @@ func TestEviction(t *testing.T) {
 	_ = c.Update("1", generateTestSessions(1))
 	verifyCache(t, c, []int{4, 5, 6, 7, 8})
 }
+
+func TestClear(t *testing.T) {
+	c := generateTestCache(t, 3)
+	c.Clear("1")
+	verifyCache(t, c, []int{0, 2})
+	c.Clear("missing")
+	verifyCache(t, c, []int{0, 2})
+}
