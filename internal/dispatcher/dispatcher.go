@@ -78,9 +78,13 @@ func (d *Dispatcher) StartSession(ctx context.Context, domain universal.Domain) 
 	if !ok {
 		d.sessions[domain], err = newSession(d.privateKey, d.conn.VIN())
 		s = d.sessions[domain]
-	} else if s != nil && s.ctx != nil {
+	} else if s != nil && s.ctx != nil && s.ready {
 		log.Info("Session for %s loaded from cache", domain)
 		sessionReady = true
+	} else if s != nil {
+		// A prior session-info verification failure may have invalidated this
+		// domain. Clear the sticky error before attempting a fresh handshake.
+		s.clearHelloError()
 	}
 	d.sessionLock.Unlock()
 	if err != nil || sessionReady {
@@ -99,11 +103,16 @@ func (d *Dispatcher) tryStartSession(ctx context.Context, s *session, domain uni
 		return false, err
 	}
 	defer recv.Close()
+
+	s.lock.Lock()
+	readySignal := s.readySignal
+	s.lock.Unlock()
+
 	// Request sent
 	select {
 	case <-ctx.Done():
-		return false, ctx.Err()
-	case <-s.readySignal:
+		return false, sessionOrContextError(s, ctx.Err())
+	case <-readySignal:
 		return false, nil
 	case <-time.After(d.RetryInterval()):
 		return true, nil
@@ -112,16 +121,32 @@ func (d *Dispatcher) tryStartSession(ctx context.Context, s *session, domain uni
 			return false, err
 		}
 	}
-	// Reply received. Normally, the dispatcher will clear readySignal after processing the reply;
-	// the other branches handle malformed vehicle responses.
+	// Reply received. Normally, the dispatcher will close readySignal after processing the reply;
+	// the other branches handle malformed vehicle responses. If session-info
+	// verification failed, surface that crypto error instead of retrying until
+	// the caller's deadline (see GitHub issue #393).
+	s.lock.Lock()
+	readySignal = s.readySignal
+	s.lock.Unlock()
+
 	select {
-	case <-s.readySignal:
+	case <-readySignal:
 		return false, nil
 	case <-ctx.Done():
-		return false, ctx.Err()
+		return false, sessionOrContextError(s, ctx.Err())
 	case <-time.After(d.RetryInterval()):
+		if err := s.lastHelloError(); err != nil {
+			return false, err
+		}
 		return true, nil
 	}
+}
+
+func sessionOrContextError(s *session, ctxErr error) error {
+	if err := s.lastHelloError(); err != nil {
+		return err
+	}
+	return ctxErr
 }
 
 // StartSessions starts sessions with the provided vehicle domains (or all supported domains, if
@@ -217,6 +242,9 @@ func (d *Dispatcher) checkForSessionUpdate(message *universal.RoutableMessage, h
 	}
 
 	if err = session.processHello(message.GetRequestUuid(), sessionInfo, tag); err != nil {
+		// processHello invalidates an established session on verification
+		// failure so Cache() no longer exports the stale entry and the next
+		// StartSession performs a fresh handshake.
 		log.Warning("[%02x] Session info error: %s", message.GetRequestUuid(), err)
 		return
 	}
@@ -415,13 +443,21 @@ func (d *Dispatcher) Send(ctx context.Context, message *universal.RoutableMessag
 	if auth != connector.AuthMethodNone {
 		d.sessionLock.Lock()
 		session, ok := d.sessions[message.GetToDestination().GetDomain()]
+		var sessionErr error
 		if ok {
 			session.lock.Lock()
 			ok = session.ready
+			if !ok {
+				sessionErr = session.helloError
+			}
 			session.lock.Unlock()
 		}
 		d.sessionLock.Unlock()
 		if !ok {
+			if sessionErr != nil {
+				log.Warning("Session for %s unavailable after session-info error: %s", message.GetToDestination().GetDomain(), sessionErr)
+				return nil, sessionErr
+			}
 			log.Warning("No session available for %s", message.GetToDestination().GetDomain())
 			return nil, protocol.ErrNoSession
 		}

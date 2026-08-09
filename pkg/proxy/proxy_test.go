@@ -51,6 +51,7 @@ type mockVehicle struct {
 	disconnected bool
 	sessionOK    bool
 	updatedCache bool
+	clearedCache bool
 }
 
 func (m *mockVehicle) Connect(context.Context) error {
@@ -76,6 +77,10 @@ func (m *mockVehicle) StartSession(context.Context) error {
 func (m *mockVehicle) UpdateCachedSessions(*cache.SessionCache) error {
 	m.updatedCache = true
 	return nil
+}
+
+func (m *mockVehicle) ClearCachedSessions(*cache.SessionCache) {
+	m.clearedCache = true
 }
 
 func (m *mockVehicle) Execute(func(*vehicle.Vehicle) error) error {
@@ -775,8 +780,9 @@ func TestVehicleCommandConnectAndSessionErrors(t *testing.T) {
 
 	t.Run("session error", func(t *testing.T) {
 		p := newTestProxy(t)
+		mock := &mockVehicle{sessionErr: errors.New("InvalidSignature: session info hmac invalid")}
 		p.fetchVehicle = func(context.Context, *account.Account, string) (vehicleSession, error) {
-			return &mockVehicle{sessionErr: errors.New("handshake failed")}, nil
+			return mock, nil
 		}
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodPost, "/api/1/vehicles/"+testVIN+"/command/door_lock", nil)
@@ -784,6 +790,15 @@ func TestVehicleCommandConnectAndSessionErrors(t *testing.T) {
 		p.ServeHTTP(rec, req)
 		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("status=%d", rec.Code)
+		}
+		if !mock.clearedCache {
+			t.Fatal("expected stale session cache entry to be cleared on StartSession failure")
+		}
+		if mock.updatedCache {
+			t.Fatal("did not expect UpdateCachedSessions after StartSession failure")
+		}
+		if !strings.Contains(rec.Body.String(), "session info hmac invalid") {
+			t.Fatalf("response %q should surface the session-info error, not a generic timeout", rec.Body.String())
 		}
 	})
 }
@@ -1003,6 +1018,7 @@ func (b *blockingVehicle) StartSession(context.Context) error { return nil }
 func (b *blockingVehicle) UpdateCachedSessions(*cache.SessionCache) error {
 	return nil
 }
+func (b *blockingVehicle) ClearCachedSessions(*cache.SessionCache) {}
 func (b *blockingVehicle) Execute(func(*vehicle.Vehicle) error) error {
 	b.onExecute()
 	return nil

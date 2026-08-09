@@ -896,11 +896,45 @@ func TestNoValidHandshakeResponse(t *testing.T) {
 	}
 	defer dispatcher.Stop()
 
-	const maxCallbacks = 5
-	callbackCount := 0
+	conn.callback = func(_ *dummyConnector, message *universal.RoutableMessage) ([]byte, bool) {
+		reply := initReply(message)
+		reply.SignedMessageStatus = &universal.MessageStatus{
+			SignedMessageFault: universal.MessageFault_E_MESSAGEFAULT_ERROR_UNKNOWN_KEY_ID,
+		}
+		encoded, err := proto.Marshal(reply)
+		if err != nil {
+			panic(err)
+		}
+		return encoded, true
+	}
+
+	if err := dispatcher.StartSession(ctx, testDomain); !errors.Is(err, protocol.ErrKeyNotPaired) {
+		t.Errorf("Expected key not paired but got %s", err)
+	}
+}
+
+func TestMalformedHandshakeSessionInfoReturnsError(t *testing.T) {
+	conn := newDummyConnector(t)
+	defer conn.Close()
+
+	key, err := authentication.NewECDHPrivateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	dispatcher, err := New(conn, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := dispatcher.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer dispatcher.Stop()
 
 	conn.callback = func(_ *dummyConnector, message *universal.RoutableMessage) ([]byte, bool) {
-		callbackCount++ // caller holds d.lock
 		reply := initReply(message)
 		reply.Payload = &universal.RoutableMessage_SessionInfo{}
 		reply.SubSigData = &universal.RoutableMessage_SignatureData{
@@ -912,11 +946,6 @@ func TestNoValidHandshakeResponse(t *testing.T) {
 				},
 			},
 		}
-		if callbackCount == maxCallbacks {
-			reply.SignedMessageStatus = &universal.MessageStatus{
-				SignedMessageFault: universal.MessageFault_E_MESSAGEFAULT_ERROR_UNKNOWN_KEY_ID,
-			}
-		}
 		encoded, err := proto.Marshal(reply)
 		if err != nil {
 			panic(err)
@@ -924,8 +953,16 @@ func TestNoValidHandshakeResponse(t *testing.T) {
 		return encoded, true
 	}
 
-	if err := dispatcher.StartSession(ctx, testDomain); !errors.Is(err, protocol.ErrKeyNotPaired) {
-		t.Errorf("Expected key not paired but got %s", err)
+	err = dispatcher.StartSession(ctx, testDomain)
+	if err == nil {
+		t.Fatal("expected StartSession to fail on malformed session info")
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("StartSession returned deadline exceeded; want session-info error, got %v", err)
+	}
+	var authErr *authentication.Error
+	if !errors.As(err, &authErr) {
+		t.Fatalf("expected authentication.Error, got %T: %v", err, err)
 	}
 }
 
@@ -1028,5 +1065,180 @@ func TestCache(t *testing.T) {
 		checkFault(t, message, universal.MessageFault_E_MESSAGEFAULT_ERROR_NONE)
 	case <-ctx.Done():
 		t.Errorf("Timed out waiting for response")
+	}
+}
+
+// TestStartSessionInvalidHMACReturnsError reproduces GitHub issue #393 for the
+// handshake path: a vehicle session-info reply with a bad HMAC used to cause
+// StartSession to retry until the context deadline, surfacing only
+// "context deadline exceeded". It must return the crypto error instead.
+func TestStartSessionInvalidHMACReturnsError(t *testing.T) {
+	conn := newDummyConnector(t)
+	defer conn.Close()
+
+	conn.callback = func(d *dummyConnector, message *universal.RoutableMessage) ([]byte, bool) {
+		encoded, handled := handleSessionInfoRequests(d, message)
+		if !handled {
+			return nil, false
+		}
+		var reply universal.RoutableMessage
+		if err := proto.Unmarshal(encoded, &reply); err != nil {
+			panic(err)
+		}
+		tag := reply.GetSignatureData().GetSessionInfoTag().GetTag()
+		if len(tag) == 0 {
+			panic("missing session info tag")
+		}
+		tag[0] ^= 0xff
+		encoded, err := proto.Marshal(&reply)
+		if err != nil {
+			panic(err)
+		}
+		return encoded, true
+	}
+
+	key, err := authentication.NewECDHPrivateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dispatcher, err := New(conn, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := dispatcher.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	err = dispatcher.StartSession(ctx, testDomain)
+	if err == nil {
+		t.Fatal("expected StartSession to fail on invalid session-info HMAC")
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("StartSession returned context deadline exceeded; want session-info HMAC error, got %v", err)
+	}
+	var authErr *authentication.Error
+	if !errors.As(err, &authErr) {
+		t.Fatalf("expected authentication.Error, got %T: %v", err, err)
+	}
+	if authErr.Code != universal.MessageFault_E_MESSAGEFAULT_ERROR_INVALID_SIGNATURE {
+		t.Fatalf("code=%v, want INVALID_SIGNATURE", authErr.Code)
+	}
+	if !bytes.Contains([]byte(err.Error()), []byte("session info hmac invalid")) {
+		t.Fatalf("error %q should mention invalid session-info HMAC", err.Error())
+	}
+}
+
+// TestCachedSessionVehicleKeyRotationInvalidatesSession reproduces the
+// post-service key-rotation case from #393: a stale cached session cannot
+// verify session-info HMACs from the vehicle's new domain key. The dispatcher
+// must drop the stale session and surface the HMAC error instead of hanging
+// until the caller deadline, and Cache() must stop exporting the bad entry.
+func TestCachedSessionVehicleKeyRotationInvalidatesSession(t *testing.T) {
+	conn := newDummyConnector(t)
+
+	key, err := authentication.NewECDHPrivateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dispatcher, err := New(conn, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := dispatcher.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := dispatcher.StartSession(ctx, testDomain); err != nil {
+		t.Fatalf("initial StartSession: %v", err)
+	}
+	cacheEntries := dispatcher.Cache()
+	if len(cacheEntries) == 0 {
+		t.Fatal("expected cache entry after successful handshake")
+	}
+	dispatcher.Stop()
+	conn.Close()
+
+	// Simulate a vehicle security controller replacement: new domain key.
+	conn = newDummyConnector(t)
+	defer conn.Close()
+	rotatedKey, err := authentication.NewECDHPrivateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn.keys[testDomain] = rotatedKey
+
+	dispatcher, err = New(conn, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := dispatcher.LoadCache(cacheEntries); err != nil {
+		t.Fatal(err)
+	}
+	if err := dispatcher.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	// Cached session appears ready; StartSession short-circuits.
+	if err := dispatcher.StartSession(ctx, testDomain); err != nil {
+		t.Fatalf("cached StartSession: %v", err)
+	}
+
+	// Trigger a session-info exchange. The vehicle signs with the new key; the
+	// client still holds the old shared secret → HMAC verification fails.
+	recv, err := dispatcher.RequestSessionInfo(ctx, testDomain)
+	if err != nil {
+		t.Fatalf("RequestSessionInfo: %v", err)
+	}
+	defer recv.Close()
+
+	select {
+	case <-recv.Recv():
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for session info reply: %v", ctx.Err())
+	}
+
+	// Allow the dispatcher's Listen goroutine to finish processHello.
+	time.Sleep(50 * time.Millisecond)
+
+	if len(dispatcher.Cache()) != 0 {
+		t.Fatal("stale session should not remain in Cache() after HMAC failure")
+	}
+
+	// A subsequent authenticated Send must surface the crypto error, not block
+	// until the context deadline.
+	sendCtx, sendCancel := context.WithTimeout(context.Background(), time.Second)
+	defer sendCancel()
+	_, err = dispatcher.Send(sendCtx, testCommand(), connector.AuthMethodHMAC)
+	if err == nil {
+		t.Fatal("expected Send to fail after session invalidation")
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Send returned deadline exceeded; want HMAC error, got %v", err)
+	}
+	if !bytes.Contains([]byte(err.Error()), []byte("session info hmac invalid")) {
+		t.Fatalf("error %q should mention invalid session-info HMAC", err.Error())
+	}
+
+	// After invalidation, a fresh StartSession must TOFU the new vehicle key.
+	handshakeCtx, handshakeCancel := context.WithTimeout(context.Background(), time.Second)
+	defer handshakeCancel()
+	if err := dispatcher.StartSession(handshakeCtx, testDomain); err != nil {
+		t.Fatalf("re-handshake after invalidation: %v", err)
+	}
+	rsp, err := dispatcher.Send(handshakeCtx, testCommand(), connector.AuthMethodHMAC)
+	if err != nil {
+		t.Fatalf("Send after re-handshake: %v", err)
+	}
+	conn.EnqueueReply(t, encodeRoutableMessage(t, replyWithPayload(rsp, []byte("ok"))))
+	select {
+	case message := <-rsp.Recv():
+		checkFault(t, message, universal.MessageFault_E_MESSAGEFAULT_ERROR_NONE)
+	case <-handshakeCtx.Done():
+		t.Fatalf("timed out waiting for post-recovery response: %v", handshakeCtx.Err())
 	}
 }

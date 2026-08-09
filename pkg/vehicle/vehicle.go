@@ -267,6 +267,13 @@ func (v *Vehicle) UpdateCachedSessions(c *cache.SessionCache) error {
 	return c.Update(v.vin, v.dispatcher.Cache())
 }
 
+// ClearCachedSessions removes any cached sessions for this vehicle.
+func (v *Vehicle) ClearCachedSessions(c *cache.SessionCache) {
+	if c != nil {
+		c.Clear(v.vin)
+	}
+}
+
 func (v *Vehicle) LoadCachedSessions(c *cache.SessionCache) error {
 	if data, ok := c.GetEntry(v.vin); ok {
 		return v.dispatcher.LoadCache(data)

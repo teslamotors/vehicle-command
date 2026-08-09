@@ -50,6 +50,7 @@ type vehicleSession interface {
 	Disconnect()
 	StartSession(ctx context.Context) error
 	UpdateCachedSessions(c *cache.SessionCache) error
+	ClearCachedSessions(c *cache.SessionCache)
 	Execute(command func(*vehicle.Vehicle) error) error
 }
 
@@ -470,6 +471,10 @@ func (p *Proxy) handleVehicleCommand(acct *account.Account, w http.ResponseWrite
 		p.forwardRequest(acct, w, req)
 		return err
 	} else if err != nil {
+		// Drop any stale cached session for this VIN so the next request
+		// handshakes instead of reloading an entry that can never be updated
+		// (for example after a vehicle key rotation / invalid session-info HMAC).
+		car.ClearCachedSessions(p.sessions)
 		writeJSONError(w, http.StatusInternalServerError, err)
 		return err
 	}
