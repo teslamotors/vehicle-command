@@ -19,6 +19,8 @@ import (
 	"github.com/teslamotors/vehicle-command/pkg/connector"
 	"github.com/teslamotors/vehicle-command/pkg/connector/inet"
 	"github.com/teslamotors/vehicle-command/pkg/vehicle"
+
+	"golang.org/x/oauth2"
 )
 
 var (
@@ -64,11 +66,16 @@ func buildUserAgent(app string) string {
 // Account allows interaction with a Tesla account.
 type Account struct {
 	// The default UserAgent is constructed from the global UserAgent, but can be overridden.
-	UserAgent  string
-	authHeader string
-	Host       string
-	Subject    string
-	client     http.Client
+	UserAgent string
+	Host      string
+	Subject   string
+
+	// authHeader is used when the Account was created with a static OAuth
+	// access token via [New]. When tokenSource is set, authHeader is unused and
+	// credentials are obtained from tokenSource on each request.
+	authHeader  string
+	tokenSource oauth2.TokenSource
+	client      http.Client
 }
 
 // We don't parse JWTs beyond what's required to extract the API server domain name
@@ -115,21 +122,17 @@ func (p *oauthPayload) domain() string {
 }
 
 // New returns an [Account] that can be used to fetch a [vehicle.Vehicle].
-// Optional userAgent can be passed in - otherwise it will be generated from code
+//
+// oauthToken is a Fleet API OAuth access token (JWT). The token is stored
+// statically on the Account; it is not refreshed. Long-lived applications
+// should prefer [FromTokenSource].
+//
+// Optional userAgent can be passed in - otherwise it will be generated from code.
 func New(oauthToken, userAgent string) (*Account, error) {
-	parts := strings.Split(oauthToken, ".")
-	if len(parts) != 3 {
-		return nil, fmt.Errorf("client provided malformed OAuth token")
-	}
-	payloadJSON, err := base64.RawStdEncoding.DecodeString(parts[1])
+	payload, err := parseOAuthPayload(oauthToken)
 	if err != nil {
-		return nil, fmt.Errorf("client provided malformed OAuth token: %s (%s)", err, parts[1])
+		return nil, err
 	}
-	var payload oauthPayload
-	if err := json.Unmarshal(payloadJSON, &payload); err != nil {
-		return nil, fmt.Errorf("client provided malformed OAuth token: %s", err)
-	}
-
 	domain := payload.domain()
 	if domain == "" {
 		return nil, fmt.Errorf("client provided OAuth token with invalid audiences")
@@ -142,6 +145,85 @@ func New(oauthToken, userAgent string) (*Account, error) {
 	}, nil
 }
 
+// FromTokenSource returns an [Account] that obtains OAuth credentials from ts
+// on each Fleet API request. When ts is a refreshing token source (for example
+// from golang.org/x/oauth2), expired access tokens are renewed automatically,
+// which is required for long-lived processes.
+//
+// Domain and subject are taken from the access token returned by the initial
+// ts.Token() call. The Account wraps ts with [oauth2.ReuseTokenSource] so
+// concurrent callers share cached credentials until they expire.
+func FromTokenSource(ts oauth2.TokenSource, userAgent string) (*Account, error) {
+	if ts == nil {
+		return nil, fmt.Errorf("nil oauth2.TokenSource")
+	}
+	tok, err := ts.Token()
+	if err != nil {
+		return nil, fmt.Errorf("oauth2 token source: %w", err)
+	}
+	if tok == nil || tok.AccessToken == "" {
+		return nil, fmt.Errorf("oauth2 token source returned an empty access token")
+	}
+	payload, err := parseOAuthPayload(tok.AccessToken)
+	if err != nil {
+		return nil, err
+	}
+	domain := payload.domain()
+	if domain == "" {
+		return nil, fmt.Errorf("client provided OAuth token with invalid audiences")
+	}
+	return &Account{
+		UserAgent:   buildUserAgent(userAgent),
+		Host:        domain,
+		Subject:     payload.Subject,
+		tokenSource: oauth2.ReuseTokenSource(tok, ts),
+	}, nil
+}
+
+// FromToken returns an [Account] backed by tok. If tok includes a refresh token
+// and expiry, wrap it with an oauth2.Config TokenSource and use
+// [FromTokenSource] instead so access tokens can be refreshed.
+func FromToken(tok *oauth2.Token, userAgent string) (*Account, error) {
+	if tok == nil {
+		return nil, fmt.Errorf("nil oauth2.Token")
+	}
+	return FromTokenSource(oauth2.StaticTokenSource(tok), userAgent)
+}
+
+func parseOAuthPayload(oauthToken string) (*oauthPayload, error) {
+	parts := strings.Split(oauthToken, ".")
+	if len(parts) != 3 {
+		return nil, fmt.Errorf("client provided malformed OAuth token")
+	}
+	payloadJSON, err := base64.RawStdEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil, fmt.Errorf("client provided malformed OAuth token: %s (%s)", err, parts[1])
+	}
+	var payload oauthPayload
+	if err := json.Unmarshal(payloadJSON, &payload); err != nil {
+		return nil, fmt.Errorf("client provided malformed OAuth token: %s", err)
+	}
+	return &payload, nil
+}
+
+func (a *Account) authorization() (string, error) {
+	if a.tokenSource != nil {
+		tok, err := a.tokenSource.Token()
+		if err != nil {
+			return "", fmt.Errorf("oauth2 token source: %w", err)
+		}
+		if tok == nil || tok.AccessToken == "" {
+			return "", fmt.Errorf("oauth2 token source returned an empty access token")
+		}
+		tokenType := strings.TrimSpace(tok.Type())
+		if tokenType == "" {
+			tokenType = "Bearer"
+		}
+		return tokenType + " " + tok.AccessToken, nil
+	}
+	return a.authHeader, nil
+}
+
 // GetVehicle returns the Vehicle belonging to the account with the provided vin.
 //
 // Providing a nil privateKey is allowed, but a privateKey is required for most Vehicle
@@ -149,8 +231,14 @@ func New(oauthToken, userAgent string) (*Account, error) {
 // an AddKeyRequest; see documentation in [pkg/github.com/teslamotors/vehicle-command/pkg/vehicle]. The
 // sessions parameter may also be nil, but providing a cache.SessionCache avoids a round-trip
 // handshake with the Vehicle in subsequent connections.
+//
+// When the Account was created with [FromTokenSource], the returned vehicle's
+// Fleet API connection fetches a current access token for each request.
 func (a *Account) GetVehicle(_ context.Context, vin string, privateKey authentication.ECDHPrivateKey, sessions *cache.SessionCache) (*vehicle.Vehicle, error) {
 	conn := inet.NewConnection(vin, a.authHeader, a.Host, a.UserAgent)
+	if a.tokenSource != nil {
+		conn.SetAuthHeaderFunc(a.authorization)
+	}
 	car, err := vehicle.NewVehicle(conn, privateKey, sessions)
 	if err != nil {
 		conn.Close()
@@ -168,10 +256,14 @@ func (a *Account) Get(ctx context.Context, endpoint string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error constructing request to %s: %w", endpoint, err)
 	}
+	auth, err := a.authorization()
+	if err != nil {
+		return nil, err
+	}
 	log.Debug("Requesting %s...", url)
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("User-Agent", a.UserAgent)
-	request.Header.Set("Authorization", a.authHeader)
+	request.Header.Set("Authorization", auth)
 	response, err := a.client.Do(request)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching %s: %w", endpoint, err)
@@ -193,7 +285,11 @@ func (a *Account) Get(ctx context.Context, endpoint string) ([]byte, error) {
 }
 
 func (a *Account) sendFleetAPICommand(ctx context.Context, endpoint string, command interface{}) ([]byte, error) {
-	return inet.SendFleetAPICommand(ctx, &a.client, a.UserAgent, a.authHeader, fmt.Sprintf("https://%s/%s", a.Host, endpoint), command)
+	auth, err := a.authorization()
+	if err != nil {
+		return nil, err
+	}
+	return inet.SendFleetAPICommand(ctx, &a.client, a.UserAgent, auth, fmt.Sprintf("https://%s/%s", a.Host, endpoint), command)
 }
 
 // Post sends an HTTP POST request to endpoint.

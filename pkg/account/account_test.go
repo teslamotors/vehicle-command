@@ -1,10 +1,20 @@
 package account
 
 import (
+	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
+
+	"golang.org/x/oauth2"
 )
 
 // b64Encode encodes a string to base64 without padding.
@@ -85,4 +95,185 @@ func TestDomainExtraction(t *testing.T) {
 func makeTestJWT(payload *oauthPayload) string {
 	jwtBody, _ := json.Marshal(payload)
 	return fmt.Sprintf("x.%s.y", b64Encode(string(jwtBody)))
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+type countingTokenSource struct {
+	mu     sync.Mutex
+	calls  atomic.Int32
+	tokens []string
+	err    error
+}
+
+func (s *countingTokenSource) Token() (*oauth2.Token, error) {
+	s.calls.Add(1)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.err != nil {
+		return nil, s.err
+	}
+	if len(s.tokens) == 0 {
+		return nil, fmt.Errorf("no tokens left")
+	}
+	tok := s.tokens[0]
+	if len(s.tokens) > 1 {
+		s.tokens = s.tokens[1:]
+	}
+	return &oauth2.Token{
+		AccessToken: tok,
+		TokenType:   "Bearer",
+		Expiry:      time.Now().Add(-time.Minute), // force refresh on next ReuseTokenSource fetch
+	}, nil
+}
+
+func validAccessToken(aud string) string {
+	return makeTestJWT(&oauthPayload{
+		Audiences: []string{aud},
+		Subject:   "sub-1",
+	})
+}
+
+func TestFromTokenSourceNil(t *testing.T) {
+	if _, err := FromTokenSource(nil, ""); err == nil {
+		t.Fatal("expected error for nil TokenSource")
+	}
+	if _, err := FromToken(nil, ""); err == nil {
+		t.Fatal("expected error for nil Token")
+	}
+}
+
+func TestFromTokenSourceUsesRefreshedAccessToken(t *testing.T) {
+	first := validAccessToken("https://fleet-api.prd.na.vn.cloud.tesla.com")
+	second := validAccessToken("https://fleet-api.prd.na.vn.cloud.tesla.com")
+	src := &countingTokenSource{tokens: []string{first, second}}
+
+	acct, err := FromTokenSource(src, "test-agent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if acct.Host != "fleet-api.prd.na.vn.cloud.tesla.com" {
+		t.Fatalf("Host=%q", acct.Host)
+	}
+	if acct.Subject != "sub-1" {
+		t.Fatalf("Subject=%q", acct.Subject)
+	}
+	if src.calls.Load() != 1 {
+		t.Fatalf("construction should call Token once, got %d", src.calls.Load())
+	}
+
+	var authHeaders []string
+	acct.client = http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			authHeaders = append(authHeaders, req.Header.Get("Authorization"))
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(`{"ok":true}`)),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+
+	// First request: ReuseTokenSource may refresh because expiry was in the past.
+	if _, err := acct.Get(context.Background(), "api/1/vehicles"); err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if _, err := acct.Post(context.Background(), "api/1/users/keys", []byte(`{}`)); err != nil {
+		t.Fatalf("Post: %v", err)
+	}
+	if len(authHeaders) != 2 {
+		t.Fatalf("expected 2 requests, got %d", len(authHeaders))
+	}
+	for i, h := range authHeaders {
+		if !strings.HasPrefix(h, "Bearer ") {
+			t.Fatalf("request %d auth=%q", i, h)
+		}
+		if strings.Contains(h, "Bearer Bearer") {
+			t.Fatalf("request %d duplicated token type: %q", i, h)
+		}
+	}
+	// TokenSource must have been consulted again after the expired cached token.
+	if src.calls.Load() < 2 {
+		t.Fatalf("expected TokenSource refresh, calls=%d", src.calls.Load())
+	}
+}
+
+func TestFromTokenSourcePropagatesToGetVehicle(t *testing.T) {
+	access := validAccessToken("https://fleet-api.prd.na.vn.cloud.tesla.com")
+	src := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: access})
+
+	acct, err := FromTokenSource(src, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var sawAuth string
+	acct.client = http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewReader([]byte(`{"response":{"state":"online"}}`))),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+
+	// Intercept the vehicle connection's HTTP client by building the vehicle
+	// and then sending Wakeup through a custom auth path: replace connection
+	// auth by exercising GetVehicle's SetAuthHeaderFunc wiring via Wakeup on a
+	// connection that uses our round tripper.
+	car, err := acct.GetVehicle(context.Background(), "5YJ3E1EA1KF000001", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer car.Disconnect()
+
+	// The inet connection created by GetVehicle has its own client. Swap in a
+	// recorder by sending through Account.authorization used by the connection
+	// callback — verify the callback returns the static token.
+	auth, err := acct.authorization()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sawAuth = auth
+	if sawAuth != "Bearer "+access {
+		t.Fatalf("authorization=%q", sawAuth)
+	}
+
+	// Ensure GetVehicle installed a live auth func: a TokenSource error should
+	// surface on Fleet API commands through the vehicle connection.
+	errSrc := &countingTokenSource{err: fmt.Errorf("refresh failed")}
+	acct.tokenSource = errSrc
+	if err := car.Wakeup(context.Background()); err == nil || !strings.Contains(err.Error(), "refresh failed") {
+		t.Fatalf("Wakeup error = %v, want refresh failure from TokenSource", err)
+	}
+}
+
+func TestNewRemainsStatic(t *testing.T) {
+	access := validAccessToken("https://fleet-api.prd.na.vn.cloud.tesla.com")
+	acct, err := New(access, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got string
+	acct.client = http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			got = req.Header.Get("Authorization")
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(`{}`)),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+	if _, err := acct.Get(context.Background(), "api/1/vehicles"); err != nil {
+		t.Fatal(err)
+	}
+	if got != "Bearer "+access {
+		t.Fatalf("Authorization=%q", got)
+	}
 }
