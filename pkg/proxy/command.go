@@ -117,6 +117,15 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 			return nil, err
 		}
 		return func(v *vehicle.Vehicle) error { return v.SetSteeringWheelHeater(ctx, on) }, nil
+	case "remote_steering_wheel_heat_level_request":
+		// HvacSteeringWheelHeaterAction only exposes power_on in the current
+		// Vehicle Command Protocol protos; heat level is not expressible as a
+		// signed VehicleAction. Fleet API REST supports this command, so fall
+		// back instead of returning invalid_command / a no-op success.
+		return nil, ErrCommandUseRESTAPI
+	case "remote_auto_steering_wheel_heat_climate_request":
+		// Same limitation as heat_level: no signed VehicleAction yet.
+		return nil, ErrCommandUseRESTAPI
 	case "set_bioweapon_mode":
 		on, err := params.getBool("on", true)
 		if err != nil {
