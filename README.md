@@ -217,6 +217,21 @@ registered `example.com`, provide a link to
 will handle the rest. Customers with more than one Tesla product must select the desired vehicle before clicking
 the link or scanning the QR code.
 
+Keys enrolled through this cloud (`_ak`) flow are installed as **Fleet Manager**
+keys. On vehicles running firmware 2023.38 or later, Fleet Manager keys can
+authorize commands over the Fleet API but **cannot authorize commands over
+BLE**. Attempts to use such a key over BLE typically fail with
+`MESSAGEFAULT_ERROR_INSUFFICIENT_PRIVILEGES`. This is vehicle policy, not an
+SDK bug; see the [Fleet Manager role
+description](pkg/protocol/protocol.md#roles) in the protocol documentation.
+
+If your application also needs local BLE control, pair a separate key over BLE
+(for example with `tesla-control -ble add-key-request ... owner cloud_key` and
+an NFC confirmation). That path enrolls an Owner (or other explicitly chosen)
+role that is allowed to send BLE commands. The `cloud_key` argument there is
+only a key form-factor label — it is not the same as `_ak` Fleet Manager
+enrollment.
+
 ### Generating a server TLS key and certificate
 
 The HTTP Proxy requires a TLS server certificate. For testing and development
