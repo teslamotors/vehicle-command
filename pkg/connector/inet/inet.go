@@ -143,7 +143,12 @@ func ValidTeslaDomainSuffix(domain string) bool {
 // response body is not necessarily nil if the error is set.
 func (c *Connection) SendFleetAPICommand(ctx context.Context, endpoint string, command interface{}) ([]byte, error) {
 	url := fmt.Sprintf("https://%s/%s", c.serverURL, endpoint)
-	rsp, err := SendFleetAPICommand(ctx, c.client, c.UserAgent, c.authHeader, url, command)
+	authHeader, err := c.authorization()
+	if err != nil {
+		// Credential failures are not remedied by retrying the same request.
+		return nil, &protocol.CommandError{Err: err, PossibleSuccess: false, PossibleTemporary: false}
+	}
+	rsp, err := SendFleetAPICommand(ctx, c.client, c.UserAgent, authHeader, url, command)
 	if err != nil {
 		var httpErr *HTTPError
 		if errors.As(err, &httpErr) && httpErr.Code == http.StatusMisdirectedRequest {
@@ -165,6 +170,10 @@ type Connection struct {
 	serverURL  string
 	inbox      chan []byte
 	authHeader string
+	// authHeaderFunc, when set, is called before each Fleet API request to
+	// obtain a current Authorization header value (for example from a
+	// refreshing oauth2.TokenSource). When nil, authHeader is used.
+	authHeaderFunc func() (string, error)
 
 	lock     sync.Mutex
 	lastPoke time.Time
@@ -181,6 +190,20 @@ func NewConnection(vin string, authHeader, serverURL, userAgent string) *Connect
 		inbox:      make(chan []byte, connector.BufferSize),
 	}
 	return &conn
+}
+
+// SetAuthHeaderFunc installs a callback that supplies the Authorization header
+// for each Fleet API request. Passing nil restores the static header provided
+// to [NewConnection].
+func (c *Connection) SetAuthHeaderFunc(fn func() (string, error)) {
+	c.authHeaderFunc = fn
+}
+
+func (c *Connection) authorization() (string, error) {
+	if c.authHeaderFunc != nil {
+		return c.authHeaderFunc()
+	}
+	return c.authHeader, nil
 }
 
 func (c *Connection) PreferredAuthMethod() connector.AuthMethod {

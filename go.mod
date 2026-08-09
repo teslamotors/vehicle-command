@@ -1,6 +1,8 @@
 module github.com/teslamotors/vehicle-command
 
-go 1.23
+go 1.23.0
+
+toolchain go1.23.6
 
 require (
 	github.com/99designs/keyring v1.2.2
@@ -8,6 +10,7 @@ require (
 	github.com/go-ble/ble v0.0.0-20240122180141-8c5522f54333
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
+	golang.org/x/oauth2 v0.28.0
 	golang.org/x/term v0.5.0
 	google.golang.org/protobuf v1.34.2
 )
@@ -18,7 +21,6 @@ require (
 	github.com/danieljoos/wincred v1.2.0 // indirect
 	github.com/dvsekhvalnov/jose2go v1.7.0 // indirect
 	github.com/godbus/dbus v0.0.0-20190726142602-4481cbc300e2 // indirect
-	github.com/google/go-cmp v0.5.8 // indirect
 	github.com/gsterjov/go-libsecret v0.0.0-20161001094733-a6f4afe4910c // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.1 // indirect
 	github.com/mattn/go-colorable v0.1.6 // indirect
