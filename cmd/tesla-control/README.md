@@ -44,6 +44,12 @@ tesla-control -ble add-key-request public_key.pem owner cloud_key
 The program should instruct you to confirm the new key by tapping your NFC card
 on the center console.
 
+Note: this BLE pairing step enrolls an **Owner** key (role `owner`) with form
+factor `cloud_key`. That is different from enrolling a partner key through
+`https://tesla.com/_ak/<domain>`, which installs a **Fleet Manager** key that
+cannot send commands over BLE on firmware 2023.38+. See the repository
+[README](/README.md#distributing-your-public-key) for details.
+
 ## Sending commands
 
 You should now be able to send commands over BLE:
