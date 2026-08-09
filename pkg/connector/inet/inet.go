@@ -183,6 +183,19 @@ func NewConnection(vin string, authHeader, serverURL, userAgent string) *Connect
 	return &conn
 }
 
+// SetHTTPClient sets the HTTP client used for Fleet API requests on this
+// connection. Passing nil restores a client with Go's default settings.
+//
+// Applications typically use this to install a custom [http.RoundTripper] for
+// logging, metrics, timeouts, or tests without mutating [http.DefaultClient].
+func (c *Connection) SetHTTPClient(client *http.Client) {
+	if client == nil {
+		c.client = &http.Client{}
+		return
+	}
+	c.client = client
+}
+
 func (c *Connection) PreferredAuthMethod() connector.AuthMethod {
 	return connector.AuthMethodHMAC
 }

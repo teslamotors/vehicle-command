@@ -68,7 +68,7 @@ type Account struct {
 	authHeader string
 	Host       string
 	Subject    string
-	client     http.Client
+	client     *http.Client
 }
 
 // We don't parse JWTs beyond what's required to extract the API server domain name
@@ -139,7 +139,31 @@ func New(oauthToken, userAgent string) (*Account, error) {
 		authHeader: "Bearer " + strings.TrimSpace(oauthToken),
 		Host:       domain,
 		Subject:    payload.Subject,
+		client:     &http.Client{},
 	}, nil
+}
+
+// SetHTTPClient sets the HTTP client used for Fleet API requests made by Account
+// methods such as [Account.Get] and [Account.Post].
+//
+// Passing nil restores a client with Go's default settings. The same client is
+// also used by vehicles returned from subsequent [Account.GetVehicle] calls.
+//
+// This allows applications to install a custom [http.RoundTripper] for logging,
+// metrics, timeouts, or tests without mutating [http.DefaultClient].
+func (a *Account) SetHTTPClient(client *http.Client) {
+	if client == nil {
+		a.client = &http.Client{}
+		return
+	}
+	a.client = client
+}
+
+func (a *Account) httpClient() *http.Client {
+	if a.client == nil {
+		a.client = &http.Client{}
+	}
+	return a.client
 }
 
 // GetVehicle returns the Vehicle belonging to the account with the provided vin.
@@ -151,6 +175,7 @@ func New(oauthToken, userAgent string) (*Account, error) {
 // handshake with the Vehicle in subsequent connections.
 func (a *Account) GetVehicle(_ context.Context, vin string, privateKey authentication.ECDHPrivateKey, sessions *cache.SessionCache) (*vehicle.Vehicle, error) {
 	conn := inet.NewConnection(vin, a.authHeader, a.Host, a.UserAgent)
+	conn.SetHTTPClient(a.httpClient())
 	car, err := vehicle.NewVehicle(conn, privateKey, sessions)
 	if err != nil {
 		conn.Close()
@@ -172,7 +197,7 @@ func (a *Account) Get(ctx context.Context, endpoint string) ([]byte, error) {
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("User-Agent", a.UserAgent)
 	request.Header.Set("Authorization", a.authHeader)
-	response, err := a.client.Do(request)
+	response, err := a.httpClient().Do(request)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching %s: %w", endpoint, err)
 	}
@@ -193,7 +218,7 @@ func (a *Account) Get(ctx context.Context, endpoint string) ([]byte, error) {
 }
 
 func (a *Account) sendFleetAPICommand(ctx context.Context, endpoint string, command interface{}) ([]byte, error) {
-	return inet.SendFleetAPICommand(ctx, &a.client, a.UserAgent, a.authHeader, fmt.Sprintf("https://%s/%s", a.Host, endpoint), command)
+	return inet.SendFleetAPICommand(ctx, a.httpClient(), a.UserAgent, a.authHeader, fmt.Sprintf("https://%s/%s", a.Host, endpoint), command)
 }
 
 // Post sends an HTTP POST request to endpoint.
