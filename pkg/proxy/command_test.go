@@ -13,6 +13,42 @@ import (
 	"github.com/teslamotors/vehicle-command/pkg/vehicle"
 )
 
+func TestDomainsForCommand(t *testing.T) {
+	tests := []struct {
+		command     string
+		wantDomains []protocol.Domain
+		wantSkip    bool
+	}{
+		{"wake_up", nil, true},
+		{"door_lock", []protocol.Domain{protocol.DomainVCSEC}, false},
+		{"door_unlock", []protocol.Domain{protocol.DomainVCSEC}, false},
+		{"actuate_trunk", []protocol.Domain{protocol.DomainVCSEC}, false},
+		{"remote_start_drive", []protocol.Domain{protocol.DomainVCSEC}, false},
+		{"open_tonneau", []protocol.Domain{protocol.DomainVCSEC}, false},
+		{"auto_conditioning_start", []protocol.Domain{protocol.DomainInfotainment}, false},
+		{"charge_start", []protocol.Domain{protocol.DomainInfotainment}, false},
+		{"flash_lights", []protocol.Domain{protocol.DomainInfotainment}, false},
+		{"window_control", []protocol.Domain{protocol.DomainInfotainment}, false},
+		{"not_a_real_command", nil, false},
+	}
+	for _, tt := range tests {
+		domains, skip := proxy.DomainsForCommand(tt.command)
+		if skip != tt.wantSkip {
+			t.Errorf("%s: skip=%v, want %v", tt.command, skip, tt.wantSkip)
+		}
+		if len(domains) != len(tt.wantDomains) {
+			t.Errorf("%s: domains=%v, want %v", tt.command, domains, tt.wantDomains)
+			continue
+		}
+		for i := range domains {
+			if domains[i] != tt.wantDomains[i] {
+				t.Errorf("%s: domains=%v, want %v", tt.command, domains, tt.wantDomains)
+				break
+			}
+		}
+	}
+}
+
 func TestExtractCommandAction(t *testing.T) {
 	ctx := context.Background()
 	params := proxy.RequestParameters{

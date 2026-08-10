@@ -48,7 +48,7 @@ type httpDoer interface {
 type vehicleSession interface {
 	Connect(ctx context.Context) error
 	Disconnect()
-	StartSession(ctx context.Context) error
+	StartSession(ctx context.Context, domains []protocol.Domain) error
 	UpdateCachedSessions(c *cache.SessionCache) error
 	Execute(command func(*vehicle.Vehicle) error) error
 }
@@ -57,8 +57,8 @@ type liveVehicle struct {
 	*vehicle.Vehicle
 }
 
-func (v *liveVehicle) StartSession(ctx context.Context) error {
-	return v.Vehicle.StartSession(ctx, nil)
+func (v *liveVehicle) StartSession(ctx context.Context, domains []protocol.Domain) error {
+	return v.Vehicle.StartSession(ctx, domains)
 }
 
 func (v *liveVehicle) Execute(command func(*vehicle.Vehicle) error) error {
@@ -465,17 +465,20 @@ func (p *Proxy) handleVehicleCommand(acct *account.Account, w http.ResponseWrite
 	}
 	defer car.Disconnect()
 
-	if err := car.StartSession(ctx); errors.Is(err, protocol.ErrProtocolNotSupported) {
-		p.markUnsupportedVIN(vin)
-		p.forwardRequest(acct, w, req)
-		return err
-	} else if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err)
-		return err
+	domains, skipSession := DomainsForCommand(command)
+	if !skipSession {
+		if err := car.StartSession(ctx, domains); errors.Is(err, protocol.ErrProtocolNotSupported) {
+			p.markUnsupportedVIN(vin)
+			p.forwardRequest(acct, w, req)
+			return err
+		} else if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, err)
+			return err
+		}
+		defer func() {
+			_ = car.UpdateCachedSessions(p.sessions)
+		}()
 	}
-	defer func() {
-		_ = car.UpdateCachedSessions(p.sessions)
-	}()
 
 	if err = car.Execute(commandToExecuteFunc); err == ErrCommandUseRESTAPI {
 		return err

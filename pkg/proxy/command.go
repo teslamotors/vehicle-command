@@ -22,6 +22,9 @@ var (
 	// ErrCommandUseRESTAPI indicates vehicle/command is not supported by the protocol
 	ErrCommandUseRESTAPI = errors.New("command requires using the REST API")
 
+	domainVCSECOnly        = []protocol.Domain{protocol.DomainVCSEC}
+	domainInfotainmentOnly = []protocol.Domain{protocol.DomainInfotainment}
+
 	seatPositions = []vehicle.SeatPosition{
 		vehicle.SeatFrontLeft,
 		vehicle.SeatFrontRight,
@@ -56,6 +59,44 @@ var (
 
 // RequestParameters allows simple type check
 type RequestParameters map[string]interface{}
+
+// DomainsForCommand returns the vehicle domains that must be handshaken before running command,
+// and whether StartSession can be skipped entirely.
+//
+// A nil domains slice means both VCSEC and Infotainment (the historical proxy default). Prefer
+// classifying commands explicitly; unknown commands keep the dual-domain behavior.
+func DomainsForCommand(command string) (domains []protocol.Domain, skipSession bool) {
+	switch command {
+	case "wake_up":
+		// Over Fleet API, Wakeup is a plain REST call and does not need a signed session.
+		return nil, true
+	case "door_lock", "door_unlock", "actuate_trunk", "remote_start_drive",
+		"open_tonneau", "close_tonneau", "stop_tonneau":
+		return domainVCSECOnly, false
+	case "adjust_volume", "media_next_fav", "media_prev_fav", "media_next_track", "media_prev_track",
+		"media_volume_down", "media_volume_up", "media_toggle_playback",
+		"auto_conditioning_start", "auto_conditioning_stop", "charge_max_range",
+		"remote_seat_cooler_request", "remote_seat_heater_request", "remote_auto_seat_climate_request",
+		"remote_steering_wheel_heater_request", "set_bioweapon_mode", "set_cabin_overheat_protection",
+		"set_climate_keeper_mode", "set_cop_temp", "set_preconditioning_max", "set_temps",
+		"charge_port_door_open", "charge_port_door_close", "flash_lights", "honk_horn",
+		"set_low_power_mode", "keep_accessory_power_mode", "charge_standard", "charge_start",
+		"charge_stop", "set_charging_amps", "set_scheduled_charging", "set_charge_limit",
+		"set_scheduled_departure", "add_charge_schedule", "add_precondition_schedule",
+		"remove_charge_schedule", "remove_precondition_schedule",
+		"set_pin_to_drive", "clear_pin_to_drive_admin", "erase_user_data", "reset_pin_to_drive_pin",
+		"reset_valet_pin", "guest_mode", "set_sentry_mode", "set_valet_mode", "set_vehicle_name",
+		"speed_limit_activate", "speed_limit_deactivate", "speed_limit_clear_pin",
+		"speed_limit_clear_pin_admin", "speed_limit_set_limit",
+		"parental_controls_activate", "parental_controls_deactivate", "parental_controls_enable_setting",
+		"parental_controls_set_speed_limit", "parental_controls_clear_pin_admin",
+		"trigger_homelink", "schedule_software_update", "cancel_software_update", "window_control":
+		return domainInfotainmentOnly, false
+	default:
+		// Unclassified / future commands keep today's both-domain handshake.
+		return nil, false
+	}
+}
 
 // ExtractCommandAction use command to define which action should be executed.
 func ExtractCommandAction(ctx context.Context, command string, params RequestParameters) (func(*vehicle.Vehicle) error, error) {

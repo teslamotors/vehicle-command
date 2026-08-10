@@ -43,14 +43,16 @@ func (timeoutErr) Error() string { return "timeout" }
 func (timeoutErr) Timeout() bool { return true }
 
 type mockVehicle struct {
-	connectErr   error
-	sessionErr   error
-	executeErr   error
-	executeCalls int
-	connected    bool
-	disconnected bool
-	sessionOK    bool
-	updatedCache bool
+	connectErr     error
+	sessionErr     error
+	executeErr     error
+	executeCalls   int
+	sessionCalls   int
+	connected      bool
+	disconnected   bool
+	sessionOK      bool
+	updatedCache   bool
+	sessionDomains []protocol.Domain
 }
 
 func (m *mockVehicle) Connect(context.Context) error {
@@ -65,7 +67,9 @@ func (m *mockVehicle) Disconnect() {
 	m.disconnected = true
 }
 
-func (m *mockVehicle) StartSession(context.Context) error {
+func (m *mockVehicle) StartSession(_ context.Context, domains []protocol.Domain) error {
+	m.sessionCalls++
+	m.sessionDomains = append([]protocol.Domain(nil), domains...)
 	if m.sessionErr != nil {
 		return m.sessionErr
 	}
@@ -686,6 +690,52 @@ func TestVehicleCommandSuccess(t *testing.T) {
 	if !mock.connected || !mock.sessionOK || mock.executeCalls != 1 || !mock.disconnected || !mock.updatedCache {
 		t.Fatalf("mock state: %+v", mock)
 	}
+	if mock.sessionCalls != 1 || len(mock.sessionDomains) != 1 || mock.sessionDomains[0] != protocol.DomainVCSEC {
+		t.Fatalf("session domains=%v calls=%d, want VCSEC only", mock.sessionDomains, mock.sessionCalls)
+	}
+}
+
+func TestVehicleCommandWakeUpSkipsSession(t *testing.T) {
+	p := newTestProxy(t)
+	mock := &mockVehicle{}
+	p.fetchVehicle = func(context.Context, *account.Account, string) (vehicleSession, error) {
+		return mock, nil
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/1/vehicles/"+testVIN+"/command/wake_up", nil)
+	req.Header.Set("Authorization", authHeader())
+	p.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if mock.sessionCalls != 0 || mock.sessionOK || mock.updatedCache {
+		t.Fatalf("wake_up should skip StartSession/cache update: %+v", mock)
+	}
+	if !mock.connected || mock.executeCalls != 1 || !mock.disconnected {
+		t.Fatalf("mock state: %+v", mock)
+	}
+}
+
+func TestVehicleCommandClimateUsesInfotainmentOnly(t *testing.T) {
+	p := newTestProxy(t)
+	mock := &mockVehicle{}
+	p.fetchVehicle = func(context.Context, *account.Account, string) (vehicleSession, error) {
+		return mock, nil
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/1/vehicles/"+testVIN+"/command/auto_conditioning_start", nil)
+	req.Header.Set("Authorization", authHeader())
+	p.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if mock.sessionCalls != 1 || len(mock.sessionDomains) != 1 || mock.sessionDomains[0] != protocol.DomainInfotainment {
+		t.Fatalf("session domains=%v calls=%d, want Infotainment only", mock.sessionDomains, mock.sessionCalls)
+	}
 }
 
 func TestVehicleCommandMethodNotAllowed(t *testing.T) {
@@ -997,9 +1047,11 @@ type blockingVehicle struct {
 	onExecute func()
 }
 
-func (b *blockingVehicle) Connect(context.Context) error      { return nil }
-func (b *blockingVehicle) Disconnect()                        {}
-func (b *blockingVehicle) StartSession(context.Context) error { return nil }
+func (b *blockingVehicle) Connect(context.Context) error { return nil }
+func (b *blockingVehicle) Disconnect()                   {}
+func (b *blockingVehicle) StartSession(context.Context, []protocol.Domain) error {
+	return nil
+}
 func (b *blockingVehicle) UpdateCachedSessions(*cache.SessionCache) error {
 	return nil
 }
