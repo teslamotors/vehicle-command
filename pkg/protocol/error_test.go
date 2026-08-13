@@ -1,10 +1,50 @@
 package protocol
 
 import (
+	"fmt"
 	"testing"
 
 	universal "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/universalmessage"
 )
+
+func TestWrappedErrorClassification(t *testing.T) {
+	possiblySucceeded := NewError("command outcome unknown", true, true)
+	tests := []struct {
+		name             string
+		err              error
+		mayHaveSucceeded bool
+		temporary        bool
+		shouldRetry      bool
+	}{
+		{
+			name:        "temporary error",
+			err:         fmt.Errorf("wrapped: %w", ErrBusy),
+			temporary:   true,
+			shouldRetry: true,
+		},
+		{
+			name:             "possibly succeeded error",
+			err:              fmt.Errorf("wrapped: %w", possiblySucceeded),
+			mayHaveSucceeded: true,
+			temporary:        true,
+			shouldRetry:      false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := MayHaveSucceeded(test.err); got != test.mayHaveSucceeded {
+				t.Errorf("MayHaveSucceeded() = %v, want %v", got, test.mayHaveSucceeded)
+			}
+			if got := Temporary(test.err); got != test.temporary {
+				t.Errorf("Temporary() = %v, want %v", got, test.temporary)
+			}
+			if got := ShouldRetry(test.err); got != test.shouldRetry {
+				t.Errorf("ShouldRetry() = %v, want %v", got, test.shouldRetry)
+			}
+		})
+	}
+}
 
 func TestRetriableError(t *testing.T) {
 	var err RoutableMessageError
