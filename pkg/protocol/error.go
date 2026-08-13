@@ -104,7 +104,8 @@ func (e *KeychainError) Error() string {
 // MayHaveSucceeded returns true if err is a CommandError that indicates the command may have been
 // executed but the client did not receive a confirmation from the vehicle.
 func MayHaveSucceeded(err error) bool {
-	if commErr, ok := err.(Error); ok && commErr.MayHaveSucceeded() {
+	var commErr Error
+	if errors.As(err, &commErr) && commErr.MayHaveSucceeded() {
 		return true
 	}
 	return false
@@ -113,7 +114,8 @@ func MayHaveSucceeded(err error) bool {
 // Temporary returns true if err is a CommandError that indicates the command failed due to possibly
 // transient conditions that do not require user action to resolve.
 func Temporary(err error) bool {
-	if commErr, ok := err.(Error); ok && commErr.Temporary() {
+	var commErr Error
+	if errors.As(err, &commErr) && commErr.Temporary() {
 		return true
 	}
 	return false
@@ -124,7 +126,8 @@ func ShouldRetry(err error) bool {
 	if err == nil {
 		return false
 	}
-	if e, ok := err.(Error); ok {
+	var e Error
+	if errors.As(err, &e) {
 		if e.MayHaveSucceeded() {
 			return false
 		}
