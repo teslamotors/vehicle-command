@@ -80,6 +80,10 @@ func (e *HTTPError) Temporary() bool {
 		e.Code == http.StatusMisdirectedRequest
 }
 
+// SendFleetAPICommand POSTs command to url.
+//
+// If authHeader is empty, client is responsible for authenticating the request; see
+// [NewConnectionWithClient].
 func SendFleetAPICommand(ctx context.Context, client *http.Client, userAgent, authHeader string, url string, command interface{}) ([]byte, error) {
 	var body []byte
 	var ok bool
@@ -98,7 +102,9 @@ func SendFleetAPICommand(ctx context.Context, client *http.Client, userAgent, au
 
 	request.Header.Set("User-Agent", userAgent)
 	request.Header.Set("Content-type", "application/json")
-	request.Header.Set("Authorization", authHeader)
+	if authHeader != "" {
+		request.Header.Set("Authorization", authHeader)
+	}
 	request.Header.Set("Accept", "*/*")
 
 	result, err := client.Do(request)
@@ -170,7 +176,10 @@ type Connection struct {
 	lastPoke time.Time
 }
 
-// NewConnection creates a Connection.
+// NewConnection creates a Connection that sends authHeader with every request.
+//
+// The header is fixed for the lifetime of the Connection, so it stops working once the token it
+// carries expires. Use [NewConnectionWithClient] to authenticate with credentials that refresh.
 func NewConnection(vin string, authHeader, serverURL, userAgent string) *Connection {
 	conn := Connection{
 		UserAgent:  userAgent,
@@ -179,6 +188,31 @@ func NewConnection(vin string, authHeader, serverURL, userAgent string) *Connect
 		serverURL:  serverURL,
 		authHeader: authHeader,
 		inbox:      make(chan []byte, connector.BufferSize),
+	}
+	return &conn
+}
+
+// NewConnectionWithClient creates a Connection that sends its requests with client.
+//
+// The client is responsible for authenticating the requests: the Connection sets no
+// Authorization header of its own. Typically client is built from an OAuth token source, so
+// that expired tokens are refreshed transparently:
+//
+//	ts := oauth2.StaticTokenSource(&oauth2.Token{RefreshToken: refreshToken})
+//	conf := &oauth2.Config{ClientID: clientID, Endpoint: teslaEndpoint}
+//	conn := inet.NewConnectionWithClient(conf.Client(ctx, ts), vin, serverURL, userAgent)
+//
+// A nil client is replaced by [http.DefaultClient], which sends unauthenticated requests.
+func NewConnectionWithClient(client *http.Client, vin, serverURL, userAgent string) *Connection {
+	if client == nil {
+		client = http.DefaultClient
+	}
+	conn := Connection{
+		UserAgent: userAgent,
+		vin:       vin,
+		client:    client,
+		serverURL: serverURL,
+		inbox:     make(chan []byte, connector.BufferSize),
 	}
 	return &conn
 }
