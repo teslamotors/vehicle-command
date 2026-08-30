@@ -16,7 +16,7 @@ func TestSendAfterClose(t *testing.T) {
 	}))
 	defer server.Close()
 	domain, _ := strings.CutPrefix(server.URL, "https://")
-	conn := NewConnection("VIN123", server.Client(), domain, "")
+	conn := NewConnectionWithClient(server.Client(), "VIN123", domain, "")
 	if err := conn.Send(context.Background(), []byte{}); err != nil {
 		t.Errorf("Send failed: %s", err)
 	}

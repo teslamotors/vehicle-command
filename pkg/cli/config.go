@@ -64,7 +64,6 @@ import (
 	"github.com/teslamotors/vehicle-command/pkg/connector/ble"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
 	"github.com/teslamotors/vehicle-command/pkg/vehicle"
-	"golang.org/x/oauth2"
 
 	"github.com/99designs/keyring"
 )
@@ -433,7 +432,7 @@ func (c *Config) Account() (*account.Account, error) {
 	if err != nil {
 		return nil, err
 	}
-	return account.New(oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token}), "")
+	return account.New(token, "")
 }
 
 // SavePrivateKey writes skey to the system keyring or file, depending on what options are

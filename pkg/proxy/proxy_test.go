@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"golang.org/x/oauth2"
 
 	"github.com/teslamotors/vehicle-command/pkg/account"
 	"github.com/teslamotors/vehicle-command/pkg/cache"
@@ -1174,7 +1173,7 @@ func TestForwardRequestBodyReadError(t *testing.T) {
 
 func TestDefaultFetchVehicleAndLiveVehicle(t *testing.T) {
 	p := newTestProxy(t)
-	acct, err := account.New(oauth2.StaticTokenSource(&oauth2.Token{AccessToken: testJWT(testSubject, "https://"+testHost)}), proxyProtocolVersion)
+	acct, err := account.New(testJWT(testSubject, "https://"+testHost), proxyProtocolVersion)
 	if err != nil {
 		t.Fatal(err)
 	}

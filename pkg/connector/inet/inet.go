@@ -80,7 +80,11 @@ func (e *HTTPError) Temporary() bool {
 		e.Code == http.StatusMisdirectedRequest
 }
 
-func SendFleetAPICommand(ctx context.Context, client *http.Client, userAgent string, url string, command interface{}) ([]byte, error) {
+// SendFleetAPICommand POSTs command to url.
+//
+// If authHeader is empty, client is responsible for authenticating the request; see
+// [NewConnectionWithClient].
+func SendFleetAPICommand(ctx context.Context, client *http.Client, userAgent, authHeader string, url string, command interface{}) ([]byte, error) {
 	var body []byte
 	var ok bool
 	if body, ok = command.([]byte); !ok {
@@ -98,6 +102,9 @@ func SendFleetAPICommand(ctx context.Context, client *http.Client, userAgent str
 
 	request.Header.Set("User-Agent", userAgent)
 	request.Header.Set("Content-type", "application/json")
+	if authHeader != "" {
+		request.Header.Set("Authorization", authHeader)
+	}
 	request.Header.Set("Accept", "*/*")
 
 	result, err := client.Do(request)
@@ -142,7 +149,7 @@ func ValidTeslaDomainSuffix(domain string) bool {
 // response body is not necessarily nil if the error is set.
 func (c *Connection) SendFleetAPICommand(ctx context.Context, endpoint string, command interface{}) ([]byte, error) {
 	url := fmt.Sprintf("https://%s/%s", c.serverURL, endpoint)
-	rsp, err := SendFleetAPICommand(ctx, c.client, c.UserAgent, url, command)
+	rsp, err := SendFleetAPICommand(ctx, c.client, c.UserAgent, c.authHeader, url, command)
 	if err != nil {
 		var httpErr *HTTPError
 		if errors.As(err, &httpErr) && httpErr.Code == http.StatusMisdirectedRequest {
@@ -158,20 +165,48 @@ func (c *Connection) SendFleetAPICommand(ctx context.Context, endpoint string, c
 
 // Connection implements the connector.Connector interface by POSTing commands to a server.
 type Connection struct {
-	UserAgent string
-	vin       string
-	client    *http.Client
-	serverURL string
-	inbox     chan []byte
+	UserAgent  string
+	vin        string
+	client     *http.Client
+	serverURL  string
+	inbox      chan []byte
+	authHeader string
 
 	lock     sync.Mutex
 	lastPoke time.Time
 }
 
-// NewConnection creates a Connection. The client is responsible for authenticating requests,
-// typically by wrapping an [golang.org/x/oauth2.TokenSource] with
-// [golang.org/x/oauth2.NewClient].
-func NewConnection(vin string, client *http.Client, serverURL, userAgent string) *Connection {
+// NewConnection creates a Connection that sends authHeader with every request.
+//
+// The header is fixed for the lifetime of the Connection, so it stops working once the token it
+// carries expires. Use [NewConnectionWithClient] to authenticate with credentials that refresh.
+func NewConnection(vin string, authHeader, serverURL, userAgent string) *Connection {
+	conn := Connection{
+		UserAgent:  userAgent,
+		vin:        vin,
+		client:     &http.Client{},
+		serverURL:  serverURL,
+		authHeader: authHeader,
+		inbox:      make(chan []byte, connector.BufferSize),
+	}
+	return &conn
+}
+
+// NewConnectionWithClient creates a Connection that sends its requests with client.
+//
+// The client is responsible for authenticating the requests: the Connection sets no
+// Authorization header of its own. Typically client is built from an OAuth token source, so
+// that expired tokens are refreshed transparently:
+//
+//	ts := oauth2.StaticTokenSource(&oauth2.Token{RefreshToken: refreshToken})
+//	conf := &oauth2.Config{ClientID: clientID, Endpoint: teslaEndpoint}
+//	conn := inet.NewConnectionWithClient(conf.Client(ctx, ts), vin, serverURL, userAgent)
+//
+// A nil client is replaced by [http.DefaultClient], which sends unauthenticated requests.
+func NewConnectionWithClient(client *http.Client, vin, serverURL, userAgent string) *Connection {
+	if client == nil {
+		client = http.DefaultClient
+	}
 	conn := Connection{
 		UserAgent: userAgent,
 		vin:       vin,

@@ -24,7 +24,6 @@ import (
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
 	"github.com/teslamotors/vehicle-command/pkg/sign"
 	"github.com/teslamotors/vehicle-command/pkg/vehicle"
-	"golang.org/x/oauth2"
 )
 
 const (
@@ -71,8 +70,7 @@ func getAccount(req *http.Request) (*account.Account, error) {
 	if !ok {
 		return nil, fmt.Errorf("client did not provide an OAuth token")
 	}
-	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
-	return account.New(ts, proxyProtocolVersion)
+	return account.New(token, proxyProtocolVersion)
 }
 
 // Proxy exposes an HTTP API for sending vehicle commands.

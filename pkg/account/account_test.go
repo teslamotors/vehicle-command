@@ -4,19 +4,14 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
-
-	"golang.org/x/oauth2"
 )
 
 // b64Encode encodes a string to base64 without padding.
 func b64Encode(payload string) string {
 	return base64.RawStdEncoding.EncodeToString([]byte(payload))
-}
-
-// ts wraps a fixed access token in a TokenSource.
-func ts(token string) oauth2.TokenSource {
-	return oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
 }
 
 // TestNewAccount tests the creation of a new account with various JWT scenarios.
@@ -40,7 +35,7 @@ func TestNewAccount(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			acct, err := New(ts(test.jwt), "")
+			acct, err := New(test.jwt, "")
 			if (err != nil) != test.shouldError {
 				t.Errorf("Unexpected result: err = %v, shouldError = %v", err, test.shouldError)
 			}
@@ -57,7 +52,7 @@ func TestDomainDefault(t *testing.T) {
 		Audiences: []string{"https://auth.tesla.com/nts"},
 	}
 
-	acct, err := New(ts(makeTestJWT(payload)), "")
+	acct, err := New(makeTestJWT(payload), "")
 	if err != nil {
 		t.Fatalf("Returned error on valid JWT: %s", err)
 	}
@@ -78,13 +73,59 @@ func TestDomainExtraction(t *testing.T) {
 		Subject: "SUBJECT",
 	}
 
-	acct, err := New(ts(makeTestJWT(payload)), "")
+	acct, err := New(makeTestJWT(payload), "")
 	if err != nil {
 		t.Fatalf("Returned error on valid JWT: %s", err)
 	}
 	expectedHost := "fleet-api.prd.eu.vn.cloud.tesla.com"
 	if acct == nil || acct.Host != expectedHost || acct.Subject != "SUBJECT" {
 		t.Errorf("acct = %+v, expected Host = %s", acct, expectedHost)
+	}
+}
+
+// TestNewWithClient checks that the supplied client is used as-is, and that New keeps sending a
+// fixed bearer token.
+func TestNewWithClient(t *testing.T) {
+	jwt := makeTestJWT(&oauthPayload{Audiences: []string{"https://auth.tesla.com/nts"}})
+
+	client := &http.Client{}
+	acct, err := NewWithClient(client, jwt, "")
+	if err != nil {
+		t.Fatalf("Returned error on valid JWT: %s", err)
+	}
+	if acct.client != client {
+		t.Error("NewWithClient did not use the supplied client")
+	}
+
+	acct, err = New(jwt, "")
+	if err != nil {
+		t.Fatalf("Returned error on valid JWT: %s", err)
+	}
+	transport, ok := acct.client.Transport.(*bearerTransport)
+	if !ok {
+		t.Fatalf("New used transport %T, expected *bearerTransport", acct.client.Transport)
+	}
+	if transport.header != "Bearer "+jwt {
+		t.Errorf("transport.header = %q, expected %q", transport.header, "Bearer "+jwt)
+	}
+}
+
+// TestBearerTransport checks that the Authorization header reaches the server.
+func TestBearerTransport(t *testing.T) {
+	var got string
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, req *http.Request) {
+		got = req.Header.Get("Authorization")
+	}))
+	defer server.Close()
+
+	client := &http.Client{Transport: &bearerTransport{header: "Bearer token"}}
+	rsp, err := client.Get(server.URL)
+	if err != nil {
+		t.Fatalf("Get failed: %s", err)
+	}
+	rsp.Body.Close()
+	if got != "Bearer token" {
+		t.Errorf("Authorization = %q, expected %q", got, "Bearer token")
 	}
 }
 
