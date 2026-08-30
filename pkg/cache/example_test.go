@@ -19,9 +19,8 @@ func Example() {
 	defer conn.Close()
 
 	// Try to load cache from disk if it doesn't already exist
-	var err error
-	var myCache *cache.SessionCache
-	if myCache, err = cache.ImportFromFile(cacheFilename); err != nil {
+	myCache, err := cache.ImportFromFile(cacheFilename)
+	if err != nil {
 		myCache = cache.New(5) // Create a cache that holds sessions for up to five vehicles
 	}
 
