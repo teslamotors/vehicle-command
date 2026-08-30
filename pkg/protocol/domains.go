@@ -9,6 +9,7 @@ import (
 type Domain = universal.Domain
 
 const (
+	DomainNone = universal.Domain_DOMAIN_BROADCAST
 	// DomainVCSEC handles (un)lock, remote start drive, keychain management commands.
 	DomainVCSEC = universal.Domain_DOMAIN_VEHICLE_SECURITY
 	// DomainInfotainment handles commands that terminate on the vehicle's infotainment system.

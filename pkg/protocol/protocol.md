@@ -43,7 +43,7 @@ above are for printability.
      Messages addressed to `DOMAIN_VEHICLE_SECURITY` (VCSEC) parse this as a
      [`vcsec.UnsignedMessage`](protobuf/vcsec.proto), while messages addressed to
      `DOMAIN_INFOTAINMENT` parse this as a
-     [`carsever.Action`](protobuf/car_server.proto).
+     [`carserver.Action`](protobuf/car_server.proto).
    * `payload.session_info_request` is a [handshake request](#Request) from a
      client. The client needs to complete a handshake before it can send commands.
    * `payload.session_info` is a [handshake response](#Response) from the vehicle.
@@ -59,10 +59,10 @@ above are for printability.
  * The vehicle sets `signedMessageStatus` to indicate protocol-layer errors.
    [Application-layer errors](#Response-handling) appear in
    `protobuf_message_as_bytes`.
- * The `flags` field is a bit mask of `universal_message.Flags` values. There
-   is currently no need for clients to use this field; future versions of the
-   protocol may use this field to add authenticated data that is discarded by
-   older vehicles.
+ * The `flags` field is a bit mask of `universal_message.Flags` values.
+   Vehicles authenticate this value, but ignore unrecognized bits. Clients
+   should always set the `FLAG_ENCRYPT_RESPONSE` bit, which instructs vehicles
+   with compatible firmware (2024.38+) to encrypt the response.
 
 ## Decoding messages
 
@@ -120,7 +120,7 @@ Messages can be sent to vehicles either over a REST API or over BLE.
 ### HTTPS
 
 See [Fleet API
-documentation](https://developer.tesla.com/docs/fleet-api#fleet-api) for
+documentation](https://developer.tesla.com/docs/fleet-api/getting-started/what-is-fleet-api) for
 information on using OAuth authentication.
 
 To send a message to a vehicle, make a POST request to
@@ -136,7 +136,7 @@ a command, just that the server received a response. The `RoutableMessage` may
 contain an error message.
 
 See [online
-documentation](https://developer.tesla.com/docs/tesla-fleet-api#response-codes)
+documentation](https://developer.tesla.com/docs/fleet-api/getting-started/conventions#response-codes)
 for information on other HTTP status codes.
 
 Although communication between clients and Tesla's servers use TLS/TCP, the
@@ -201,7 +201,7 @@ A **Fleet Manager** represents a cloud-based Owner key. In vehicles running
 2023.38 or later, a Fleet Manager cannot add or remove other users' keys from
 the vehicle and cannot send commands over BLE. If a cloud-based service needs
 to manage Owner and Driver access, this should be done at the account level
-using [Fleet API](https://developer.tesla.com/docs/tesla-fleet-api#vehicle-endpoints).
+using [Fleet API](https://developer.tesla.com/docs/fleet-api/endpoints/vehicle-commands).
 
 A **Vehicle Monitor** can read vehicle data, such as location information, but
 cannot authorize commands that change the vehicle's state.
@@ -209,10 +209,15 @@ cannot authorize commands that change the vehicle's state.
 A **Charging Manager** can read vehicle data and authorize commands that affect
 vehicle charging.
 
+A **Guest** key is essentially a temporary Driver key, with an automated
+lifecycle intended to facilitate vehicle rentals. See
+[Fleet API documentation](https://developer.tesla.com/docs/fleet-api/endpoints/vehicle-commands#guest-mode).
+
 A **Service** key bootstraps pairing other keys and authorizes commands on
 behalf of service technicians. Service keys can remotely (un)lock vehicles in
-order to provide roadside assistance, but vehicles in their default state
-prevent Service keys from authorizing other commands over the Internet.
+order to provide roadside assistance, as well as remotely delete (but not add)
+Driver, Guest, and Fleet Manager keys. Vehicles in their default state prevent
+Service keys from authorizing other commands over the Internet.
 
 ### Metadata serialization
 
@@ -275,7 +280,7 @@ in the remainder of the document.
 
 *Do not use this key except to debug implementations using the test vectors
 included in these documents. Since the private key is published, enrolling the
-public key on a vehicle may result in unauthorized access.
+public key on a vehicle may result in unauthorized access.*
 
 In `vehicle.key`:
 
@@ -464,7 +469,7 @@ fceb679ee7bca756fcd441bf238bf2f338629b41d9eb9c67be1b32c9672ce300
 
 ---
 
-Next, the client [serializes the following metadata](#Metadata serialization):
+Next, the client [serializes the following metadata](#Metadata-serialization):
 
  * `TAG_SIGNATURE_TYPE`: `Signatures.SIGNATURE_TYPE_HMAC`
  * `TAG_PERSONALIZATION`: `VIN`
@@ -528,12 +533,13 @@ The client serializes the following metadata values into a string `M`:
 
 | Value | Tag | Description |
 | ----- | --- | ----------- |
-| Signature type | `Signatures.TAG_SIGNATURE_TYPE` | Either `Signatures.SIGNATURE_TYPE_HMAC` or `Signatures.SIGNATURE_TYPE_AES_GCM_PERSONALIZED`. See below. |
-| Domain         | `Signatures.TAG_DOMAIN`         | Typically `UniversalMesasge.DOMAIN_VEHICLE_SECURITY` or `UniversalMessage.DOMAIN_INFOTAINMENT` |
+| Signature type | `Signatures.TAG_SIGNATURE_TYPE` | Either `Signatures.SIGNATURE_TYPE_HMAC_PERSONALIZED` or `Signatures.SIGNATURE_TYPE_AES_GCM_PERSONALIZED`. See below. |
+| Domain         | `Signatures.TAG_DOMAIN`         | Typically `UniversalMessage.DOMAIN_VEHICLE_SECURITY` or `UniversalMessage.DOMAIN_INFOTAINMENT` |
 | VIN            | `Signatures.TAG_PERSONALIZATION`| 17-character vehicle identification number |
 | Epoch          | `Signatures.TAG_EPOCH`          | Copied from `session_info.epoch`           |
 | Expiration time| `Signatures.TAG_EXPIRES_AT`     | Time in seconds according to domain's clock |
 | Counter        | `Signatures.TAG_COUNTER`        | Monotonic counter, initially `session_info.counter` |
+| Flags          | `Signatures.TAG_FLAGS`          | Request flag bit mask. Only included if non-zero. |
 
 Setting the expiration time requires the client to track the difference between
 the domain's clock and the local clock. Note that each domain has its own clock.
@@ -561,7 +567,7 @@ To add HMAC-SHA256 authentication:
  - Derive an HMAC-SHA256 key `K' = HMAC-SHA256(K, "authenticated command")`.
    The "authenticated command" is a string literal.
  - Construct a RoutableMessage as described [above](#Message-encoding).
- - Set the `RoutableMessge.payload.protobuf_message_as_bytes` to `P`.
+ - Set the `RoutableMessage.payload.protobuf_message_as_bytes` to `P`.
  - Set the `RoutableMessage.signature_data.signer_identity.public_key` to
    `ENCODE_PUBLIC(C)` (see [Notation](#Notation)).
  - Compute the HMAC tag `tag = HMAC-SHA256(K', M || P)`.
@@ -579,7 +585,7 @@ To encrypt the plaintext protobuf `P` using AES-GCM:
  - Encrypt the `P` with the above parameters to obtain a ciphertext `x` and a
    message authentication `tag`.
  - Construct a RoutableMessage as described [above](#Message-encoding).
- - Set the `RoutableMessge.payload.protobuf_message_as_bytes` to `x`.
+ - Set the `RoutableMessage.payload.protobuf_message_as_bytes` to `x`.
  - Set the `RoutableMessage.signature_data.signer_identity.public_key` to
    `ENCODE_PUBLIC(C)` (see [Notation](#Notation)).
  - Populate
@@ -590,7 +596,11 @@ To encrypt the plaintext protobuf `P` using AES-GCM:
 
 ***Example:*** We'll send an "Turn HVAC on" command using the above example
 with `VIN = 5YJ30123456789ABC` and the hex representation of the shared key `K
-= 1b2fce19967b79db696f909cff89ea9a`.
+= 1b2fce19967b79db696f909cff89ea9a`. The request sets the
+`UniversalMessage.FLAG_ENCRYPT_RESPONSE` flag, as recommended for all commands
+(see [Response decryption](#response-decryption)), so the flags bit mask is `1
+<< FLAG_ENCRYPT_RESPONSE = 2` and is included in both the metadata and the
+`RoutableMessage.flags` field.
 
 First we find the protobuf encoding for the command. Normally this is done
 using the language-specific bindings created by `protoc` from the `*.proto`
@@ -617,12 +627,16 @@ field of AES-GCM.
 |  `Signatures.TAG_PERSONALIZATION`| `5YJ30123456789ABC`    | 02 11 35594a3330313233343536373839414243  |
 |  `Signatures.TAG_EPOCH`          | `session_info.epoch`   | 03 10 4c463f9cc0d3d26906e982ed224adde6    |
 |  `Signatures.TAG_EXPIRES_AT`     | `t=2655` seconds       | 04 04 00000a5f                            |
-|  `Signatures.TAG_COUNTER`        | `session_info.counter` | 05 07 00000007                            |
+|  `Signatures.TAG_COUNTER`        | `session_info.counter` | 05 04 00000007                            |
+|  `Signatures.TAG_FLAGS`          | `1 << UniversalMessage.FLAG_ENCRYPT_RESPONSE = 0x02` | 07 04 00000002 |
+
+All values in the Encoding column are hex, including the leading tag and
+length bytes.
 
 Concatenating the above encoded values together with the terminal `0xff` byte gives:
 
 ```
-000105010103021135594a333031323334353637383941424303104c463f9cc0d3d26906e982ed224adde6040400000a5f050400000007ff
+000105010103021135594a333031323334353637383941424303104c463f9cc0d3d26906e982ed224adde6040400000a5f050400000007070400000002ff
 ```
 
 ```python
@@ -632,7 +646,7 @@ from cryptography.hazmat.primitives import hashes
 
 plaintext = bytes.fromhex("120452020801")
 
-metadata = bytes.fromhex("000105010103021135594a333031323334353637383941424303104c463f9cc0d3d26906e982ed224adde6040400000a5f050400000007ff")
+metadata = bytes.fromhex("000105010103021135594a333031323334353637383941424303104c463f9cc0d3d26906e982ed224adde6040400000a5f050400000007070400000002ff")
 aad = hashes.Hash(hashes.SHA256())
 
 aad.update(metadata)
@@ -647,7 +661,7 @@ print(f"Nonce: {nonce.hex()}, Ciphertext: {ct[:-16].hex()}, Tag: {ct[-16:].hex()
 Output (will be randomized each time by the nonce):
 
 ```
-Nonce: dbf79447fa156674dae1caed, Ciphertext: 38038e8c0f2e, Tag: 8e128da165f162f4d7d2c8da866cf82a
+Nonce: dbf79447fa156674dae1caed, Ciphertext: 38038e8c0f2e, Tag: c228e0ff64991481db3a7bbc133696c5
 ```
 
 Copying the above fields into a RoutableMessage protobuf yields:
@@ -669,9 +683,10 @@ signature_data {
     nonce: dbf79447fa156674dae1caed
     counter: 7
     expires_at: 2655
-    tag: 8e128da165f162f4d7d2c8da866cf82a
+    tag: c228e0ff64991481db3a7bbc133696c5
   }
 }
+flags: 2
 uuid: 58406580528b6a5301391800b4fe9b99
 ```
 
@@ -680,6 +695,18 @@ epoch allows the vehicle to return a more specific error message if there is a
 mismatch.
 
 ---
+
+### Caching session state
+
+If a client is not running continuously, it should cache session state to disk,
+along with the time difference between the local clock and the vehicle clock.
+Loading the session from cache removes the need to send session info requests,
+which reduces the latency of the first command and, when using Fleet API,
+reduces the number of Fleet API requests made by the client. If the session
+state is no longer valid, then the client can automatically recover as
+described below. The recovery mechanism is no more expensive than performing
+the handshake in the first place, so clients never incur a penalty by
+optimistically assuming a cache is valid.
 
 ### Recovering from synchronization errors
 
@@ -715,6 +742,69 @@ Vehicle responses also RoutableMessages. If a protocol-layer error occurred,
 then the vehicle sets the
 `RoutableMessage.signedMessageStatus.signed_message_fault` field.
 
+Error codes and their remediation are summarized in
+[universal_message.proto](protobuf/universal_message.proto).
+See comments in the `MessageFault_E` definition.
+
+### Response decryption
+
+If the client set the `FLAG_ENCRYPT_RESPONSE`, then vehicles running supported
+firmware (2024.38+) will encrypt the payload. Vehicles running previous
+firmware versions will ignore this flag, so clients do not need to check the
+vehicle's firmware version before setting it.
+
+If the response includes a `signature_data.AES_GCM_Response_data` field, then
+the `protobuf_message_as_bytes` payload is encrypted. Otherwise, the payload is
+plaintext.
+
+#### Request hash
+
+The client must compute the "request hash" of each request it sends. This value
+will be used when decrypting the response. The request hash is a single byte
+that encodes the authentication method used by the request (either
+`Signatures.SIGNATURE_TYPE_HMAC_PERSONALIZED` or
+`Signatures.SIGNATURE_TYPE_AES_GCM_PERSONALIZED`) followed by the request's
+authentication tag.
+
+ * If the request uses AES-GCM encryption, then the tag is the request's
+   `signature_data.AES_GCM_Personalized_Signature_Data.tag` field.
+ * If the request uses HMAC-SHA256 authentication, then the tag is the
+   request's `signature_data.HMAC_PersonalizedData.tag` field.
+
+If the request is sent to the Vehicle Security domain, then the request hash is
+truncated to 17 bytes (i.e., a single byte encoding the authentication method
+and the first 16 bytes of the MAC). Truncation only affects HMAC-SHA256
+requests, since AES-GCM tags are only 16 bytes.
+
+#### Counter verification
+
+The client must verify that the counter value contained in the response has
+not been previously used in a response for the same request. Note that if a
+request does trigger multiple responses, responses may be received out of
+order.
+
+Clients that fail to implement this check are vulnerable to replay attacks.
+
+#### Response metadata
+
+To decrypt the response, use AES-GCM with the shared key `K` defined above, the
+nonce and tag supplied in the response, and the associated authenticated data
+field obtained by [serializing](#Metadata serialization) the following metadata:
+
+| Value | Tag | Description |
+| ----- | --- | ----------- |
+| Signature type | `Signatures.TAG_SIGNATURE_TYPE` | `Signatures.SIGNATURE_TYPE_AES_GCM_RESPONSE` |
+| Domain         | `Signatures.TAG_DOMAIN`         | Typically `UniversalMessage.DOMAIN_VEHICLE_SECURITY` or `UniversalMessage.DOMAIN_INFOTAINMENT` |
+| VIN            | `Signatures.TAG_PERSONALIZATION`| 17-character vehicle identification number |
+| Counter        | `Signatures.TAG_COUNTER`        | Monotonic counter, initially `session_info.counter` |
+| Flags          | `Signatures.TAG_FLAGS`          | Flags field of the response, not the request |
+| Request Hash   | `Signatures.TAG_REQUEST_HASH`   | See [Request hash](#request-hash) |
+| Fault          | `Signatures.TAG_FAULT`          | Message fault of the response |
+
+Note that the Flags field is always included in the response metadata, whereas
+for outgoing requests the flags are only included if non-zero. Encode the fault
+as a 32-bit big-endian integer.
+
 ### Infotainment application-layer responses
 
 If a reply comes from the Infotainment domain, the client should parse the
@@ -749,4 +839,4 @@ key), a message is terminal if
 client should drop empty messages.
 
 For non-whitelist operations, an empty message indicates success and
-`FromVCSECMessage.commandStatus.nominalError` indicates an error.
+`FromVCSECMessage.nominalError` indicates an error.

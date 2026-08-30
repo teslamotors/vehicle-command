@@ -16,6 +16,15 @@ message LatLong {
     float longitude = 2;
 }
 
+message ChargePortLatchState {
+    oneof type {
+        Void SNA = 1;
+        Void Disengaged = 2;
+        Void Engaged = 3;
+        Void Blocking = 4;
+    }
+}
+
 message PreconditioningTimes {
     oneof times {
         Void all_week = 1;
@@ -28,4 +37,42 @@ message OffPeakChargingTimes {
         Void all_week = 1;
         Void weekdays = 2;
     }
+}
+
+enum MediaPlaybackStatus {
+    Stopped = 0;
+    Playing = 1;
+    Paused = 2;
+}
+
+enum StwHeatLevel {
+    StwHeatLevel_Unknown = 0;
+    StwHeatLevel_Off = 1;
+    StwHeatLevel_Low = 2;
+    StwHeatLevel_High = 3;
+}
+
+message ChargeSchedule {
+    uint64                      id                      = 1; // datetime in epoch time
+    string                      name                    = 2;
+    int32                       days_of_week            = 3;
+    bool                        start_enabled           = 4;
+    int32                       start_time              = 5; // 24h in minutes
+    bool                        end_enabled             = 6;
+    int32                       end_time                = 7; // 24h in minutes
+    bool                        one_time                = 8;
+    bool                        enabled                 = 9;
+    float                       latitude                = 10;
+    float                       longitude               = 11;
+}
+
+message PreconditionSchedule {
+    uint64                      id                      = 1; // datetime in epoch time
+    string                      name                    = 2;
+    int32                       days_of_week            = 3;
+    int32                       precondition_time       = 4; // 24h in minutes
+    bool                        one_time                = 5;
+    bool                        enabled                 = 6;
+    float                       latitude                = 7;
+    float                       longitude               = 8;
 }

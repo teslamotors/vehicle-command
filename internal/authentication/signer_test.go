@@ -24,11 +24,11 @@ func TestUpdateSessionInfo(t *testing.T) {
 }
 
 func TestBadSessionInfoProto(t *testing.T) {
-	verifierId := []byte("foo")
+	verifierID := []byte("foo")
 	verifierKey, signerKey := getVerifierAndSignerKeys(t)
 	dispatcher := Dispatcher{signerKey}
 
-	verifier, err := NewVerifier(verifierKey, verifierId, universal.Domain_DOMAIN_VEHICLE_SECURITY, signerKey.PublicBytes())
+	verifier, err := NewVerifier(verifierKey, verifierID, universal.Domain_DOMAIN_VEHICLE_SECURITY, signerKey.PublicBytes())
 	if err != nil {
 		t.Fatalf("Failed to generate verifier")
 	}
@@ -39,7 +39,7 @@ func TestBadSessionInfoProto(t *testing.T) {
 		t.Fatalf("Failed to get session info: %s", err)
 	}
 
-	signer, err := dispatcher.ConnectAuthenticated(verifierId, challenge, info, tag)
+	signer, err := dispatcher.ConnectAuthenticated(verifierID, challenge, info, tag)
 	if err != nil {
 		t.Errorf("Error connecting to verifier: %s", err)
 	}
@@ -48,7 +48,7 @@ func TestBadSessionInfoProto(t *testing.T) {
 	err = signer.UpdateSignedSessionInfo(challenge, info, tag)
 	checkError(t, err, errCodeInvalidSignature)
 
-	_, err = dispatcher.ConnectAuthenticated(verifierId, challenge, info, tag)
+	_, err = dispatcher.ConnectAuthenticated(verifierID, challenge, info, tag)
 	checkError(t, err, errCodeDecoding)
 
 	if tag, err = verifier.session.SessionInfoHMAC(verifier.verifierName, challenge, info); err != nil {

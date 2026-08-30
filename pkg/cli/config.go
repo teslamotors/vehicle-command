@@ -54,6 +54,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -63,38 +64,44 @@ import (
 	"github.com/teslamotors/vehicle-command/pkg/connector/ble"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
 	"github.com/teslamotors/vehicle-command/pkg/vehicle"
+	"golang.org/x/oauth2"
 
 	"github.com/99designs/keyring"
 )
 
-// domainNames is used to translate domains provided at the command line into native protocol.Domain
-// values.
-type domainNames []string
+var DomainsByName = map[string]protocol.Domain{
+	"VCSEC":        protocol.DomainVCSEC,
+	"INFOTAINMENT": protocol.DomainInfotainment,
+}
 
-func (d *domainNames) Set(value string) error {
-	*d = append(*d, value)
+var DomainNames = map[protocol.Domain]string{
+	protocol.DomainVCSEC:        "VCSEC",
+	protocol.DomainInfotainment: "INFOTAINMENT",
+}
+
+// DomainList is used to translate domains provided at the command line into native protocol.Domain
+// values.
+type DomainList []protocol.Domain
+
+// Set updates a DomainList from a command-line argument.
+func (d *DomainList) Set(value string) error {
+	canonicalName := strings.ToUpper(value)
+	if domain, ok := DomainsByName[canonicalName]; ok {
+		*d = append(*d, domain)
+	} else {
+		return fmt.Errorf("unknown domain '%s'", value)
+	}
 	return nil
 }
 
-func (d *domainNames) String() string {
-	return strings.Join(*d, ",")
-}
-
-func (d *domainNames) ToDomains() ([]protocol.Domain, error) {
-	mapping := map[string]protocol.Domain{
-		"VCSEC":        protocol.DomainVCSEC,
-		"INFOTAINMENT": protocol.DomainInfotainment,
-	}
-	var domains []protocol.Domain
-	for _, name := range *d {
-		canonicalName := strings.ToUpper(name)
-		if domain, ok := mapping[canonicalName]; ok {
-			domains = append(domains, domain)
-		} else {
-			return nil, fmt.Errorf("unknown domain '%s'", name)
+func (d *DomainList) String() string {
+	var names []string
+	for _, domain := range *d {
+		if name, ok := DomainNames[domain]; ok {
+			names = append(names, name)
 		}
 	}
-	return domains, nil
+	return strings.Join(names, ",")
 }
 
 // Environment variable names used are used by [Config.ReadFromEnvironment] to set common parameters.
@@ -138,16 +145,18 @@ type Config struct {
 	KeyringKeyName   string // Username for private key in system keyring
 	KeyringTokenName string // Username for OAuth token in system keyring
 	VIN              string
+	BtAdapterID      string // ID of Bluetooth adapter to use (Linux only)
 	TokenFilename    string
 	KeyFilename      string
 	CacheFilename    string
+	DisableCache     bool
 	Backend          keyring.Config
 	BackendType      backendType
 	Debug            bool // Enable keyring debug messages
 
-	// DomainNames can limit a vehicle connection to relevant subsystems, which can reduce
+	// Domains can limit a vehicle connection to relevant subsystems, which can reduce
 	// connection latency and avoid waking up the infotainment system unnecessarily.
-	DomainNames domainNames
+	Domains DomainList
 
 	password   *string
 	sessions   *cache.SessionCache
@@ -180,10 +189,11 @@ func (c *Config) RegisterCommandLineFlags() {
 		if !c.Flags.isSet(FlagVIN) {
 			log.Debug("FlagPrivateKey is set but FlagVIN is not. A VIN is required to send vehicle commands.")
 		}
-		flag.StringVar(&c.CacheFilename, "session-cache", "", "Load session info cache from `file`. Defaults to $TESLA_CACHE_FILE.")
+		flag.StringVar(&c.CacheFilename, "session-cache", "", "Load session info cache from `file`. Defaults to $TESLA_CACHE_FILE then ~/.tesla-cache.json.")
+		flag.BoolVar(&c.DisableCache, "disable-session-cache", false, "Disable the session info cache.")
 		flag.StringVar(&c.KeyringKeyName, "key-name", "", "System keyring `name` for private key. Defaults to $TESLA_KEY_NAME.")
 		flag.StringVar(&c.KeyFilename, "key-file", "", "A `file` containing private key. Defaults to $TESLA_KEY_FILE.")
-		flag.Var(&c.DomainNames, "domain", "Domains to connect to (can be repeated; omit for all)")
+		flag.Var(&c.Domains, "domain", "Domains to connect to (can be repeated; omit for all)")
 	}
 	if c.Flags.isSet(FlagOAuth) {
 		flag.StringVar(&c.KeyringTokenName, "token-name", "", "System keyring `name` for OAuth token. Defaults to $TESLA_TOKEN_NAME.")
@@ -199,6 +209,7 @@ func (c *Config) RegisterCommandLineFlags() {
 		flag.StringVar(&c.Backend.FileDir, "keyring-file-dir", keyringDirectory, "keyring `directory` for file-backed keyring types")
 		flag.BoolVar(&c.Debug, "keyring-debug", false, "Enable keyring debug logging")
 	}
+	c.registerCommandLineFlagsOsSpecific()
 }
 
 // LoadCredentials attempts to open a keyring, prompting for a password if not needed. Call this
@@ -231,8 +242,13 @@ func (c *Config) ReadFromEnvironment() {
 		}
 	}
 	if c.Flags.isSet(FlagPrivateKey) {
-		if c.CacheFilename == "" {
+		if !c.DisableCache && c.CacheFilename == "" {
 			c.CacheFilename = os.Getenv(EnvTeslaCacheFile)
+			if c.CacheFilename == "" {
+				if homeDir := os.Getenv("HOME"); homeDir != "" {
+					c.CacheFilename = filepath.Join(homeDir, ".tesla-cache.json")
+				}
+			}
 			log.Debug("Set session cache file to '%s'", c.CacheFilename)
 		}
 		if c.KeyringKeyName == "" && c.KeyFilename == "" {
@@ -281,11 +297,12 @@ func (c *Config) ReadFromEnvironment() {
 // If c.CacheFilename is not set or no vehicle handshake has occurred, then this method does
 // nothing.
 func (c *Config) UpdateCachedSessions(v *vehicle.Vehicle) {
-	if c.CacheFilename != "" && c.sessions != nil {
-		v.UpdateCachedSessions(c.sessions)
-		if err := c.sessions.ExportToFile(c.CacheFilename); err != nil {
-			log.Error("Error updating cache: %s", err)
-		}
+	if c.CacheFilename == "" || c.sessions == nil {
+		return
+	}
+	_ = v.UpdateCachedSessions(c.sessions)
+	if err := c.sessions.ExportToFile(c.CacheFilename); err != nil {
+		log.Error("Error updating cache: %s", err)
 	}
 }
 
@@ -365,13 +382,8 @@ func (c *Config) Connect(ctx context.Context) (acct *account.Account, car *vehic
 		return nil, nil, err
 	}
 	if skey != nil {
-		log.Info("Securing connction...")
-		domains, err := c.DomainNames.ToDomains()
-		if err != nil {
-			return nil, nil, err
-		}
-
-		if err := car.StartSession(ctx, domains); err != nil {
+		log.Info("Securing connection...")
+		if err := car.StartSession(ctx, c.Domains); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -421,7 +433,7 @@ func (c *Config) Account() (*account.Account, error) {
 	if err != nil {
 		return nil, err
 	}
-	return account.New(token, "")
+	return account.New(oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token}), "")
 }
 
 // SavePrivateKey writes skey to the system keyring or file, depending on what options are
@@ -460,6 +472,11 @@ func (c *Config) ConnectRemote(ctx context.Context, skey protocol.ECDHPrivateKey
 
 // ConnectLocal connects to a vehicle over BLE.
 func (c *Config) ConnectLocal(ctx context.Context, skey protocol.ECDHPrivateKey) (car *vehicle.Vehicle, err error) {
+	err = ble.InitAdapterWithID(c.BtAdapterID)
+	if err != nil {
+		return nil, err
+	}
+
 	conn, err := ble.NewConnection(ctx, c.VIN)
 	if err != nil {
 		return nil, err

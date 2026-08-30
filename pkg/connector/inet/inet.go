@@ -18,7 +18,10 @@ import (
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
 )
 
-func readWithContext(ctx context.Context, r io.Reader, p []byte) ([]byte, error) {
+// MaxLatency is the default maximum latency permitted when updating the vehicle clock estimate.
+var MaxLatency = 10 * time.Second
+
+func ReadWithContext(ctx context.Context, r io.Reader, p []byte) ([]byte, error) {
 	bytesRead := 0
 	for {
 		if ctx.Err() != nil {
@@ -45,40 +48,39 @@ The regular expression below extracts domains from HTTP bodies:
 
 	{
 	  "response": null,
-	  "error": "user out of region, use base URL: https://fleet-api.prd.na.vn.cloud.tesla.com, see https://developer.tesla.com/docs/fleet-api#regional-requirements",
+	  "error": "user out of region, use base URL: https://fleet-api.prd.na.vn.cloud.tesla.com, see https://...",
 	  "error_description": ""
 	}
 */
 var baseDomainRE = regexp.MustCompile(`use base URL: https://([-a-z0-9.]*)`)
 
-type HttpError struct {
+type HTTPError struct {
 	Code    int
 	Message string
 }
 
-func (e *HttpError) Error() string {
+func (e *HTTPError) Error() string {
 	if e.Message == "" {
 		return http.StatusText(e.Code)
 	}
 	return e.Message
 }
 
-func (e *HttpError) MayHaveSucceeded() bool {
+func (e *HTTPError) MayHaveSucceeded() bool {
 	if e.Code >= 400 && e.Code < 500 {
 		return false
 	}
 	return e.Code != http.StatusServiceUnavailable
 }
 
-func (e *HttpError) Temporary() bool {
+func (e *HTTPError) Temporary() bool {
 	return e.Code == http.StatusServiceUnavailable ||
 		e.Code == http.StatusGatewayTimeout ||
 		e.Code == http.StatusRequestTimeout ||
-		e.Code == http.StatusMisdirectedRequest ||
-		e.Code == http.StatusTooManyRequests
+		e.Code == http.StatusMisdirectedRequest
 }
 
-func SendFleetAPICommand(ctx context.Context, client *http.Client, userAgent, url string, command interface{}) ([]byte, error) {
+func SendFleetAPICommand(ctx context.Context, client *http.Client, userAgent string, url string, command interface{}) ([]byte, error) {
 	var body []byte
 	var ok bool
 	if body, ok = command.([]byte); !ok {
@@ -102,10 +104,12 @@ func SendFleetAPICommand(ctx context.Context, client *http.Client, userAgent, ur
 	if err != nil {
 		return nil, &protocol.CommandError{Err: err, PossibleSuccess: false, PossibleTemporary: true}
 	}
-	defer result.Body.Close()
+	defer func() {
+		_ = result.Body.Close()
+	}()
 
 	body = make([]byte, connector.MaxResponseLength+1)
-	body, err = readWithContext(ctx, result.Body, body)
+	body, err = ReadWithContext(ctx, result.Body, body)
 	if err != nil {
 		return nil, &protocol.CommandError{Err: err, PossibleSuccess: true, PossibleTemporary: false}
 	}
@@ -127,7 +131,7 @@ func SendFleetAPICommand(ctx context.Context, client *http.Client, userAgent, ur
 			return nil, ErrVehicleNotAwake
 		}
 	}
-	return nil, &HttpError{Code: result.StatusCode, Message: string(body)}
+	return nil, &HTTPError{Code: result.StatusCode, Message: string(body)}
 }
 
 func ValidTeslaDomainSuffix(domain string) bool {
@@ -140,7 +144,7 @@ func (c *Connection) SendFleetAPICommand(ctx context.Context, endpoint string, c
 	url := fmt.Sprintf("https://%s/%s", c.serverURL, endpoint)
 	rsp, err := SendFleetAPICommand(ctx, c.client, c.UserAgent, url, command)
 	if err != nil {
-		var httpErr *HttpError
+		var httpErr *HTTPError
 		if errors.As(err, &httpErr) && httpErr.Code == http.StatusMisdirectedRequest {
 			matches := baseDomainRE.FindStringSubmatch(httpErr.Message)
 			if len(matches) == 2 && ValidTeslaDomainSuffix(matches[1]) {
@@ -160,11 +164,13 @@ type Connection struct {
 	serverURL string
 	inbox     chan []byte
 
-	wakeLock sync.Mutex
+	lock     sync.Mutex
 	lastPoke time.Time
 }
 
-// NewConnection creates a Connection.
+// NewConnection creates a Connection. The client is responsible for authenticating requests,
+// typically by wrapping an [golang.org/x/oauth2.TokenSource] with
+// [golang.org/x/oauth2.NewClient].
 func NewConnection(vin string, client *http.Client, serverURL, userAgent string) *Connection {
 	conn := Connection{
 		UserAgent: userAgent,
@@ -180,6 +186,10 @@ func (c *Connection) PreferredAuthMethod() connector.AuthMethod {
 	return connector.AuthMethodHMAC
 }
 
+func (c *Connection) AllowedLatency() time.Duration {
+	return MaxLatency
+}
+
 func (c *Connection) RetryInterval() time.Duration {
 	return time.Second
 }
@@ -189,6 +199,8 @@ func (c *Connection) Receive() <-chan []byte {
 }
 
 func (c *Connection) Close() {
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	if c.inbox != nil {
 		close(c.inbox)
 		c.inbox = nil
@@ -208,9 +220,9 @@ func (c *Connection) Wakeup(ctx context.Context) error {
 	}
 
 	for {
-		c.wakeLock.Lock()
+		c.lock.Lock()
 		c.lastPoke = time.Now()
-		c.wakeLock.Unlock()
+		c.lock.Unlock()
 		endpoint := fmt.Sprintf("api/1/vehicles/%s/wake_up", c.vin)
 		respJSON, err := c.SendFleetAPICommand(ctx, endpoint, nil)
 		if err == nil {
@@ -252,6 +264,11 @@ func (c *Connection) Send(ctx context.Context, buffer []byte) error {
 	if err := json.Unmarshal(body, &rsp); err != nil {
 		log.Debug("Invalid server response (%d bytes): %s", len(body), body)
 		return &protocol.CommandError{Err: fmt.Errorf("unable to parse server response: %w", err), PossibleSuccess: true, PossibleTemporary: false}
+	}
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	if c.inbox == nil {
+		return protocol.ErrNotConnected
 	}
 	select {
 	case c.inbox <- rsp.Payload:

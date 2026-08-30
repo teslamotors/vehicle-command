@@ -3,17 +3,53 @@ package vehicle
 import (
 	"context"
 	"crypto/ecdh"
+	"errors"
+	"strings"
 
 	"google.golang.org/protobuf/proto"
 
 	"github.com/teslamotors/vehicle-command/pkg/connector"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
 	carserver "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/carserver"
+	"github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/keys"
 	"github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/vcsec"
 )
 
+// IsValidPIN returns true if the pin is four digits.
+func IsValidPIN(pin string) bool {
+	if len(pin) != 4 {
+		return false
+	}
+	for _, c := range pin {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+var ErrInvalidPIN = errors.New("PIN codes must be four digits")
+
+// EnableValetMode enters the vehicle's Valet Mode. This sets certain restrictions but disables PIN
+// to Drive. Consult the Owner's Manual for details. The PIN must be a four-digit string.
+func (v *Vehicle) EnableValetMode(ctx context.Context, pin string) error {
+	return v.SetValetMode(ctx, true, pin)
+}
+
+// DisableValetMode exits Valet Mode.
+func (v *Vehicle) DisableValetMode(ctx context.Context) error {
+	return v.SetValetMode(ctx, false, "")
+}
+
+// SetValetMode enables or disables Valet Mode. A password must be provided when turning valet mode
+// on, and should be empty when turning valet mode off.
+//
+// Deprecated: Use [Vehicle.EnableValetMode] or [Vehicle.DisableValetMode].
 func (v *Vehicle) SetValetMode(ctx context.Context, on bool, valetPassword string) error {
-	return v.executeCarServerAction(ctx,
+	if on && !IsValidPIN(valetPassword) {
+		return ErrInvalidPIN
+	}
+	err := v.executeCarServerAction(ctx,
 		&carserver.Action_VehicleAction{
 			VehicleAction: &carserver.VehicleAction{
 				VehicleActionMsg: &carserver.VehicleAction_VehicleControlSetValetModeAction{
@@ -24,6 +60,10 @@ func (v *Vehicle) SetValetMode(ctx context.Context, on bool, valetPassword strin
 				},
 			},
 		})
+	if !on && err != nil && strings.HasSuffix(err.Error(), "already off") {
+		return nil
+	}
+	return err
 }
 
 func (v *Vehicle) ResetValetPin(ctx context.Context) error {
@@ -38,7 +78,9 @@ func (v *Vehicle) ResetValetPin(ctx context.Context) error {
 }
 
 // ResetPIN clears the saved PIN. You must disable PIN to drive before clearing the PIN. This allows
-// setting a new PIN using SetPINToDrive.
+// setting a new PIN using [Vehicle.SetPINToDrive].
+//
+// Deprecated: Use [Vehicle.ClearPINToDrive].
 func (v *Vehicle) ResetPIN(ctx context.Context) error {
 	return v.executeCarServerAction(ctx,
 		&carserver.Action_VehicleAction{
@@ -73,6 +115,17 @@ func (v *Vehicle) DeactivateSpeedLimit(ctx context.Context, speedLimitPin string
 						Activate: false,
 						Pin:      speedLimitPin,
 					},
+				},
+			},
+		})
+}
+
+func (v *Vehicle) ClearSpeedLimitPINAdminAction(ctx context.Context) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_DrivingClearSpeedLimitPinAdminAction{
+					DrivingClearSpeedLimitPinAdminAction: &carserver.DrivingClearSpeedLimitPinAdminAction{},
 				},
 			},
 		})
@@ -121,7 +174,7 @@ func (v *Vehicle) SetSentryMode(ctx context.Context, state bool) error {
 //
 // We recommend users avoid this command unless they are managing a fleet of vehicles and understand
 // the implications of enabling the mode. See official API documentation at
-// https://developer.tesla.com/docs/fleet-api#guest_mode.
+// https://developer.tesla.com/docs/fleet-api/endpoints/vehicle-commands#guest-mode
 func (v *Vehicle) SetGuestMode(ctx context.Context, enabled bool) error {
 	return v.executeCarServerAction(ctx,
 		&carserver.Action_VehicleAction{
@@ -135,12 +188,24 @@ func (v *Vehicle) SetGuestMode(ctx context.Context, enabled bool) error {
 		})
 }
 
+// ClearPINToDrive disables the PIN to Drive feature and clears the saved PIN.
+func (v *Vehicle) ClearPINToDrive(ctx context.Context) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_VehicleControlResetPinToDriveAdminAction{
+					VehicleControlResetPinToDriveAdminAction: &carserver.VehicleControlResetPinToDriveAdminAction{},
+				},
+			},
+		})
+}
+
 // SetPINToDrive controls whether the PIN to Drive feature is enabled or not. It is also used to set
 // the PIN.
 //
 // Once a PIN is set, the vehicle remembers its value even when PIN to Drive is disabled and
-// discards any new PIN provided using this method. To change an existing PIN, first call
-// v.ResetPIN.
+// discards any new PIN provided using this method. To change an existing PIN, use
+// [vehicle.ClearPINToDrive].
 func (v *Vehicle) SetPINToDrive(ctx context.Context, enabled bool, pin string) error {
 	if _, ok := v.conn.(connector.FleetAPIConnector); !ok {
 		return protocol.ErrRequiresEncryption
@@ -178,10 +243,21 @@ func (v *Vehicle) TriggerHomelink(ctx context.Context, latitude float32, longitu
 // AddKey adds a public key to the vehicle's whitelist. If isOwner is true, the new key can
 // authorize changes to vehicle access controls, such as adding/removing other keys.
 func (v *Vehicle) AddKey(ctx context.Context, publicKey *ecdh.PublicKey, isOwner bool, formFactor vcsec.KeyFormFactor) error {
+	if isOwner {
+		return v.AddKeyWithRole(ctx, publicKey, keys.Role_ROLE_OWNER, formFactor)
+	}
+	return v.AddKeyWithRole(ctx, publicKey, keys.Role_ROLE_DRIVER, formFactor)
+}
+
+// AddKeyWithRole adds a public key to the vehicle's whitelist. See [Protocol Specification] for
+// more information on roles.
+//
+// [Protocol Specification]: https://github.com/teslamotors/vehicle-command/blob/main/pkg/protocol/protocol.md#roles
+func (v *Vehicle) AddKeyWithRole(ctx context.Context, publicKey *ecdh.PublicKey, role keys.Role, formFactor vcsec.KeyFormFactor) error {
 	if publicKey.Curve() != ecdh.P256() {
 		return protocol.ErrInvalidPublicKey
 	}
-	payload := addKeyPayload(publicKey, isOwner, formFactor)
+	payload := addKeyPayload(publicKey, role, formFactor)
 	encodedPayload, err := proto.Marshal(payload)
 	if err != nil {
 		return err
@@ -212,19 +288,7 @@ func (v *Vehicle) RemoveKey(ctx context.Context, publicKey *ecdh.PublicKey) erro
 }
 
 func (v *Vehicle) KeySummary(ctx context.Context) (*vcsec.WhitelistInfo, error) {
-	payload := vcsec.UnsignedMessage{
-		SubMessage: &vcsec.UnsignedMessage_InformationRequest{
-			InformationRequest: &vcsec.InformationRequest{
-				InformationRequestType: vcsec.InformationRequestType_INFORMATION_REQUEST_TYPE_GET_WHITELIST_INFO,
-			},
-		},
-	}
-	encodedPayload, err := proto.Marshal(&payload)
-	if err != nil {
-		return nil, err
-	}
-	done := func(v *vcsec.FromVCSECMessage) (bool, error) { return true, nil }
-	reply, err := v.getVCSECResult(ctx, encodedPayload, connector.AuthMethodNone, done)
+	reply, err := v.getVCSECInfo(ctx, vcsec.InformationRequestType_INFORMATION_REQUEST_TYPE_GET_WHITELIST_INFO, slotNone)
 	if err != nil {
 		return nil, err
 	}
@@ -232,22 +296,7 @@ func (v *Vehicle) KeySummary(ctx context.Context) (*vcsec.WhitelistInfo, error) 
 }
 
 func (v *Vehicle) KeyInfoBySlot(ctx context.Context, slot uint32) (*vcsec.WhitelistEntryInfo, error) {
-	payload := vcsec.UnsignedMessage{
-		SubMessage: &vcsec.UnsignedMessage_InformationRequest{
-			InformationRequest: &vcsec.InformationRequest{
-				InformationRequestType: vcsec.InformationRequestType_INFORMATION_REQUEST_TYPE_GET_WHITELIST_ENTRY_INFO,
-				Key: &vcsec.InformationRequest_Slot{
-					Slot: slot,
-				},
-			},
-		},
-	}
-	encodedPayload, err := proto.Marshal(&payload)
-	if err != nil {
-		return nil, err
-	}
-	done := func(v *vcsec.FromVCSECMessage) (bool, error) { return true, nil }
-	reply, err := v.getVCSECResult(ctx, encodedPayload, connector.AuthMethodNone, done)
+	reply, err := v.getVCSECInfo(ctx, vcsec.InformationRequestType_INFORMATION_REQUEST_TYPE_GET_WHITELIST_ENTRY_INFO, slot)
 	if err != nil {
 		return nil, err
 	}
@@ -276,13 +325,24 @@ func (v *Vehicle) Unlock(ctx context.Context) error {
 // attempting to call v.SessionInfo with the domain argument set to
 // [universal.Domain_DOMAIN_INFOTAINMENT].
 func (v *Vehicle) SendAddKeyRequest(ctx context.Context, publicKey *ecdh.PublicKey, isOwner bool, formFactor vcsec.KeyFormFactor) error {
+	if isOwner {
+		return v.SendAddKeyRequestWithRole(ctx, publicKey, keys.Role_ROLE_OWNER, formFactor)
+	}
+	return v.SendAddKeyRequestWithRole(ctx, publicKey, keys.Role_ROLE_DRIVER, formFactor)
+}
+
+// SendAddKeyRequestWithRole behaves like [SendAddKeyRequest] except the new key's role can be
+// specified explicitly. See [Protocol Specification] for more information on roles.
+//
+// [Protocol Specification]: https://github.com/teslamotors/vehicle-command/blob/main/pkg/protocol/protocol.md#roles
+func (v *Vehicle) SendAddKeyRequestWithRole(ctx context.Context, publicKey *ecdh.PublicKey, role keys.Role, formFactor vcsec.KeyFormFactor) error {
 	if publicKey.Curve() != ecdh.P256() {
 		return protocol.ErrInvalidPublicKey
 	}
 	if _, ok := v.conn.(connector.FleetAPIConnector); ok {
 		return protocol.ErrRequiresBLE
 	}
-	encodedPayload, err := proto.Marshal(addKeyPayload(publicKey, isOwner, formFactor))
+	encodedPayload, err := proto.Marshal(addKeyPayload(publicKey, role, formFactor))
 	if err != nil {
 		return err
 	}
@@ -297,4 +357,115 @@ func (v *Vehicle) SendAddKeyRequest(ctx context.Context, publicKey *ecdh.PublicK
 		return err
 	}
 	return v.conn.Send(ctx, encodedEnvelope)
+}
+
+// ParentalControlsActivate enables parental controls with the given PIN.
+//
+// Parental control policies cannot be updated when parental controls are
+// active. Use ParentalControlsEnableSetting and ParentalControlsSetSpeedLimit
+// to update the default policy as needed before activation.
+//
+// If a PIN was set earlier, the same PIN must be used when re-enabling. Clear
+// the PIN with ParentalControlsClearPIN.
+func (v *Vehicle) ParentalControlsActivate(ctx context.Context, pin string) error {
+	if !IsValidPIN(pin) {
+		return ErrInvalidPIN
+	}
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_ParentalControlsAction{
+					ParentalControlsAction: &carserver.ParentalControlsAction{
+						Activate: true,
+						Pin:      pin,
+					},
+				},
+			},
+		})
+}
+
+// ParentalControlsDeactivate disables parental controls. Requires the current PIN.
+func (v *Vehicle) ParentalControlsDeactivate(ctx context.Context, pin string) error {
+	if !IsValidPIN(pin) {
+		return ErrInvalidPIN
+	}
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_ParentalControlsAction{
+					ParentalControlsAction: &carserver.ParentalControlsAction{
+						Activate: false,
+						Pin:      pin,
+					},
+				},
+			},
+		})
+}
+
+// ParentalControlsSetting identifies an individual parental controls setting.
+type ParentalControlsSetting = carserver.ParentalControlsEnableSettingsAction_ParentalControlsSetting_E
+
+const (
+	ParentalControlsSettingSpeedLimit     = carserver.ParentalControlsEnableSettingsAction_SpeedLimit
+	ParentalControlsSettingAcceleration   = carserver.ParentalControlsEnableSettingsAction_Acceleration
+	ParentalControlsSettingSafetyFeatures = carserver.ParentalControlsEnableSettingsAction_SafetyFeatures
+	ParentalControlsSettingCurfew         = carserver.ParentalControlsEnableSettingsAction_Curfew
+	ParentalControlsSettingBrowserBlocked = carserver.ParentalControlsEnableSettingsAction_BrowserBlocked
+	ParentalControlsSettingTheaterBlocked = carserver.ParentalControlsEnableSettingsAction_TheaterBlocked
+	ParentalControlsSettingArcadeBlocked  = carserver.ParentalControlsEnableSettingsAction_ArcadeBlocked
+)
+
+// ParentalControlsEnableSetting enables or disables an individual parental
+// controls setting. See ParentalControlsSetting for valid setting values.
+// Fails with parental_controls_active if parental controls are already active.
+func (v *Vehicle) ParentalControlsEnableSetting(ctx context.Context, setting ParentalControlsSetting, enable bool) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_ParentalControlsEnableSettingsAction{
+					ParentalControlsEnableSettingsAction: &carserver.ParentalControlsEnableSettingsAction{
+						Setting: setting,
+						Enable:  enable,
+					},
+				},
+			},
+		})
+}
+
+// ParentalControlsSetSpeedLimit sets the parental controls speed limit in MPH.
+// Fails with parental_controls_active if parental controls are already active.
+func (v *Vehicle) ParentalControlsSetSpeedLimit(ctx context.Context, limitMPH float64) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_ParentalControlsSetSpeedLimitAction{
+					ParentalControlsSetSpeedLimitAction: &carserver.ParentalControlsSetSpeedLimitAction{
+						LimitMph: limitMPH,
+					},
+				},
+			},
+		})
+}
+
+// ParentalControlsClearPIN clears the stored parental controls PIN.
+func (v *Vehicle) ParentalControlsClearPIN(ctx context.Context) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_ParentalControlsClearPinAdminAction{
+					ParentalControlsClearPinAdminAction: &carserver.ParentalControlsClearPinAdminAction{},
+				},
+			},
+		})
+}
+
+// EraseGuestData erases user data created while in Guest Mode. This command has no effect unless
+// the vehicle is currently in Guest Mode.
+func (v *Vehicle) EraseGuestData(ctx context.Context) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_EraseUserDataAction{},
+			},
+		})
 }

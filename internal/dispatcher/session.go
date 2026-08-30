@@ -8,9 +8,12 @@ import (
 
 	"github.com/teslamotors/vehicle-command/internal/authentication"
 	"github.com/teslamotors/vehicle-command/pkg/connector"
+	"github.com/teslamotors/vehicle-command/pkg/protocol"
 
 	universal "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/universalmessage"
 )
+
+var defaultExpiration = 5 * time.Second
 
 // CacheEntry contains information that allows a vehicle session to be resumed without a handshake
 // mesasge (SessionInfoRequest).
@@ -32,9 +35,9 @@ type session struct {
 	readySignal chan struct{}
 }
 
-// NewSession creates a new session object that can authorize commands going to
+// newSession creates a new session object that can authorize commands going to
 // the vehicle and authenticate session info arriving from the vehicle.
-func NewSession(private authentication.ECDHPrivateKey, vin string) (*session, error) {
+func newSession(private authentication.ECDHPrivateKey, vin string) (*session, error) {
 	return &session{
 		private:     private,
 		readySignal: make(chan struct{}, 1),
@@ -42,8 +45,25 @@ func NewSession(private authentication.ECDHPrivateKey, vin string) (*session, er
 	}, nil
 }
 
-func (s *session) Authorize(ctx context.Context, command *universal.RoutableMessage, method connector.AuthMethod) error {
+func (s *session) decrypt(message *universal.RoutableMessage, handler *receiver) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	counter, err := s.ctx.Decrypt(message, handler.requestID)
+	if err != nil {
+		return err
+	}
+	if !handler.antireplay.Update(counter) {
+		return protocol.ErrReplayedResponse
+	}
+	return nil
+}
+
+func (s *session) authorize(ctx context.Context, command *universal.RoutableMessage, method connector.AuthMethod) error {
 	var err error
+	lifetime := defaultExpiration
+	if deadline, ok := ctx.Deadline(); ok {
+		lifetime = time.Until(deadline)
+	}
 	for {
 		attempted := false
 		select {
@@ -56,9 +76,9 @@ func (s *session) Authorize(ctx context.Context, command *universal.RoutableMess
 				case connector.AuthMethodNone:
 					err = nil
 				case connector.AuthMethodGCM:
-					err = s.ctx.Encrypt(command, commandTimeout)
+					err = s.ctx.Encrypt(command, lifetime)
 				case connector.AuthMethodHMAC:
-					err = s.ctx.AuthorizeHMAC(command, commandTimeout)
+					err = s.ctx.AuthorizeHMAC(command, lifetime)
 				default:
 					return errors.New("unrecognized authentication method")
 				}
@@ -77,16 +97,6 @@ func (s *session) Authorize(ctx context.Context, command *universal.RoutableMess
 	}
 }
 
-// VehiclePublicKeyBytes returns the encoded remote public key.
-func (s *session) VehiclePublicKeyBytes() []byte {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	if s.ctx == nil {
-		return nil
-	}
-	return s.ctx.RemotePublicKeyBytes()
-}
-
 func (s *session) export() []byte {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -100,11 +110,11 @@ func (s *session) export() []byte {
 	return info
 }
 
-// ProcessHello verifies a session info message from the vehicle.
+// processHello verifies a session info message from the vehicle.
 //
 // The caller must verify that the challenge matches the UUID of a
 // recently-transmitted message.
-func (s *session) ProcessHello(challenge, info, tag []byte) error {
+func (s *session) processHello(challenge, info, tag []byte) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 

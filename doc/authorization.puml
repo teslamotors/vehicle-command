@@ -1,0 +1,16 @@
+@startuml
+title Authorization Flow
+"developer.tesla.com" -> "Your Backend": Store Client ID and Client Secret securely
+
+== Obtain a Partner Authentication Token ==
+"Your Backend" -> "Tesla Auth": POST https://auth.tesla.com/oauth2/v3/token
+"Your Backend" <-- "Tesla Auth": {"access_token": "jwt"}
+
+== Obtain a Third-Party Token ==
+"User" -> "Tesla Auth": https://auth.tesla.com/oauth2/v3/authorize
+"User" <-- "Tesla Auth": Redirect URL
+"User" -> "Your Backend": Redirect URL sends token to your backend
+"Your Backend" -> "Tesla Auth": Code Exchange\nPOST https://auth.tesla.com/oauth2/v3/token
+"Your Backend" <-- "Tesla Auth": {"access_token": "jwt"}
+
+@enduml

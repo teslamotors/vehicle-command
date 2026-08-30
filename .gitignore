@@ -10,3 +10,4 @@ examples/unlock/unlock
 examples/ble/ble
 *.DS_Store
 *.key
+config

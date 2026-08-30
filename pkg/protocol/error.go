@@ -51,6 +51,11 @@ var (
 	ErrProtocolNotSupported = errors.New("vehicle does not support protocol -- use REST API")
 	ErrRequiresBLE          = errors.New("command can only be sent over BLE")
 	ErrRequiresEncryption   = errors.New("command should not be sent in plaintext or encrypted with an unauthenticated public key")
+	ErrNoDecryptionContext  = errors.New("could not decrypt vehicle response without a session")
+	// ErrReplayedResponse indicates the client received multiple responses from the vehicle with
+	// the same response counter. This could be benign, as the network may have reattempted
+	// transmission.
+	ErrReplayedResponse = errors.New("received vehicle response with duplicate counter")
 )
 
 type CommandError struct {
@@ -188,7 +193,8 @@ type RoutableMessageError struct {
 }
 
 func (v *RoutableMessageError) MayHaveSucceeded() bool {
-	return v.Code == universal.MessageFault_E_MESSAGEFAULT_ERROR_NONE
+	return v.Code == universal.MessageFault_E_MESSAGEFAULT_ERROR_NONE ||
+		v.Code == universal.MessageFault_E_MESSAGEFAULT_ERROR_RESPONSE_MTU_EXCEEDED
 }
 
 // retriableErrors can sometimes be remedied if the client retries the command,

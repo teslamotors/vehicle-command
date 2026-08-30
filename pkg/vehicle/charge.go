@@ -18,6 +18,88 @@ const (
 	ChargingPolicyWeekdays
 )
 
+type ChargeSchedule = carserver.ChargeSchedule
+
+type PreconditionSchedule = carserver.PreconditionSchedule
+
+func (v *Vehicle) AddChargeSchedule(ctx context.Context, schedule *ChargeSchedule) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_AddChargeScheduleAction{
+					AddChargeScheduleAction: schedule,
+				},
+			},
+		})
+}
+
+func (v *Vehicle) RemoveChargeSchedule(ctx context.Context, id uint64) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_RemoveChargeScheduleAction{
+					RemoveChargeScheduleAction: &carserver.RemoveChargeScheduleAction{
+						Id: id,
+					},
+				},
+			},
+		})
+}
+
+func (v *Vehicle) BatchRemoveChargeSchedules(ctx context.Context, home, work, other bool) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_BatchRemoveChargeSchedulesAction{
+					BatchRemoveChargeSchedulesAction: &carserver.BatchRemoveChargeSchedulesAction{
+						Home:  home,
+						Work:  work,
+						Other: other,
+					},
+				},
+			},
+		})
+}
+
+func (v *Vehicle) AddPreconditionSchedule(ctx context.Context, schedule *PreconditionSchedule) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_AddPreconditionScheduleAction{
+					AddPreconditionScheduleAction: schedule,
+				},
+			},
+		})
+}
+
+func (v *Vehicle) RemovePreconditionSchedule(ctx context.Context, id uint64) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_RemovePreconditionScheduleAction{
+					RemovePreconditionScheduleAction: &carserver.RemovePreconditionScheduleAction{
+						Id: id,
+					},
+				},
+			},
+		})
+}
+
+func (v *Vehicle) BatchRemovePreconditionSchedules(ctx context.Context, home, work, other bool) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_BatchRemovePreconditionSchedulesAction{
+					BatchRemovePreconditionSchedulesAction: &carserver.BatchRemovePreconditionSchedulesAction{
+						Home:  home,
+						Work:  work,
+						Other: other,
+					},
+				},
+			},
+		})
+}
+
 func (v *Vehicle) ChangeChargeLimit(ctx context.Context, chargeLimitPercent int32) error {
 	return v.executeCarServerAction(ctx,
 		&carserver.Action_VehicleAction{
@@ -210,6 +292,38 @@ func (v *Vehicle) ClearScheduledDeparture(ctx context.Context) error {
 				VehicleActionMsg: &carserver.VehicleAction_ScheduledDepartureAction{
 					ScheduledDepartureAction: &carserver.ScheduledDepartureAction{
 						Enabled: false,
+					},
+				},
+			},
+		})
+}
+
+// SetLowPowerMode enables or disables low power mode, which reduces battery consumption. If the
+// vehicle is forced to be in lower power mode due to low battery, this will return a
+// low_power_mode_enforced error.
+func (v *Vehicle) SetLowPowerMode(ctx context.Context, enable bool) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_SetLowPowerModeAction{
+					SetLowPowerModeAction: &carserver.SetLowPowerModeAction{
+						LowPowerMode: enable,
+					},
+				},
+			},
+		})
+}
+
+// SetKeepAccessoryPowerMode enables or disables accessory power mode. Phone chargers, USB ports,
+// and low voltage outlets remain powered after exit until the vehicle enters Low Power Mode. When
+// enabled, this feature consumes additional energy even if no devices are connected.
+func (v *Vehicle) SetKeepAccessoryPowerMode(ctx context.Context, enable bool) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_SetKeepAccessoryPowerModeAction{
+					SetKeepAccessoryPowerModeAction: &carserver.SetKeepAccessoryPowerModeAction{
+						KeepAccessoryPowerMode: enable,
 					},
 				},
 			},

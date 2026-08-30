@@ -178,9 +178,11 @@ func (s *Signer) Encrypt(message *universal.RoutableMessage, expiresIn time.Dura
 // AuthorizeHMAC adds an authentication tag to message.
 //
 // This allows the recipient to verify the message has not been tampered with,
-// but the payload is not encrypted. Unencrypted (but authenticated) messages are required for an
-// HTTP API which relays messages to vehicles but needs to state in order to determine when a
-// sequence of replies terminates.
+// but the payload is not encrypted. Unencrypted (but authenticated) messages are required by the
+// HTTP proxy. The proxy needs to inspect commands in order to enforce OAuth scopes and determine
+// when a sequence of replies terminates. If a client is not using the HTTP proxy, it should use
+// Encrypt instead of AuthorizeHMAC.
+//
 // Sensitive data, such as live camera streams, is encrypted on the application layer.
 func (s *Signer) AuthorizeHMAC(message *universal.RoutableMessage, expiresIn time.Duration) error {
 	s.counter++
@@ -208,4 +210,33 @@ func (s *Signer) AuthorizeHMAC(message *universal.RoutableMessage, expiresIn tim
 		return err
 	}
 	return nil
+}
+
+// Decrypt a Verifier message in place.
+//
+// Returns the anti-replay counter included in the message, which the client must verify increases
+// monotonically for a given id or is inside of a sliding window.
+func (s *Signer) Decrypt(message *universal.RoutableMessage, id []byte) (uint32, error) {
+	gcmInfo := message.GetSignatureData().GetAES_GCM_ResponseData()
+	if gcmInfo == nil {
+		return 0, newError(errCodeBadParameter, "missing AES-GCM data")
+	}
+	authenticatedData, err := s.responseMetadata(message, id, gcmInfo.Counter)
+	if err != nil {
+		return 0, nil
+	}
+	plaintext, err := s.session.Decrypt(
+		gcmInfo.Nonce,
+		message.GetProtobufMessageAsBytes(),
+		authenticatedData,
+		gcmInfo.Tag,
+	)
+	if err != nil {
+		return 0, err
+	}
+	message.Payload = &universal.RoutableMessage_ProtobufMessageAsBytes{
+		ProtobufMessageAsBytes: plaintext,
+	}
+	message.SubSigData = nil
+	return gcmInfo.Counter, nil
 }

@@ -22,8 +22,10 @@ import (
 	"golang.org/x/oauth2"
 )
 
-//go:embed version.txt
-var libraryVersion string
+var (
+	//go:embed version.txt
+	libraryVersion string
+)
 
 func buildUserAgent(app string) string {
 	library := strings.TrimSpace("tesla-sdk/" + libraryVersion)
@@ -65,6 +67,7 @@ type Account struct {
 	// The default UserAgent is constructed from the global UserAgent, but can be overridden.
 	UserAgent string
 	Host      string
+	Subject   string
 	client    *http.Client
 }
 
@@ -72,12 +75,11 @@ type Account struct {
 type oauthPayload struct {
 	Audiences []string `json:"aud"`
 	OUCode    string   `json:"ou_code"`
+	Subject   string   `json:"sub"`
 }
 
-var (
-	domainRegEx     = regexp.MustCompile(`^[A-Za-z0-9-.]+$`) // We're mostly interested in stopping paths; the http package handles the rest.
-	remappedDomains = map[string]string{}                    // For use during development; populate in an init() function.
-)
+var domainRegEx = regexp.MustCompile(`^[A-Za-z0-9-.]+$`) // We're mostly interested in stopping paths; the http package handles the rest.
+var remappedDomains = map[string]string{}                // For use during development; populate in an init() function.
 
 const defaultDomain = "fleet-api.prd.na.vn.cloud.tesla.com"
 
@@ -113,13 +115,18 @@ func (p *oauthPayload) domain() string {
 }
 
 // New returns an [Account] that can be used to fetch a [vehicle.Vehicle].
+//
+// The Account authenticates every request through ts, so a refreshing TokenSource keeps a
+// long-lived Account working. Callers holding a fixed token can wrap it with
+// [oauth2.StaticTokenSource].
+//
 // Optional userAgent can be passed in - otherwise it will be generated from code
 func New(ts oauth2.TokenSource, userAgent string) (*Account, error) {
-	oauthToken, err := ts.Token()
+	token, err := ts.Token()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not obtain OAuth token: %w", err)
 	}
-	parts := strings.Split(oauthToken.AccessToken, ".")
+	parts := strings.Split(token.AccessToken, ".")
 	if len(parts) != 3 {
 		return nil, fmt.Errorf("client provided malformed OAuth token")
 	}
@@ -136,15 +143,11 @@ func New(ts oauth2.TokenSource, userAgent string) (*Account, error) {
 	if domain == "" {
 		return nil, fmt.Errorf("client provided OAuth token with invalid audiences")
 	}
-	client := http.DefaultClient
-	client.Transport = &oauth2.Transport{
-		Source: ts,
-		Base:   http.DefaultClient.Transport,
-	}
 	return &Account{
 		UserAgent: buildUserAgent(userAgent),
-		client:    client,
 		Host:      domain,
+		Subject:   payload.Subject,
+		client:    oauth2.NewClient(context.Background(), ts),
 	}, nil
 }
 
@@ -155,7 +158,7 @@ func New(ts oauth2.TokenSource, userAgent string) (*Account, error) {
 // an AddKeyRequest; see documentation in [pkg/github.com/teslamotors/vehicle-command/pkg/vehicle]. The
 // sessions parameter may also be nil, but providing a cache.SessionCache avoids a round-trip
 // handshake with the Vehicle in subsequent connections.
-func (a *Account) GetVehicle(ctx context.Context, vin string, privateKey authentication.ECDHPrivateKey, sessions *cache.SessionCache) (*vehicle.Vehicle, error) {
+func (a *Account) GetVehicle(_ context.Context, vin string, privateKey authentication.ECDHPrivateKey, sessions *cache.SessionCache) (*vehicle.Vehicle, error) {
 	conn := inet.NewConnection(vin, a.client, a.Host, a.UserAgent)
 	car, err := vehicle.NewVehicle(conn, privateKey, sessions)
 	if err != nil {
@@ -181,7 +184,9 @@ func (a *Account) Get(ctx context.Context, endpoint string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error fetching %s: %w", endpoint, err)
 	}
-	defer response.Body.Close()
+	defer func() {
+		_ = response.Body.Close()
+	}()
 	if response.StatusCode != http.StatusOK {
 		err := fmt.Errorf("http error when sending command to %s: %s", url, response.Status)
 		return nil, err

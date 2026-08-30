@@ -1,0 +1,23 @@
+@startuml
+title Vehicle Commands Proxy
+ 
+"Your Backend" -> "Vehicle Commands Proxy": GET /api/1/vehicles/$VIN/command/flash_lights\n(includes Bearer token)
+activate "Vehicle Commands Proxy"
+"Vehicle Commands Proxy" -> "Vehicle Commands Proxy": Sign command using private key
+ 
+"Vehicle Commands Proxy" -> "Fleet API": Signed command
+activate "Fleet API"
+ 
+"Fleet API" -> Vehicle: Signed command
+activate Vehicle
+Vehicle -> Vehicle: Validate signature\nusing public key
+Vehicle -> Vehicle: Flash Lights
+Vehicle --> "Fleet API": Response
+deactivate Vehicle
+ 
+"Fleet API" --> "Vehicle Commands Proxy": Response
+deactivate "Fleet API"
+ 
+"Vehicle Commands Proxy" --> "Your Backend": Response
+deactivate "Vehicle Commands Proxy"
+@enduml

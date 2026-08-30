@@ -24,7 +24,7 @@ func (v *Vehicle) SetSeatCooler(ctx context.Context, level Level, seat SeatPosit
 				VehicleActionMsg: &carserver.VehicleAction_HvacSeatCoolerActions{
 					HvacSeatCoolerActions: &carserver.HvacSeatCoolerActions{
 						HvacSeatCoolerAction: []*carserver.HvacSeatCoolerActions_HvacSeatCoolerAction{
-							&carserver.HvacSeatCoolerActions_HvacSeatCoolerAction{
+							{
 								SeatCoolerLevel: carserver.HvacSeatCoolerActions_HvacSeatCoolerLevel_E(level + 1),
 								SeatPosition:    protoSeat,
 							},

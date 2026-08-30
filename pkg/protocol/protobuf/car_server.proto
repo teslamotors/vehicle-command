@@ -22,6 +22,7 @@ message VehicleAction {
     reserved 60;
     reserved 76;
     oneof vehicle_action_msg {
+        GetVehicleData getVehicleData = 1;
         ChargingSetLimitAction chargingSetLimitAction = 5;
         ChargingStartStopAction chargingStartStopAction = 6;
         DrivingClearSpeedLimitPinAction drivingClearSpeedLimitPinAction = 7;
@@ -66,7 +67,75 @@ message VehicleAction {
         EraseUserDataAction eraseUserDataAction = 72;
         VehicleControlSetPinToDriveAction vehicleControlSetPinToDriveAction = 77;
         VehicleControlResetPinToDriveAction vehicleControlResetPinToDriveAction = 78;
+        DrivingClearSpeedLimitPinAdminAction drivingClearSpeedLimitPinAdminAction = 79;
+        VehicleControlResetPinToDriveAdminAction vehicleControlResetPinToDriveAdminAction = 89;
+        ChargeSchedule addChargeScheduleAction = 97;
+        RemoveChargeScheduleAction removeChargeScheduleAction = 98;
+        PreconditionSchedule addPreconditionScheduleAction = 99;
+        RemovePreconditionScheduleAction removePreconditionScheduleAction = 100;
+        BatchRemovePreconditionSchedulesAction batchRemovePreconditionSchedulesAction = 107;
+        BatchRemoveChargeSchedulesAction batchRemoveChargeSchedulesAction = 108;
+        ParentalControlsClearPinAction parentalControlsClearPinAction = 109;
+        ParentalControlsClearPinAdminAction parentalControlsClearPinAdminAction = 110;
+        ParentalControlsAction parentalControlsAction = 111;
+        ParentalControlsEnableSettingsAction parentalControlsEnableSettingsAction = 112;
+        ParentalControlsSetSpeedLimitAction parentalControlsSetSpeedLimitAction = 113;
+        SetLowPowerModeAction setLowPowerModeAction = 130;
+        SetKeepAccessoryPowerModeAction setKeepAccessoryPowerModeAction = 138;
     }
+}
+
+message GetVehicleData {
+    GetChargeState getChargeState = 2;
+    GetClimateState getClimateState = 3;
+    GetDriveState getDriveState = 4;
+    reserved 5, 6;
+    GetLocationState getLocationState = 7;
+    GetClosuresState getClosuresState = 8;
+    GetChargeScheduleState getChargeScheduleState = 10;
+    GetPreconditioningScheduleState getPreconditioningScheduleState = 11;
+    reserved 12, 13;
+    GetTirePressureState getTirePressureState = 14;
+    GetMediaState getMediaState = 15;
+    GetMediaDetailState getMediaDetailState = 16;
+    GetSoftwareUpdateState getSoftwareUpdateState = 17;
+    GetParentalControlsState getParentalControlsState = 19;
+}
+
+message GetTirePressureState {
+}
+
+message GetMediaState {
+}
+
+message GetMediaDetailState {
+}
+
+message GetSoftwareUpdateState {
+}
+
+message GetChargeState {
+}
+
+message GetClimateState {
+}
+
+message GetDriveState {
+}
+
+message GetLocationState {
+}
+
+message GetClosuresState {
+}
+
+message GetChargeScheduleState {
+}
+
+message GetPreconditioningScheduleState {
+}
+
+message GetParentalControlsState {
 }
 
 message EraseUserDataAction {
@@ -76,6 +145,7 @@ message EraseUserDataAction {
 message Response {
     ActionStatus actionStatus = 1;
     oneof response_msg {
+        VehicleData vehicleData = 2;
         Signatures.SessionInfo getSessionInfoResponse = 3;
         NearbyChargingSites getNearbyChargingSites = 5;
         Ping ping = 9;
@@ -122,6 +192,9 @@ message ChargingStartStopAction {
 
 message DrivingClearSpeedLimitPinAction {
     string pin = 1;
+}
+
+message DrivingClearSpeedLimitPinAdminAction {
 }
 
 message DrivingSetSpeedLimitAction {
@@ -326,7 +399,7 @@ message VehicleControlTriggerHomelinkAction {
 }
 
 message VehicleControlWindowAction {
-    LatLong location = 1;
+    reserved 1; // Location not required for vehicles that support this protocol.
     oneof action {
         Void unknown = 2;
         Void vent = 3;
@@ -389,6 +462,26 @@ message SetChargingAmpsAction {
     int32 charging_amps = 1;
 }
 
+message RemoveChargeScheduleAction {
+    uint64                      id                      = 1; // datetime in epoch time
+}
+
+message BatchRemoveChargeSchedulesAction {
+    bool                        home                    = 1;
+    bool                        work                    = 2;
+    bool                        other                   = 3; // Delete non-home and non-work charge schedules
+}
+
+message BatchRemovePreconditionSchedulesAction {
+    bool home = 1;
+    bool work = 2;
+    bool other = 3; // Delete non-home and non-work precondition schedules
+}
+
+message RemovePreconditionScheduleAction {
+    uint64 id = 1; // datetime in epoch time
+}
+
 message SetCabinOverheatProtectionAction {
     bool on = 1;
     bool fan_only = 2;
@@ -414,4 +507,48 @@ message VehicleControlSetPinToDriveAction {
 }
 
 message VehicleControlResetPinToDriveAction {
+}
+
+message ParentalControlsClearPinAction {
+    string pin = 1;
+}
+
+message ParentalControlsClearPinAdminAction {
+}
+
+message ParentalControlsAction {
+    // If a PIN was set previously, it must be provided whenever this command
+    // is used. For example, after parental controls are disabled, re-enabling
+    // requires the original PIN.
+    bool activate = 1;
+    string pin = 2;
+}
+
+message ParentalControlsEnableSettingsAction {
+    enum ParentalControlsSetting_E {
+        SpeedLimit = 0;
+        Acceleration = 1;
+        SafetyFeatures = 2;
+        Curfew = 3;
+        BrowserBlocked = 4;
+        TheaterBlocked = 5;
+        ArcadeBlocked = 6;
+    }
+    ParentalControlsSetting_E setting = 1;
+    bool enable = 2;
+}
+
+message ParentalControlsSetSpeedLimitAction {
+    double limit_mph = 1;
+}
+
+message VehicleControlResetPinToDriveAdminAction {
+}
+
+message SetLowPowerModeAction {
+    bool low_power_mode = 1;
+}
+
+message SetKeepAccessoryPowerModeAction {
+    bool keep_accessory_power_mode = 1;
 }

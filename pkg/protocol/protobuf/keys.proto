@@ -13,4 +13,5 @@ enum Role
     ROLE_FM              = 4;
     ROLE_VEHICLE_MONITOR = 5;
     ROLE_CHARGING_MANAGER = 6;
+    ROLE_GUEST           = 8;
 }

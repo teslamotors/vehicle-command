@@ -19,6 +19,7 @@ type Verifier struct {
 	Peer
 	lock   sync.Mutex
 	window uint64
+	handle uint32
 }
 
 // NewVerifier returns a Verifier.
@@ -42,7 +43,7 @@ func NewVerifier(private ECDHPrivateKey, id []byte, domain universal.Domain, sig
 		return nil, ErrMetadataFieldTooLong
 	}
 
-	if err := verifier.rotateEpochIfNeeded(); err != nil {
+	if err := verifier.rotateEpochIfNeeded(false); err != nil {
 		return nil, err
 	}
 	return &verifier, nil
@@ -59,21 +60,26 @@ func (v *Verifier) signatureError(code universal.MessageFault_E, challenge []byt
 	return newError(errCodeInternal, fmt.Sprintf("Error collecting session info after encountering %s", code))
 }
 
-func (v *Verifier) rotateEpochIfNeeded() error {
-	if v.timeZero.IsZero() || v.counter == 0xFFFFFFFF || v.timestamp() > uint32(epochLength/time.Second) {
+func (v *Verifier) rotateEpochIfNeeded(force bool) error {
+	if force || v.timeZero.IsZero() || v.counter == 0xFFFFFFFF || v.timestamp() > uint32(epochLength/time.Second) {
 		if _, err := rand.Read(v.epoch[:]); err != nil {
 			v.counter = 0xFFFFFFFF
 			return newError(errCodeInternal, "RNG failure")
-		} else {
-			v.timeZero = time.Now()
-			v.counter = 0
 		}
+		v.timeZero = time.Now()
+		v.counter = 0
 	}
 	return nil
 }
 
+func (v *Verifier) AssignHandle(handle uint32) {
+	v.lock.Lock()
+	v.handle = handle
+	v.lock.Unlock()
+}
+
 func (v *Verifier) sessionInfo() (*signatures.SessionInfo, error) {
-	if err := v.rotateEpochIfNeeded(); err != nil {
+	if err := v.adjustClock(); err != nil {
 		return nil, err
 	}
 	info := &signatures.SessionInfo{
@@ -81,6 +87,7 @@ func (v *Verifier) sessionInfo() (*signatures.SessionInfo, error) {
 		PublicKey: v.session.LocalPublicBytes(),
 		Epoch:     v.epoch[:],
 		ClockTime: v.timestamp(),
+		Handle:    v.handle,
 	}
 	return info, nil
 }
@@ -137,13 +144,53 @@ func (v *Verifier) SetSessionInfo(challenge []byte, message *universal.RoutableM
 	return nil
 }
 
+func (v *Verifier) adjustClock() error {
+	// During process sleep, the monotonic clock may be frozen. This has the effect of causing
+	// commands to expire further in the future then the client may intend. In order to correct, we
+	// check if the wall clock has advanced significantly further than the monotonic clock and
+	// update the monotonic clock accordingly.
+	//
+	// Since the wall clock can be set over UDP, it is not trustworthy; therefore we do not make
+	// corrections in the other direction. This means an attacker who can modify the wall clock
+	// can cause commands to expire prematurely, but cannot extend the expiration time of a command.
+	//
+	// See https://pkg.go.dev/time discussion on wall clocks vs monotonic clock.
+	now := time.Now()
+	wallClock := now.Unix()
+	wallClockStart := v.timeZero.Unix()
+
+	// Check values that would cause an overflow.
+	const yearInSeconds = 365 * 24 * 60 * 60
+	if wallClockStart > wallClock || wallClock-wallClockStart > yearInSeconds {
+		return v.rotateEpochIfNeeded(true)
+	}
+
+	// elapsedWallTime and elapsedProcessTime are how far into the current epoch we are according to
+	// the wall clock and the monotonic clock, respectively.
+	elapsedWallTime := time.Duration(wallClock-wallClockStart) * time.Second
+	elapsedProcessTime := now.Sub(v.timeZero) // Monotonic clock semantics promise this will not be negative, and the implementation uses saturated arithmetic.
+
+	if elapsedWallTime > elapsedProcessTime {
+		sleepDuration := elapsedWallTime - elapsedProcessTime
+		if sleepDuration > time.Second {
+			var t time.Time
+			if t.Add(elapsedWallTime).After(now) {
+				return v.rotateEpochIfNeeded(true)
+			}
+			// The Add(...) method adjusts both the monotonic and wall clocks
+			v.timeZero = now.Add(-elapsedWallTime)
+		}
+	}
+	return v.rotateEpochIfNeeded(false)
+}
+
 // Verify message.
 // If payload is encrypted, returns the plaintext. Otherwise extracts and returns the payload as-is.
 func (v *Verifier) Verify(message *universal.RoutableMessage) (plaintext []byte, err error) {
 	v.lock.Lock()
 	defer v.lock.Unlock()
 
-	if err = v.rotateEpochIfNeeded(); err != nil {
+	if err = v.adjustClock(); err != nil {
 		return nil, err
 	}
 
@@ -174,55 +221,6 @@ func (v *Verifier) Verify(message *universal.RoutableMessage) (plaintext []byte,
 		}
 	}
 
-	return
-}
-
-// updateSlidingWindow takes the current counter value (i.e., the highest
-// counter value of any authentic message received so far), the current sliding
-// window, and the newCounter value from an incoming message. The function
-// returns the updated counter and window values and sets ok to true if it
-// could confirm that newCounter has never been previously used. If ok is
-// false, then updatedCounter = counter and updatedWindow = window.
-func updateSlidingWindow(counter uint32, window uint64, newCounter uint32) (updatedCounter uint32, updatedWindow uint64, ok bool) {
-	// If we exit early due to an error, we want to leave the counter/window
-	// state unchanged. Therefore we initialize return values to the current
-	// state.
-	updatedCounter = counter
-	updatedWindow = window
-	ok = false
-
-	if counter == newCounter {
-		// This counter value has been used before.
-		return
-	}
-
-	if newCounter < counter {
-		// This message arrived out of order.
-		age := counter - newCounter
-		if age > windowSize {
-			// Our history doesn't go back this far, so we can't determine if
-			// we've seen this newCounter value before.
-			return
-		}
-		if window>>(age-1)&1 == 1 {
-			// The newCounter value has been used before.
-			return
-		}
-		// Everything looks good.
-		ok = true
-		updatedWindow |= (1 << (age - 1))
-		return
-	}
-
-	// If we've reached this point, newCounter > counter, so newCounter is valid.
-	ok = true
-	updatedCounter = newCounter
-	// Compute how far we need to shift our sliding window.
-	shiftCount := newCounter - counter
-	updatedWindow <<= shiftCount
-	// We need to set the bit in our window that corresponds to counter (if
-	// newCounter = counter + 1, then this is the first [LSB] of the window).
-	updatedWindow |= uint64(1) << (shiftCount - 1)
 	return
 }
 
@@ -294,6 +292,37 @@ func (v *Verifier) verifySessionInfo(message *universal.RoutableMessage, info se
 		if expiresAt == 0 || expiresAt-v.timestamp() > maxSecondsWithoutCounter {
 			return v.signatureError(universal.MessageFault_E_MESSAGEFAULT_ERROR_TIME_TO_LIVE_TOO_LONG, message.GetUuid())
 		}
+	}
+	return nil
+}
+
+// Encrypt a message response in place.
+//
+// The message id must uniquely identify the Signer's request that prompted the message. The
+// counter must increase monotonically for a given id.
+func (v *Verifier) Encrypt(message *universal.RoutableMessage, id []byte, counter uint32) error {
+	plaintext := message.GetProtobufMessageAsBytes()
+	authenticatedData, err := v.responseMetadata(message, id, counter)
+	if err != nil {
+		return err
+	}
+	nonce, ciphertext, tag, err := v.session.Encrypt(plaintext, authenticatedData)
+	if err != nil {
+		return err
+	}
+	message.SubSigData = &universal.RoutableMessage_SignatureData{
+		SignatureData: &signatures.SignatureData{
+			SigType: &signatures.SignatureData_AES_GCM_ResponseData{
+				AES_GCM_ResponseData: &signatures.AES_GCM_Response_Signature_Data{
+					Counter: counter,
+					Nonce:   nonce,
+					Tag:     tag,
+				},
+			},
+		},
+	}
+	message.Payload = &universal.RoutableMessage_ProtobufMessageAsBytes{
+		ProtobufMessageAsBytes: ciphertext,
 	}
 	return nil
 }

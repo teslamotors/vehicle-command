@@ -15,7 +15,47 @@ import (
 
 // Expose some interfaces from the otherwise internal package
 
+// ECDHPrivateKey represents a local private key.
+//
+// See warnings in [Session] if implementing this interface using an HSM or
+// other Trusted Execution Environment (TEE).
 type ECDHPrivateKey authentication.ECDHPrivateKey
+
+// Session is a type alias for authentication.Session, exposed here so that
+// external packages can implement ECDHPrivateKey. The Exchange method on
+// ECDHPrivateKey returns Session, and without this alias external code cannot
+// reference the return type of that method, which makes ECDHPrivateKey
+// effectively unimplementable from outside this module.
+//
+// This matters for HSM and enclave integrations: code that holds the private
+// key in protected memory (Nitro Enclave, KMS, hardware HSM) needs to provide
+// its own ECDHPrivateKey implementation that proxies to the protected boundary.
+// The package comment in internal/authentication/ecdh.go specifically calls
+// out HSM integration as the reason ECDHPrivateKey is an interface rather
+// than a concrete type, so re-exporting Session restores that capability.
+//
+// If this interface is implemented using an HSM or other trusted execution
+// environment (TEE), then protecting long-term key material from a host
+// compromise requires:
+//
+//   - The TEE must NOT expose an API to export the shared secret (i.e., an
+//     ECDH interface).
+//   - The TEE must NOT expose an AES interface that uses the ECDH-derived
+//     key. This would allow a compromised host to compute the derived
+//     AES-GCM integrity-protection key.
+//   - The TEE must NOT expose an AES-GCM encryption interface that accepts
+//     the nonce as a host-provided input. Again, this would allow a
+//     compromised host to compute the derived AES-GCM integrity-protection
+//     key.
+//
+// The Session object should not include any of the above derived secrets,
+// just handles that can be provided to the TEE.
+//
+// If the TEE interface cannot meet the above requirements, then there may
+// still be value in using one because the host will only be able to
+// exfiltrate long-term shared secrets for existing, known vehicle public
+// keys.
+type Session = authentication.Session
 
 // LoadPrivateKey loads a P256 EC private key from a file.
 func LoadPrivateKey(filename string) (ECDHPrivateKey, error) {

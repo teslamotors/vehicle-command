@@ -104,6 +104,31 @@ func (v *Vehicle) getVCSECResult(ctx context.Context, payload []byte, auth conne
 	}
 }
 
+const slotNone = 0xFFFFFFFF
+
+func (v *Vehicle) getVCSECInfo(ctx context.Context, requestType vcsec.InformationRequestType, keySlot uint32) (*vcsec.FromVCSECMessage, error) {
+	payload := vcsec.UnsignedMessage{
+		SubMessage: &vcsec.UnsignedMessage_InformationRequest{
+			InformationRequest: &vcsec.InformationRequest{
+				InformationRequestType: requestType,
+			},
+		},
+	}
+	if keySlot != slotNone {
+		payload.GetInformationRequest().Key = &vcsec.InformationRequest_Slot{
+			Slot: keySlot,
+		}
+	}
+
+	encodedPayload, err := proto.Marshal(&payload)
+	if err != nil {
+		return nil, err
+	}
+
+	done := func(_ *vcsec.FromVCSECMessage) (bool, error) { return true, nil }
+	return v.getVCSECResult(ctx, encodedPayload, connector.AuthMethodNone, done)
+}
+
 func isWhitelistOperationComplete(fromVCSEC *vcsec.FromVCSECMessage) (bool, error) {
 	if opStatus := fromVCSEC.GetCommandStatus().GetWhitelistOperationStatus(); opStatus != nil {
 		status := opStatus.GetWhitelistOperationInformation()
@@ -123,13 +148,7 @@ func (v *Vehicle) executeWhitelistOperation(ctx context.Context, payload []byte)
 	return err
 }
 
-func addKeyPayload(publicKey *ecdh.PublicKey, isOwner bool, formFactor vcsec.KeyFormFactor) *vcsec.UnsignedMessage {
-	var role keys.Role
-	if isOwner {
-		role = keys.Role_ROLE_OWNER
-	} else {
-		role = keys.Role_ROLE_DRIVER
-	}
+func addKeyPayload(publicKey *ecdh.PublicKey, role keys.Role, formFactor vcsec.KeyFormFactor) *vcsec.UnsignedMessage {
 	return &vcsec.UnsignedMessage{
 		SubMessage: &vcsec.UnsignedMessage_WhitelistOperation{
 			WhitelistOperation: &vcsec.WhitelistOperation{
@@ -190,8 +209,9 @@ func (v *Vehicle) AutoSecureVehicle(ctx context.Context) error {
 type Closure string
 
 const (
-	ClosureTrunk Closure = "trunk"
-	ClosureFrunk Closure = "frunk"
+	ClosureTrunk   Closure = "trunk"
+	ClosureFrunk   Closure = "frunk"
+	ClosureTonneau Closure = "tonneau"
 )
 
 func (v *Vehicle) executeClosureAction(ctx context.Context, action vcsec.ClosureMoveType_E, closure Closure) error {
@@ -209,6 +229,8 @@ func (v *Vehicle) executeClosureAction(ctx context.Context, action vcsec.Closure
 		request.RearTrunk = action
 	case ClosureFrunk:
 		request.FrontTrunk = action
+	case ClosureTonneau:
+		request.Tonneau = action
 	}
 
 	payload := vcsec.UnsignedMessage{

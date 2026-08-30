@@ -1,10 +1,525 @@
 syntax = "proto3";
 
 package CarServer;
+import "google/protobuf/timestamp.proto";
+
+import "vcsec.proto";
+import "common.proto";
+import "managed_charging.proto";
 
 option go_package = "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/carserver";
 option java_package = "com.tesla.generated.carserver.vehicle";
 option java_outer_classname = "Vehicle";
+
+message VehicleData {
+    ChargeState charge_state = 3;
+    ClimateState climate_state = 4;
+    DriveState drive_state = 5;
+    LocationState location_state = 8;
+    ClosuresState closures_state = 9;
+    ChargeScheduleState charge_schedule_state = 15;
+    PreconditioningScheduleState preconditioning_schedule_state = 16;
+    TirePressureState tire_pressure_state = 19;
+    MediaState media_state = 20;
+    MediaDetailState media_detail_state = 21;
+    SoftwareUpdateState software_update_state = 23;
+    ParentalControlsState parental_controls_state = 24;
+}
+
+message ClosuresState {
+    message SunRoofState {
+        oneof type {
+            Void Unknown = 1;
+            Void Calibrating = 2;
+            Void Closed = 3;
+            Void Open = 4;
+            Void Moving = 5;
+            Void Vent = 6;
+        }
+    }
+
+    message DisplayState {
+        oneof type {
+            Void Off = 1;
+            Void Dim = 2;
+            Void Accessory = 3;
+            Void On = 4;
+            Void Driving = 5;
+            Void Charging = 6;
+            Void Lock = 7;
+            Void Sentry = 8;
+            Void Dog = 9;
+            Void Entertainment = 10;
+        }
+    }
+
+    message SentryModeState {
+        oneof type {
+            Void Off = 1;
+            Void Idle = 2;
+            Void Armed = 3;
+            Void Aware = 4;
+            Void Panic = 5;
+            Void Quiet = 6;
+        }
+    }
+
+    oneof optional_door_open_driver_front { bool door_open_driver_front = 101; }
+    oneof optional_door_open_driver_rear { bool door_open_driver_rear = 102; }
+    oneof optional_door_open_passenger_front { bool door_open_passenger_front = 103; }
+    oneof optional_door_open_passenger_rear { bool door_open_passenger_rear = 104; }
+    oneof optional_door_open_trunk_front { bool door_open_trunk_front = 105; }
+    oneof optional_door_open_trunk_rear { bool door_open_trunk_rear = 106; }
+
+    oneof optional_window_open_driver_front { bool window_open_driver_front = 107; }
+    oneof optional_window_open_passenger_front { bool window_open_passenger_front = 108; }
+    oneof optional_window_open_driver_rear { bool window_open_driver_rear = 109; }
+    oneof optional_window_open_passenger_rear { bool window_open_passenger_rear = 110; }
+    SunRoofState sun_roof_state = 11; // only set when sunroof installed
+
+    oneof optional_sun_roof_percent_open { int32 sun_roof_percent_open = 112; } // only set when sunroof installed
+
+    oneof optional_locked { bool locked = 113; }
+    oneof optional_is_user_present { bool is_user_present = 114; }
+    DisplayState center_display_state = 15;
+
+    // `true` when remote start is active.
+    oneof optional_remote_start { bool remote_start = 116; }
+    oneof optional_valet_mode { bool valet_mode = 117; }
+    oneof optional_valet_pin_needed { bool valet_pin_needed = 118; }
+    SentryModeState sentry_mode_state = 19; // only set when sentry mode supported
+
+    oneof optional_sentry_mode_available { bool sentry_mode_available = 120; } // only set when sentry mode supported
+
+    SpeedLimitMode speed_limit_mode = 22; // only set when speed limit mode supported
+
+    oneof optional_tonneau_state { VCSEC.ClosureState_E tonneau_state = 23; }
+    oneof optional_tonneau_percent_open { uint32 tonneau_percent_open = 24; }
+    oneof optional_tonneau_in_motion { bool tonneau_in_motion = 25; }
+
+    google.protobuf.Timestamp timestamp = 2000;
+}
+
+message ChargeScheduleState {
+    repeated ChargeSchedule       charge_schedules       = 1;
+    oneof optional_charge_schedule_window { ChargeSchedule charge_schedule_window = 2; }
+    oneof optional_charge_buffer { int32 charge_buffer = 3; }
+    oneof optional_max_num_charge_schedules { uint32 max_num_charge_schedules = 4; }
+    oneof optional_next_schedule { bool next_schedule = 5; }
+    oneof optional_show_schedule_complete_state { bool show_schedule_complete_state = 6; }
+    google.protobuf.Timestamp timestamp = 2000;
+}
+
+message PreconditioningScheduleState {
+    repeated PreconditionSchedule precondition_schedules = 1;
+    oneof optional_preconditioning_schedule_window { PreconditionSchedule preconditioning_schedule_window = 2; }
+    oneof optional_max_num_precondition_schedules { uint32 max_num_precondition_schedules = 3; }
+    oneof optional_next_schedule { bool next_schedule = 4; }
+    google.protobuf.Timestamp timestamp = 2000;
+} // message PreconditioningScheduleState
+
+message SpeedLimitMode {
+    oneof optional_active { bool active = 103; }
+    oneof optional_pin_code_set { bool pin_code_set = 104; }
+    oneof optional_max_limit_mph { float max_limit_mph = 106; }
+    oneof optional_min_limit_mph { float min_limit_mph = 107; }
+    oneof optional_current_limit_mph { float current_limit_mph = 108; }
+}
+
+message ParentalControlsSettings {
+    oneof optional_speed_limit_enabled { bool speed_limit_enabled = 1; }
+    oneof optional_max_limit_mph { float max_limit_mph = 2; }
+    oneof optional_min_limit_mph { float min_limit_mph = 3; }
+    oneof optional_current_limit_mph { float current_limit_mph = 4; }
+
+    oneof optional_chill_acceleration_enabled { bool chill_acceleration_enabled = 5; }
+    oneof optional_require_safety_settings_enabled { bool require_safety_settings_enabled = 6; }
+    oneof optional_curfew_enabled { bool curfew_enabled = 7; }
+    oneof optional_curfew_start_time { int32 curfew_start_time = 8; }
+    oneof optional_curfew_end_time { int32 curfew_end_time = 9; }
+}
+
+message ParentalControlsState {
+    google.protobuf.Timestamp timestamp = 1;
+    oneof optional_parental_controls_active { bool parental_controls_active = 2; }
+    oneof optional_parental_controls_pin_set { bool parental_controls_pin_set = 3; }
+    ParentalControlsSettings parental_controls_settings = 4;
+}
+
+message SoftwareUpdateState {
+    message SoftwareUpdateStatus {
+        oneof type {
+            Void Unknown = 1;
+            Void Installing = 2;
+            Void Scheduled = 3;
+            Void Available = 4;
+            Void DownloadingWifiWait = 5;
+            Void Downloading = 6;
+        }
+    }
+
+    SoftwareUpdateStatus status = 1;
+    oneof optional_scheduled_time_ms { uint64 scheduled_time_ms = 102; }
+    oneof optional_warning_time_remaining_ms { uint64 warning_time_remaining_ms = 103; }
+    oneof optional_expected_duration_sec { uint32 expected_duration_sec = 104; }
+    oneof optional_download_perc { uint32 download_perc = 105; }
+    oneof optional_install_perc { uint32 install_perc = 106; }
+    oneof optional_version { string version = 107; }
+
+    google.protobuf.Timestamp timestamp = 108;
+}
+
+
+message DriveState {
+    ShiftState        shift_state = 1;
+    oneof optional_speed { uint32  speed = 102; }
+    oneof optional_power { int32   power = 103; }
+
+    google.protobuf.Timestamp timestamp = 4;
+
+    oneof optional_odometer_in_hundredths_of_a_mile { int32 odometer_in_hundredths_of_a_mile = 105; }
+
+    oneof optional_speed_float { float         speed_float = 106; }
+
+    oneof optional_active_route_destination { string active_route_destination = 7; }
+    oneof optional_active_route_minutes_to_arrival { float active_route_minutes_to_arrival = 8; }
+    oneof optional_active_route_miles_to_arrival { float active_route_miles_to_arrival = 9; }
+    oneof optional_active_route_traffic_minutes_delay { float active_route_traffic_minutes_delay = 10; }
+    oneof optional_active_route_energy_at_arrival { float active_route_energy_at_arrival = 11; }
+    oneof optional_last_route_update { uint32 last_route_update = 14; }
+    google.protobuf.Timestamp last_traffic_update = 15;
+
+    LatLong active_route_coordinates = 12;
+}
+
+message ChargeState {
+    message CableType {
+        oneof type {
+            Void SNA = 1;
+            Void IEC = 2;
+            Void SAE = 3;
+            Void GB_AC = 4;
+            Void GB_DC = 5;
+        }
+    }
+
+    message ChargerType {
+        oneof type {
+            Void SNA = 1;
+            Void Supercharger = 2;
+            Void Chademo = 3;
+            Void Gb = 4;
+            Void ACSingleWireCAN = 5;
+            Void Combo = 6;
+            Void MCSingleWireCAN = 7;
+            Void Other = 8;
+            Void Tesla = 9;
+        }
+    }
+
+    message ChargingState {
+        oneof type {
+            Void Unknown = 1;
+            Void Disconnected = 2;
+            Void NoPower = 3;
+            Void Starting = 4;
+            Void Charging = 5;
+            Void Complete = 6;
+            Void Stopped = 7;
+            Void Calibrating = 8;
+        }
+    }
+
+    message ChargerBrand {
+        oneof type {
+            Void Tesla = 1;
+            Void SNA = 2;
+        }
+    }
+
+    enum ScheduledChargingMode {
+        ScheduledChargingModeOff = 0;
+        ScheduledChargingModeStartAt = 1;
+        ScheduledChargingModeDepartBy = 2;
+    }
+
+    enum ChargePortColor_E {
+        ChargePortColorOff = 0;
+        ChargePortColorRed = 1;
+        ChargePortColorGreen = 2;
+        ChargePortColorBlue = 3;
+        ChargePortColorWhite = 4;
+        ChargePortColorFlashingGreen = 5;
+        ChargePortColorFlashingAmber = 6;
+        ChargePortColorAmber = 7;
+        ChargePortColorRave = 8;
+        ChargePortColorDebug = 9;
+        ChargePortColorFlashingBlue = 10;
+    }
+
+    enum ChargeLimitReason {
+        ChargeLimitReasonUnknown = 0;
+        ChargeLimitReasonNone = 1;
+        ChargeLimitReasonEvse = 2;
+        ChargeLimitReasonBattTempLow = 3;
+        ChargeLimitReasonHighSoc = 4;
+        ChargeLimitReasonCabin = 5;
+    }
+
+    enum OutletState {
+        OutletStateOff = 0;
+        OutletStateCabinAndBed = 1;
+        OutletStateCabin = 2;
+    }
+
+    enum PowerFeedState {
+        PowerFeedStateOff = 0;
+        PowerFeedStateCabinAndBed = 1;
+        PowerFeedStateCabin = 2;
+    }
+
+    enum PowershareStatus {
+        PowershareStatusInactive = 0;                // disconnected or connected, but don't know if powershare capable
+        PowershareStatusInit    = 1;                 // initializing
+        PowershareStatusActive  = 2;                 // actively powersharing
+        PowershareStatusStopped = 3;                 // powersharing has stopped - either standby or faulted or blocked; look at stopReason
+        PowershareStatusHandshaking = 4;             // powersharing is handshaking
+        PowershareStatusActiveReconnectingSoon = 5;  // powersharing is active, but reconnecting soon
+    }
+
+    enum PowershareType {
+        PowershareTypeNone = 0;
+        PowershareTypeLoad = 1;
+        PowershareTypeHome = 2;
+    }
+
+    enum PowershareStopReason {
+        PowershareStopReasonNone = 0;
+        PowershareStopReasonSOCTooLow = 1;
+        PowershareStopReasonRetry = 2;
+        PowershareStopReasonFault = 3;
+        PowershareStopReasonUser = 4;
+        PowershareStopReasonReconnecting = 5;
+        PowershareStopReasonAuthentication = 6;
+    }
+
+    ChargingState charging_state = 1;
+    ChargerType   fast_charger_type = 2;
+    ChargerBrand  fast_charger_brand = 3;
+    oneof optional_charge_limit_soc { int32         charge_limit_soc = 104; }
+    oneof optional_charge_limit_soc_std { int32         charge_limit_soc_std = 105; }
+    oneof optional_charge_limit_soc_min { int32         charge_limit_soc_min = 106; }
+    oneof optional_charge_limit_soc_max { int32         charge_limit_soc_max = 107; }
+    reserved 8;
+    oneof optional_max_range_charge_counter { int32         max_range_charge_counter = 109; }
+    oneof optional_fast_charger_present { bool          fast_charger_present = 110; }
+
+    // 2 decimals
+    oneof optional_battery_range { float         battery_range = 111; }
+    oneof optional_est_battery_range { float         est_battery_range = 112; }
+    oneof optional_ideal_battery_range { float         ideal_battery_range = 113; }
+
+    oneof optional_battery_level { int32         battery_level = 114; }
+    oneof optional_usable_battery_level { int32         usable_battery_level = 115; }
+
+    // 1 decimal
+    oneof optional_charge_energy_added { float         charge_energy_added = 116; }
+    oneof optional_charge_miles_added_rated { float         charge_miles_added_rated = 117; }
+    oneof optional_charge_miles_added_ideal { float         charge_miles_added_ideal = 118; }
+
+    oneof optional_charger_voltage { int32         charger_voltage = 119; }
+    oneof optional_charger_pilot_current { int32         charger_pilot_current = 120; }
+    oneof optional_charger_actual_current { int32         charger_actual_current = 121; }
+    oneof optional_charger_power { int32         charger_power = 122; }
+
+    oneof optional_minutes_to_full_charge { int32 minutes_to_full_charge = 123; }
+    oneof optional_minutes_to_charge_limit { int32 minutes_to_charge_limit = 142; }
+    oneof optional_trip_charging { bool          trip_charging = 125; }
+
+    oneof optional_charge_rate_mph { int32         charge_rate_mph = 126; }
+    oneof optional_charge_port_door_open { bool          charge_port_door_open = 127; }
+    CableType     conn_charge_cable = 28;
+
+    // seconds / datetime
+    oneof optional_scheduled_charging_start_time { uint64        scheduled_charging_start_time = 129; }
+    oneof optional_scheduled_charging_pending { bool          scheduled_charging_pending = 130; }
+    google.protobuf.Timestamp scheduled_departure_time = 31;
+    oneof optional_user_charge_enable_request { bool          user_charge_enable_request = 132; }
+    oneof optional_charge_enable_request { bool          charge_enable_request = 133; }
+    oneof optional_charger_phases { int32         charger_phases = 134; }
+    ChargePortLatchState charge_port_latch = 35;
+    oneof optional_charge_port_cold_weather_mode { bool          charge_port_cold_weather_mode = 136; }
+    oneof optional_charge_current_request { int32         charge_current_request = 137; }
+    oneof optional_charge_current_request_max { int32         charge_current_request_max = 138; }
+    oneof optional_managed_charging_active { bool          managed_charging_active = 139; }
+    oneof optional_managed_charging_user_canceled { bool          managed_charging_user_canceled = 140; }
+    oneof optional_managed_charging_start_time { uint64        managed_charging_start_time = 141; }
+    reserved 42, 43;
+
+    google.protobuf.Timestamp timestamp = 44;
+
+    PreconditioningTimes        preconditioning_times = 45;
+    OffPeakChargingTimes        off_peak_charging_times = 46;
+
+    oneof optional_off_peak_hours_end_time { uint32        off_peak_hours_end_time = 147; }
+
+    oneof optional_scheduled_charging_mode { ScheduledChargingMode       scheduled_charging_mode = 148; }
+    oneof optional_charging_amps { int32         charging_amps = 149; }
+
+    oneof optional_scheduled_charging_start_time_minutes { uint32        scheduled_charging_start_time_minutes = 150; }
+    oneof optional_scheduled_departure_time_minutes { uint32        scheduled_departure_time_minutes = 151; }
+    oneof optional_preconditioning_enabled { bool          preconditioning_enabled = 152; }
+    oneof optional_scheduled_charging_start_time_app { sint32        scheduled_charging_start_time_app = 153; }
+
+    oneof optional_supercharger_session_trip_planner { bool          supercharger_session_trip_planner = 154; }
+
+    oneof optional_charge_port_color { ChargePortColor_E           charge_port_color = 155; }
+
+    oneof optional_charge_rate_mph_float { float         charge_rate_mph_float = 156; }
+
+    oneof optional_charge_limit_reason { ChargeLimitReason charge_limit_reason = 157; }
+
+    ManagedChargingState managed_charging_state = 158;
+
+    oneof optional_charge_cable_unlatched { bool charge_cable_unlatched = 159; }
+
+    oneof optional_outlet_state { OutletState outlet_state = 160; }
+    oneof optional_power_feed_state { PowerFeedState power_feed_state = 161; }
+    oneof option_outlet_soc_limit { int32 outlet_soc_limit = 162; }
+    oneof option_power_feed_soc_limit { int32 power_feed_soc_limit = 163; }
+    oneof option_outlet_time_remaining { int64 outlet_time_remaining = 164; }
+    oneof option_power_feed_time_remaining { int64 power_feed_time_remaining = 165; }
+    oneof optional_powershare_feature_allowed { bool powershare_feature_allowed = 166; }
+    oneof optional_powershare_feature_enabled { bool powershare_feature_enabled = 167; }
+    oneof optional_powershare_request { bool powershare_request = 168; }
+    oneof optional_powershare_type { PowershareType powershare_type = 169; }
+    oneof optional_powershare_status { PowershareStatus powershare_status = 170; }
+    oneof optional_powershare_stop_reason { PowershareStopReason powershare_stop_reason = 171; }
+    oneof optional_powershare_instantaneous_load_kw { float powershare_instantaneous_load_kw = 172; }
+    oneof optional_powershare_vehicle_energy_left_hr { int32 powershare_vehicle_energy_left_hr = 173; }
+    oneof optional_powershare_soc_limit { int32 powershare_soc_limit = 174; }
+    oneof optional_one_time_soc_limit { int32 one_time_soc_limit = 175; }
+    oneof optional_home_location { LatLong home_location = 176; }
+    oneof optional_work_location { LatLong work_location = 177; }
+    oneof optional_outlet_max_timer_minutes { int32 outlet_max_timer_minutes = 178; }
+}
+
+message ManagedChargingState {
+    ChargeOnSolarState charge_on_solar_state = 1;
+    oneof optional_charge_on_solar_gateway_din { string        charge_on_solar_gateway_din = 2; }
+    oneof optional_tesla_electric_asset_id { string        tesla_electric_asset_id = 3; }
+    oneof optional_minutes_to_lower_limit { int32         minutes_to_lower_limit = 4; }
+}
+
+message ChargeOnSolarState {
+    reserved 5; // ChargeOnSolarStateUserSkipped is no longer supported.
+
+    // The state of the charge on solar managed charging feature.
+    oneof state {
+        // Conditions do not support the Charge on Solar feature. For example, the vehicle may not be located at
+        // a managed charging site.
+        ChargeOnSolarStateNotAllowed not_allowed = 1;
+        // The vehicle is receiving no charge recommended commands from the site controller.
+        ChargeOnSolarStateNoChargeRecommended no_charge_recommended = 2;
+        // The vehicle is actively following charge on solar recommended charge power.
+        ChargeOnSolarStateChargingOnExcessSolar charging_on_excess_solar = 3;
+        // The vehicle is charging at full power on any source.
+        ChargeOnSolarStateChargingOnAnything charging_on_anything = 4;
+        // The user disabled the charge on solar feature.
+        ChargeOnSolarStateUserDisabled user_disabled = 6;
+        // The vehicle just entered a valid state for Charge on Solar and is waiting for an initial
+        // response from the site controller. It will wait in this state for a configured amount of time before entering
+        // the ChargeOnSolarError state if it does not receive a successful response from the site controller.
+        ChargeOnSolarStateWaitingForServer waiting_for_server = 7;
+        // The managed charging service has received a sustained number of error responses and the
+        // ChargingManager is no longer following the charge on solar power set points.
+        ChargeOnSolarStateError error = 8;
+        // The user pressed the Stop Charging button during a Charge on Solar session.
+        ChargeOnSolarStateUserStopped user_stopped = 9;
+    }
+}
+
+// Conditions do not support the Charge on Solar feature. For example, the vehicle may not be located at
+// a managed charging site.
+message ChargeOnSolarStateNotAllowed {}
+
+// Charge on solar is enabled and the vehicle SOC is above the lower limit, however the
+// vehicle is not charging off solar for one or more reasons.
+// We return the highest priority reason to the mobile app.
+message ChargeOnSolarStateNoChargeRecommended {
+    ManagedCharging.ChargeOnSolarNoChargeReason reason = 1;
+}
+
+// Charge on solar is enabled and the conditions allow for charging on solar.
+// The SOC may be above or below the lower left charging limit.
+message ChargeOnSolarStateChargingOnExcessSolar {}
+
+// The vehicle is charging at full power on any source.
+message ChargeOnSolarStateChargingOnAnything {}
+
+// The user disabled the charge on solar feature.
+message ChargeOnSolarStateUserDisabled {}
+
+// The vehicle just entered a valid state for Charge on Solar and is waiting for an initial
+// response from the site controller. It will wait in this state for 15min before entering
+// the ChargeOnSolarError state if it does not receive a successful response from the site controller.
+message ChargeOnSolarStateWaitingForServer {}
+
+// The managed charging service has received a sustained number of error responses and the
+// ChargingManager is no longer following the charge on solar power set points.
+message ChargeOnSolarStateError {}
+
+// The user pressed the Stop Charging button during a Charge on Solar session.
+message ChargeOnSolarStateUserStopped {}
+
+// LocationState contains information about the vehicle's location. Typically
+// clients will want to use native coordinates, which use either WGS
+// (international) or GCJ (Chinese) coordinate systems depending on the
+// vehicle's region. If the native fields are not provided, WGS clients should
+// fall back to the plain latitude/longitude fields, and GCJ clients should
+// fall back to corrected fields.
+//
+// The geo fields contain raw WGS GPS coordinates. They are usually less
+// accurate. However, they should be used if there is a large discrepancy
+// between the raw and estimated location, as determined by the
+// "estimated to raw distance" field. This scenario most frequently arises when
+// the vehicle has recently been transported or towed.
+message LocationState {
+    message GPSCoordinateType {
+        oneof type {
+            Void GCJ = 1;
+            Void WGS = 2;
+        }
+    }
+
+    reserved 12;
+
+    oneof optional_latitude { float latitude = 101; }
+    oneof optional_longitude { float longitude = 102; }
+    oneof optional_heading { uint32 heading = 103; }
+    oneof optional_gps_as_of { uint64 gps_as_of = 104; }
+    oneof optional_native_location_supported { bool native_location_supported = 105; }
+    oneof optional_native_latitude { float native_latitude = 106; }
+    oneof optional_native_longitude { float native_longitude = 107; }
+    GPSCoordinateType native_type = 8;
+    oneof optional_corrected_latitude { float corrected_latitude = 109; } // only for China cars
+    oneof optional_corrected_longitude { float corrected_longitude = 110; } // only for China cars
+
+    google.protobuf.Timestamp timestamp = 11;
+
+    oneof optional_homelink_nearby { bool homelink_nearby = 112; } // only set when homelink supported
+
+    oneof optional_location_name { string location_name = 113; } // contains a non-precise location name
+
+    oneof optional_geo_latitude  { float geo_latitude = 114; } // raw GPS coordinates
+    oneof optional_geo_longitude { float geo_longitude = 115; }
+    oneof optional_geo_heading   { float geo_heading = 116; }
+    oneof optional_geo_elevation { float geo_elevation = 117; }
+    oneof optional_geo_accuracy  { float geo_accuracy = 118; }
+    oneof optional_estimated_gps_valid { bool estimated_gps_valid  = 119; }
+    oneof optional_estimated_to_raw_distance  { float estimated_to_raw_distance  = 120; } // the distance between the estimated and raw coordinates in meters
+} // LocationState
+
 
 message VehicleState {
     message GuestMode {
@@ -14,10 +529,218 @@ message VehicleState {
 }
 
 message ClimateState {
+    message ClimateKeeperMode {
+        oneof type {
+            Void Unknown = 1;
+            Void Off = 2;
+            Void On = 3;
+            Void Dog = 4;
+            Void Party = 5;
+        }
+    }
+
+    message DefrostMode {
+        oneof type {
+            Void Off = 1;
+            Void Normal = 2;
+            Void Max = 3;
+        }
+    }
+
+    enum HvacAutoRequest {
+        HvacAutoRequestOn = 0;
+        HvacAutoRequestOverride = 1;
+    }
+
+    enum CabinOverheatProtection_E {
+        CabinOverheatProtectionOff = 0;
+        CabinOverheatProtectionOn = 1;
+        CabinOverheatProtectionFanOnly = 2;
+    }
+
+    enum SeatHeaterLevel_E {
+        SeatHeaterLevelOff = 0;
+        SeatHeaterLevelLow = 1;
+        SeatHeaterLevelMed = 2;
+        SeatHeaterLevelHigh = 3;
+    }
+
+    enum SeatCoolingLevel_E {
+        SeatCoolingLevelOff = 0;
+        SeatCoolingLevelLow = 1;
+        SeatCoolingLevelMed = 2;
+        SeatCoolingLevelHigh = 3;
+    }
+
     enum CopActivationTemp {
         CopActivationTempUnspecified = 0;
         CopActivationTempLow = 1;
         CopActivationTempMedium = 2;
         CopActivationTempHigh = 3;
     }
+
+    enum COPNotRunningReason {
+        COPNotRunningReasonNoReason = 0;
+        COPNotRunningReasonUserInteraction = 1;
+        COPNotRunningReasonEnergyConsumptionReached = 2;
+        COPNotRunningReasonTimeout = 3;
+        COPNotRunningReasonLowSolarLoad = 4;
+        COPNotRunningReasonFault = 5;
+        COPNotRunningReasonCabinBelowThreshold = 6;
+    }
+
+    oneof optional_inside_temp_celsius { float inside_temp_celsius = 101; }
+    oneof optional_outside_temp_celsius { float outside_temp_celsius = 102; }
+    oneof optional_driver_temp_setting { float driver_temp_setting = 103; }
+    oneof optional_passenger_temp_setting { float passenger_temp_setting = 104; }
+    oneof optional_left_temp_direction { int32 left_temp_direction = 105; }
+    oneof optional_right_temp_direction { int32 right_temp_direction = 106; }
+    oneof optional_is_front_defroster_on { bool  is_front_defroster_on = 107; }
+    oneof optional_is_rear_defroster_on { bool  is_rear_defroster_on = 108; }
+    oneof optional_fan_status { int32 fan_status = 109; }
+    oneof optional_is_climate_on { bool  is_climate_on = 110; }
+    oneof optional_min_avail_temp_celsius { float min_avail_temp_celsius = 111; }
+    oneof optional_max_avail_temp_celsius { float max_avail_temp_celsius = 112; }
+
+    oneof optional_seat_heater_left { int32 seat_heater_left = 113; } // not set when no seat heaters installed. Values in 'SeatHeaterLevel_E'.
+    oneof optional_seat_heater_right { int32 seat_heater_right = 114; } // not set when no seat heaters installed. Values in 'SeatHeaterLevel_E'.
+    oneof optional_seat_heater_rear_left { int32 seat_heater_rear_left = 115; } // not set when no rear seat heaters installed. Values in 'SeatHeaterLevel_E'.
+    oneof optional_seat_heater_rear_right { int32 seat_heater_rear_right = 116; } // not set when no rear seat heaters installed. Values in 'SeatHeaterLevel_E'.
+    oneof optional_seat_heater_rear_center { int32 seat_heater_rear_center = 117; } // not set when no rear center seat heaters installed. Values in 'SeatHeaterLevel_E'.
+    oneof optional_seat_heater_rear_right_back { int32 seat_heater_rear_right_back = 118; } // not set for non-executive rear seat heaters. Values in 'SeatHeaterLevel_E'.
+    oneof optional_seat_heater_rear_left_back { int32 seat_heater_rear_left_back = 119; } // not set for non-executive rear seat heaters. Values in 'SeatHeaterLevel_E'.
+    oneof optional_seat_heater_third_row_right { int32 seat_heater_third_row_right = 120; } // not set when no third row seat heaters installed. Values in 'SeatHeaterLevel_E'.
+    oneof optional_seat_heater_third_row_left { int32 seat_heater_third_row_left = 121; } // not set when no third row seat heaters installed. Values in 'SeatHeaterLevel_E'.
+
+    oneof optional_battery_heater { bool  battery_heater = 122; }
+    oneof optional_battery_heater_no_power { bool  battery_heater_no_power = 123; }
+
+    oneof optional_steering_wheel_heater { bool  steering_wheel_heater = 125; } // not set when no steering wheel heater installed.
+    oneof optional_wiper_blade_heater { bool  wiper_blade_heater = 126; }
+    oneof optional_side_mirror_heaters { bool  side_mirror_heaters = 127; }
+    oneof optional_is_preconditioning { bool  is_preconditioning = 128; }
+
+    oneof optional_remote_heater_control_enabled { bool  remote_heater_control_enabled = 129; }
+    ClimateKeeperMode climate_keeper_mode = 30;
+
+    google.protobuf.Timestamp timestamp = 33;
+
+    oneof optional_bioweapon_mode_on { bool  bioweapon_mode_on = 134; } // only set in cars with HEPA filter
+    DefrostMode defrost_mode = 35;
+    oneof optional_is_auto_conditioning_on { bool is_auto_conditioning_on = 136; }
+    oneof optional_auto_seat_climate_left { bool auto_seat_climate_left = 137; }
+    oneof optional_auto_seat_climate_right { bool auto_seat_climate_right = 138; }
+    oneof optional_seat_fan_front_left { int32 seat_fan_front_left = 139; } // Values in 'SeatCoolingLevel_E'.
+    oneof optional_seat_fan_front_right { int32 seat_fan_front_right = 140; } // Values in 'SeatCoolingLevel_E'.
+    oneof optional_allow_cabin_overheat_protection { bool allow_cabin_overheat_protection = 141; }
+    oneof optional_supports_fan_only_cabin_overheat_protection { bool supports_fan_only_cabin_overheat_protection = 142; }
+    oneof optional_cabin_overheat_protection { CabinOverheatProtection_E cabin_overheat_protection = 143; }
+    oneof optional_cabin_overheat_protection_actively_cooling { bool cabin_overheat_protection_actively_cooling = 144; }
+    reserved 145;
+    oneof optional_cop_activation_temperature { CopActivationTemp cop_activation_temperature = 146; }
+
+    oneof optional_auto_steering_wheel_heat { bool auto_steering_wheel_heat = 147; }
+    oneof optional_steering_wheel_heat_level { StwHeatLevel steering_wheel_heat_level = 148; }
+
+    oneof optional_hvac_auto_request { HvacAutoRequest hvac_auto_request = 150; }
+    oneof optional_cop_not_running_reason { COPNotRunningReason cop_not_running_reason = 151; }
+}
+
+message TirePressureState {
+    // tpms pressure values in bar
+    google.protobuf.Timestamp timestamp = 1;
+    oneof optional_tpms_pressure_fl { float tpms_pressure_fl = 2; }
+    oneof optional_tpms_pressure_fr { float tpms_pressure_fr = 3; }
+    oneof optional_tpms_pressure_rl { float tpms_pressure_rl = 4; }
+    oneof optional_tpms_pressure_rr { float tpms_pressure_rr = 5; }
+    google.protobuf.Timestamp tpms_last_seen_pressure_time_fl = 6;
+    google.protobuf.Timestamp tpms_last_seen_pressure_time_fr = 7;
+    google.protobuf.Timestamp tpms_last_seen_pressure_time_rl = 8;
+    google.protobuf.Timestamp tpms_last_seen_pressure_time_rr = 9;
+    oneof optional_tpms_hard_warning_fl { bool tpms_hard_warning_fl = 10; }
+    oneof optional_tpms_hard_warning_fr { bool tpms_hard_warning_fr = 11; }
+    oneof optional_tpms_hard_warning_rl { bool tpms_hard_warning_rl = 12; }
+    oneof optional_tpms_hard_warning_rr { bool tpms_hard_warning_rr = 13; }
+    oneof optional_tpms_soft_warning_fl { bool tpms_soft_warning_fl = 14; }
+    oneof optional_tpms_soft_warning_fr { bool tpms_soft_warning_fr = 15; }
+    oneof optional_tpms_soft_warning_rl { bool tpms_soft_warning_rl = 16; }
+    oneof optional_tpms_soft_warning_rr { bool tpms_soft_warning_rr = 17; }
+    // rcp values in bar
+    oneof optional_tpms_rcp_front_value { float tpms_rcp_front_value = 18; }
+    oneof optional_tpms_rcp_rear_value { float tpms_rcp_rear_value = 19; }
+}
+
+message MediaState {
+    google.protobuf.Timestamp timestamp = 1;
+    oneof optional_remote_control_enabled { bool remote_control_enabled = 2; }
+    oneof optional_now_playing_artist { string now_playing_artist = 3; }
+    oneof optional_now_playing_title { string now_playing_title = 4; }
+    oneof optional_audio_volume { float audio_volume = 5; }
+    oneof optional_audio_volume_increment { float audio_volume_increment = 6; }
+    oneof optional_audio_volume_max { float audio_volume_max = 7; }
+    oneof optional_now_playing_source { MediaSourceType now_playing_source = 8; }
+    oneof optional_media_playback_status { MediaPlaybackStatus media_playback_status = 9; }
+}
+
+message MediaDetailState {
+    google.protobuf.Timestamp timestamp = 1;
+    oneof optional_now_playing_duration { int32 now_playing_duration = 2; }
+    oneof optional_now_playing_elapsed { int32 now_playing_elapsed = 3; }
+    oneof optional_now_playing_source_string { string now_playing_source_string = 4; }
+    oneof optional_now_playing_album { string now_playing_album = 5; }
+    oneof optional_now_playing_station { string now_playing_station = 6; }
+    oneof optional_a2dp_source_name { string a2dp_source_name = 7; }
+}
+
+message ShiftState {
+    oneof type {
+        Void Invalid = 1;
+        Void P = 2;
+        Void R = 3;
+        Void N = 4;
+        Void D = 5;
+        Void SNA = 6;
+    }
+}
+
+enum MediaSourceType {
+    // Standard sources
+    MediaSourceType_None = 0;
+    MediaSourceType_AM = 1;
+    MediaSourceType_FM = 2;
+    MediaSourceType_XM = 3;
+    MediaSourceType_Slacker = 5;
+    MediaSourceType_LocalFiles = 6;
+    MediaSourceType_iPod = 7;
+    MediaSourceType_Bluetooth = 8;
+    MediaSourceType_AuxIn = 9;
+    MediaSourceType_DAB = 10;
+    MediaSourceType_Rdio = 11;
+    MediaSourceType_Spotify = 12;
+    MediaSourceType_USRadio = 13;
+    MediaSourceType_EURadio = 14;
+    MediaSourceType_MediaFile = 16;
+
+    // Server-side sources
+    MediaSourceType_TuneIn = 17;
+    MediaSourceType_Stingray = 18;
+    MediaSourceType_SiriusXM = 19;
+    MediaSourceType_Tidal = 20;
+    MediaSourceType_QQMusic = 21;
+    MediaSourceType_QQMusic2 = 22;
+    MediaSourceType_Ximalaya = 23;
+    MediaSourceType_OnlineRadio = 24;
+    MediaSourceType_OnlineRadio2 = 25;
+    MediaSourceType_NetEaseMusic = 26;
+
+    // Entertainment sources
+    MediaSourceType_Browser = 28;
+    MediaSourceType_Theater = 29;
+    MediaSourceType_Game = 30;
+    MediaSourceType_Tutorial = 31;
+    MediaSourceType_Toybox = 32;
+
+    MediaSourceType_RecentsFavorites = 33;
+    MediaSourceType_HomeApps = 34;
+    MediaSourceType_Search = 35;
 }

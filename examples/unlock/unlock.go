@@ -10,6 +10,7 @@ import (
 
 	"github.com/teslamotors/vehicle-command/pkg/account"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
+	"golang.org/x/oauth2"
 )
 
 func main() {
@@ -61,7 +62,10 @@ func main() {
 
 	// This example program sends commands over the Internet, which requires a Tesla account login
 	// token. The protocol can also work over BLE; see other programs in the example directory.
-	acct, err := account.New(string(oauthToken), userAgent)
+	// A refreshing oauth2.TokenSource can be used here instead to keep the account working
+	// beyond the lifetime of a single access token.
+	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: string(oauthToken)})
+	acct, err := account.New(ts, userAgent)
 	if err != nil {
 		logger.Printf("Authentication error: %s", err)
 		return

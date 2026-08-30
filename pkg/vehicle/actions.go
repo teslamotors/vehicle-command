@@ -23,7 +23,7 @@ func (v *Vehicle) CloseTrunk(ctx context.Context) error {
 	return v.executeClosureAction(ctx, vcsec.ClosureMoveType_E_CLOSURE_MOVE_TYPE_CLOSE, ClosureTrunk)
 }
 
-// OpenTrunk opens the frunk. There is no remote way to close the frunk!
+// OpenFrunk opens the frunk. There is no remote way to close the frunk!
 func (v *Vehicle) OpenFrunk(ctx context.Context) error {
 	return v.executeClosureAction(ctx, vcsec.ClosureMoveType_E_CLOSURE_MOVE_TYPE_MOVE, ClosureFrunk)
 }
@@ -114,4 +114,19 @@ func (v *Vehicle) ChargePortOpen(ctx context.Context) error {
 				},
 			},
 		})
+}
+
+// OpenTonneau opens a Cybetruck's tonneau. Has no effect on other vehicles.
+func (v *Vehicle) OpenTonneau(ctx context.Context) error {
+	return v.executeClosureAction(ctx, vcsec.ClosureMoveType_E_CLOSURE_MOVE_TYPE_OPEN, ClosureTonneau)
+}
+
+// CloseTonneau closes a Cybetruck's tonneau. Has no effect on other vehicles.
+func (v *Vehicle) CloseTonneau(ctx context.Context) error {
+	return v.executeClosureAction(ctx, vcsec.ClosureMoveType_E_CLOSURE_MOVE_TYPE_CLOSE, ClosureTonneau)
+}
+
+// StopTonneau tells a Cybetruck to stop moving its tonneau. Has no effect on other vehicles.
+func (v *Vehicle) StopTonneau(ctx context.Context) error {
+	return v.executeClosureAction(ctx, vcsec.ClosureMoveType_E_CLOSURE_MOVE_TYPE_STOP, ClosureTonneau)
 }

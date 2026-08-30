@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/teslamotors/vehicle-command/internal/authentication"
 	universal "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/universalmessage"
 )
 
@@ -32,6 +33,8 @@ type receiver struct {
 	dispatcher    *Dispatcher
 	requestSentAt time.Time
 	lastActive    time.Time
+	antireplay    authentication.SlidingWindow
+	requestID     []byte
 }
 
 // Recv returns a channel that receives responses to the command that created the receiver.
@@ -49,6 +52,6 @@ func (r *receiver) Close() {
 
 // expired returns true if the request was sent long enough ago that any included session info
 // should be discarded as stale.
-func (r *receiver) expired() bool {
-	return time.Now().After(r.requestSentAt.Add(sessionInfoRequestTimeout))
+func (r *receiver) expired(lifetime time.Duration) bool {
+	return time.Now().After(r.requestSentAt.Add(lifetime))
 }

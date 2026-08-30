@@ -5,6 +5,12 @@ your car and turns on the AC.
 For more fleshed out examples of other commands, see
 [github.com/tesla/vehicle-command/pkg/cmd/tesla-control].
 
+# Scanning for vehicles
+
+To scan for vehicles, use the -scan-only flag:
+
+	./ble -scan-only -vin YOUR_VIN
+
 # Pairing with the vehicle
 
 To generate a key pair with OpenSSL:
@@ -26,5 +32,9 @@ Sending commands to the vehicle requires the private key you generated above:
 	./ble -vin YOUR_VIN -key private.pem
 
 You can add the -debug flag to inspect the bytes sent over BLE.
+
+You can also specify the Bluetooth adapter to use on Linux with the -bt-adapter flag:
+
+	./ble -vin YOUR_VIN -key private.pem -bt-adapter hci0
 */
 package main

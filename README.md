@@ -1,6 +1,9 @@
 # Tesla Vehicle Command SDK
 [![Go Reference](https://pkg.go.dev/badge/github.com/teslamotors/vehicle-command/pkg.svg)](https://pkg.go.dev/github.com/teslamotors/vehicle-command/pkg)
 [![Build and Test](https://github.com/teslamotors/vehicle-command/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/teslamotors/vehicle-command/actions/workflows/build.yml)
+[![Current Version](https://img.shields.io/github/v/tag/teslamotors/vehicle-command?label=latest%20tag)](https://github.com/teslamotors/vehicle-command/tags)
+[![DockerHub Tags](https://img.shields.io/docker/v/tesla/vehicle-command?label=docker%20tags)](https://hub.docker.com/r/tesla/vehicle-command/tags)
+
 
 Tesla vehicles now support a protocol that provides end-to-end command
 authentication. This Golang package uses the new protocol to control vehicle
@@ -14,7 +17,7 @@ working as vehicles begin requiring end-to-end command authentication. If you
 are one of these developers, you can set up the proxy server or refactor your
 application to use this library directly. Pre-2021 Model S and X vehicles do
 not support this new protocol. [Fleet
-API](https://developer.tesla.com/docs/tesla-fleet-api#fleet-api) will continue
+API](https://developer.tesla.com/docs/fleet-api/getting-started/what-is-fleet-api) will continue
 to work on these vehicles.
 
 ## System overview
@@ -31,7 +34,7 @@ obtain a valid OAuth token from the user, and the user must enroll the
 application's public key in the vehicle.
 
 Tesla's website has [instructions for obtaining OAuth
-tokens](https://developer.tesla.com/docs/fleet-api). This README has
+tokens](https://developer.tesla.com/docs/fleet-api/authentication/third-party-tokens). This README has
 instructions for generating private keys and directing the user to the
 public-key enrollment flow. The tools in this repository can use the OAuth
 token and the private key to send commands to vehicles.
@@ -55,10 +58,12 @@ curl --cacert cert.pem \
 
 ## Installation and configuration
 
+### Installing locally
+
 Requirements:
 
  * You've [installed Golang](https://go.dev/doc/install). The package was
-   tested with Go 1.20.
+   tested with Go 1.23.0.
  * You're using macOS or Linux. (Everything except BLE should run on Windows,
    but Windows is not officially supported).
 
@@ -77,13 +82,33 @@ The final command installs the following utilities:
  * **tesla-http-proxy**: An HTTP proxy that exposes a REST API for sending
    vehicle commands.
  * **tesla-auth-token**: Write an OAuth token to your system keyring. This
-   utility does not fetch tokens. Read the [Fleet API documentation](https://developer.tesla.com/docs/fleet-api#authentication)
+   utility does not fetch tokens. Read the [Fleet API documentation](https://developer.tesla.com/docs/fleet-api/authentication/third-party-tokens)
    for information on fetching OAuth tokens.
 
-Configure environment variables (optional):
+### Installing with Docker
 
-For convenience, you can define the following environment variables to be used
-in lieu of command-line flags when using the above applications:
+A Docker image is available for running these tools. The image defaults to
+running the HTTP proxy, but the `--entrypoint` flag changes the tool to be used.
+
+Run the image from Docker hub:
+
+```bash
+docker pull tesla/vehicle-command:latest
+docker run tesla/vehicle-command:latest --help
+
+# running a different tool
+docker run --entrypoint tesla-control tesla/vehicle-command:latest --help
+```
+
+An example [docker-compose.yml](./docker-compose.yml) file is also provided.
+
+```bash
+docker compose up
+```
+
+### Configuration
+
+The following environment variables can used in lieu of command-line flags.
 
  * `TESLA_KEY_NAME` used to derive the entry name for your command
    authentication private key in your system keyring.
@@ -97,12 +122,26 @@ in lieu of command-line flags when using the above applications:
  * `TESLA_VIN` specifies a vehicle identification number. You can find your VIN
    under Controls > Software in your vehicle's UI. (Despite the name, VINs
    contain both letters and numbers).
+ * `TESLA_CACHE_FILE` specifies a file that caches session information. The
+   cache allows programs to skip sending handshake messages to a vehicle. This
+   reduces both latency and the number of Fleet API calls a client makes when
+   reconnecting to a vehicle after restarting. This is particularly helpful
+   when using `tesla-control`, which restarts on each invocation.
+ * `TESLA_HTTP_PROXY_TLS_CERT` specifies a TLS certificate file for the HTTP proxy.
+ * `TESLA_HTTP_PROXY_TLS_KEY` specifies a TLS key file for the HTTP proxy.
+ * `TESLA_HTTP_PROXY_HOST` specifies the host for the HTTP proxy.
+ * `TESLA_HTTP_PROXY_PORT` specifies the port for the HTTP proxy.
+ * `TESLA_HTTP_PROXY_TIMEOUT` specifies the timeout for the HTTP proxy to use when
+   contacting Tesla servers.
+ * `TESLA_VERBOSE` enables verbose logging. Supported by `tesla-control` and
+   `tesla-http-proxy`.
 
 For example:
 
 ```bash
 export TESLA_KEY_NAME=$(whoami)
 export TESLA_TOKEN_NAME=$(whoami)
+export TESLA_CACHE_FILE=~/.tesla-cache.json
 ```
 
 At this point, you're ready to go use the [the command-line
@@ -123,7 +162,7 @@ As discussed above, your HTTP proxy will need to authenticate both with Tesla
 Tesla's servers require your client to provide an OAuth access token before
 they will forward commands to a vehicle. You must obtain the OAuth token from
 the vehicle's owner. See [Tesla's
-website](https://developer.tesla.com/docs/fleet-api) for instructions on
+website](https://developer.tesla.com/docs/fleet-api/getting-started/what-is-fleet-api) for instructions on
 registering a developer account and obtaining OAuth tokens.
 
 ### Generating a command-authentication private key
@@ -167,7 +206,7 @@ user when it asks if they wish to approve your request, and the vehicle will
 display the domain name next to the key in the Locks screen.
 
 Follow the instructions to [register your public key and
-domain](https://developer.tesla.com/docs/fleet-api#register).
+domain](https://developer.tesla.com/docs/fleet-api/endpoints/partner-endpoints#register).
 The public key referred to in those instructions is the `public_key.pem` file
 in the above example.
 
@@ -185,23 +224,43 @@ purposes, you can create a self-signed localhost server certificate using
 OpenSSL:
 
 ```
+mkdir config
 openssl req -x509 -nodes -newkey ec \
-    -pkeyopt ec_paramgen_curve:secp521r1 \
+    -pkeyopt ec_paramgen_curve:secp384r1 \
     -pkeyopt ec_param_enc:named_curve  \
     -subj '/CN=localhost' \
-    -keyout key.pem -out cert.pem -sha256 -days 3650 \
+    -keyout config/tls-key.pem -out config/tls-cert.pem -sha256 -days 3650 \
     -addext "extendedKeyUsage = serverAuth" \
     -addext "keyUsage = digitalSignature, keyCertSign, keyAgreement"
 ```
 
-This command creates an unencrypted private key, `key.pem`.
+This command creates an unencrypted private key, `config/tls-key.pem`.
+
+The proxy server requires TLS. We do not offer an option to disable TLS because
+this greatly increases the risk of non-experts creating insecure deployments.
+Expert users who need a non-TLS version can create one without forking the
+repository by using
+[pkg/proxy](https://pkg.go.dev/github.com/teslamotors/vehicle-command/pkg/proxy);
+the [proxy source code](cmd/tesla-http-proxy/main.go) may be a helpful starting
+point.
 
 ### Running the proxy server
 
-You can start the proxy server using the following command:
+The proxy server can be run using the following command:
 
 ```bash
-tesla-http-proxy -tls-key key.pem -cert cert.pem -port 4443
+tesla-http-proxy -tls-key config/tls-key.pem -cert config/tls-cert.pem -key-file config/fleet-key.pem -port 4443
+```
+
+It can also be run using Docker:
+
+```bash
+# option 1: using docker run
+docker pull tesla/vehicle-command:latest
+docker run --security-opt=no-new-privileges:true -v ./config:/config -p 127.0.0.1:4443:4443 tesla/vehicle-command:latest -tls-key /config/tls-key.pem -cert /config/tls-cert.pem -key-file /config/fleet-key.pem -host 0.0.0.0 -port 4443
+
+# option 2: using docker compose
+docker compose up
 ```
 
 *Note:* In production, you'll likely want to omit the `-port 4443` and listen on
@@ -239,9 +298,17 @@ curl --cacert cert.pem \
     "https://localhost:4443/api/1/vehicles/$VIN/command/flash_lights"
 ```
 
+The flow to obtain `$TESLA_AUTH_TOKEN`:
+
+![](./doc/authorization.png)
+
+A command's flow through the system:
+
+![](./doc/request_diagram.png)
+
 ### REST API documentation
 
-The HTTP proxy implements the [Tesla Fleet API vehicle command endpoints](https://developer.tesla.com/docs/fleet-api#vehicle-commands).
+The HTTP proxy implements the [Tesla Fleet API vehicle command endpoints](https://developer.tesla.com/docs/fleet-api/endpoints/vehicle-commands).
 
 Legacy clients written for Owner API may be using a vehicle's Owner API ID when
 constructing URL paths. The proxy server requires clients to use the VIN

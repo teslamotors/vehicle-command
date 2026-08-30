@@ -69,6 +69,30 @@ func (v *Vehicle) Ping(ctx context.Context) error {
 		})
 }
 
+func (v *Vehicle) adjustVolume(ctx context.Context, delta int32) error {
+	// Only the sign of delta (positive or negative) matters, not the magnitude.
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_MediaUpdateVolume{
+					MediaUpdateVolume: &carserver.MediaUpdateVolume{
+						MediaVolume: &carserver.MediaUpdateVolume_VolumeDelta{
+							VolumeDelta: delta,
+						},
+					},
+				},
+			},
+		})
+}
+
+func (v *Vehicle) VolumeUp(ctx context.Context) error {
+	return v.adjustVolume(ctx, 1)
+}
+
+func (v *Vehicle) VolumeDown(ctx context.Context) error {
+	return v.adjustVolume(ctx, -1)
+}
+
 // SetVolume to a value between 0 and 10.
 func (v *Vehicle) SetVolume(ctx context.Context, volume float32) error {
 	if volume < 0 || volume > 10 {
@@ -83,6 +107,50 @@ func (v *Vehicle) SetVolume(ctx context.Context, volume float32) error {
 							VolumeAbsoluteFloat: volume,
 						},
 					},
+				},
+			},
+		})
+}
+
+func (v *Vehicle) MediaNextTrack(ctx context.Context) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_MediaNextTrack{
+					MediaNextTrack: &carserver.MediaNextTrack{},
+				},
+			},
+		})
+}
+
+func (v *Vehicle) MediaPreviousTrack(ctx context.Context) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_MediaPreviousTrack{
+					MediaPreviousTrack: &carserver.MediaPreviousTrack{},
+				},
+			},
+		})
+}
+
+func (v *Vehicle) MediaNextFavorite(ctx context.Context) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_MediaNextFavorite{
+					MediaNextFavorite: &carserver.MediaNextFavorite{},
+				},
+			},
+		})
+}
+
+func (v *Vehicle) MediaPreviousFavorite(ctx context.Context) error {
+	return v.executeCarServerAction(ctx,
+		&carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_MediaPreviousFavorite{
+					MediaPreviousFavorite: &carserver.MediaPreviousFavorite{},
 				},
 			},
 		})
