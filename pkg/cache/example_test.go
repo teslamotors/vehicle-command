@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/teslamotors/vehicle-command/pkg/cache"
-	"github.com/teslamotors/vehicle-command/pkg/connector/ble"
+	"github.com/teslamotors/vehicle-command/pkg/connector"
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
 	"github.com/teslamotors/vehicle-command/pkg/vehicle"
 )
@@ -14,13 +14,12 @@ func Example() {
 	const cacheFilename = "my_cache.json"
 	const privateKeyFilename = "private_key.pem"
 
-	conn, err := ble.NewConnection(context.Background(), "myvin123")
-	if err != nil {
-		panic(err)
-	}
+	// Obtain a connection, e.g. ble.NewConnection(ctx, "myvin123") or inet.NewConnection(...).
+	var conn connector.Connector
 	defer conn.Close()
 
 	// Try to load cache from disk if it doesn't already exist
+	var err error
 	var myCache *cache.SessionCache
 	if myCache, err = cache.ImportFromFile(cacheFilename); err != nil {
 		myCache = cache.New(5) // Create a cache that holds sessions for up to five vehicles
