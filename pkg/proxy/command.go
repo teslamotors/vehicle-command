@@ -673,7 +673,9 @@ func (p RequestParameters) settingForHeatSeatPosition() (map[vehicle.SeatPositio
 	return map[vehicle.SeatPosition]vehicle.Level{seatPositions[int(index)]: vehicle.Level(level)}, nil
 }
 
-// Note: The API uses 0-3
+// seat_cooler_level is 0-3 and maps onto vehicle.Level directly (0 is
+// LevelOff), as the seat heater's level does; SetSeatCooler shifts it onto the
+// protobuf enum.
 func (p RequestParameters) settingForCoolerSeatPosition() (vehicle.Level, vehicle.SeatPosition, error) {
 	position, err := p.getNumber("seat_position", true)
 	if err != nil {
@@ -695,7 +697,7 @@ func (p RequestParameters) settingForCoolerSeatPosition() (vehicle.Level, vehicl
 		return 0, 0, err
 	}
 
-	return vehicle.Level(level - 1), seat, nil
+	return vehicle.Level(level), seat, nil
 }
 
 func (p RequestParameters) settingForAutoSeatPosition() (vehicle.SeatPosition, bool, error) {
