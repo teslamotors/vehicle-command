@@ -1194,3 +1194,30 @@ func TestDefaultFetchVehicleAndLiveVehicle(t *testing.T) {
 		t.Fatalf("Execute: %v", err)
 	}
 }
+
+func TestServeHTTPRejectsOversizedBody(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		target string
+	}{
+		{"command", "/api/1/vehicles/" + testVIN + "/command/door_lock"},
+		{"fleet telemetry config", "/api/1/vehicles/fleet_telemetry_config"},
+		{"forwarded request", "/api/1/vehicles/" + testVIN + "/vehicle_data"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := newTestProxy(t)
+			p.client = roundTripFunc(func(*http.Request) (*http.Response, error) {
+				t.Fatal("should not forward an oversized body")
+				return nil, nil
+			})
+			rec := httptest.NewRecorder()
+			body := bytes.Repeat([]byte("a"), maxRequestBodyBytes+1)
+			req := httptest.NewRequest(http.MethodPost, tc.target, bytes.NewReader(body))
+			req.Header.Set("Authorization", authHeader())
+			p.ServeHTTP(rec, req)
+			if rec.Code != http.StatusRequestEntityTooLarge {
+				t.Fatalf("status=%d body=%.120s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
