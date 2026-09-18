@@ -71,11 +71,15 @@ proto-gen-docker: proto-builder
 	    $(PROTO_FILES)
 
 # Regenerate via Docker and fail if the result differs from what is
-# committed. Intended for CI to catch out-of-date *.pb.go files.
+# committed, or if regeneration produced files that are not tracked (a new
+# .proto whose .pb.go was never committed). Intended for CI to catch
+# out-of-date or missing *.pb.go files.
 proto-check: proto-gen-docker
-	@if ! git diff --quiet -- $(PROTO_DIR); then \
-	    echo "ERROR: generated protobuf files are out of date."; \
+	@if ! git diff --quiet -- $(PROTO_DIR) || \
+	   [ -n "$$(git ls-files --others --exclude-standard -- $(PROTO_DIR))" ]; then \
+	    echo "ERROR: generated protobuf files are out of date or missing."; \
 	    echo "Run 'make proto-gen-docker' and commit the result."; \
+	    git --no-pager status --short -- $(PROTO_DIR); \
 	    git --no-pager diff -- $(PROTO_DIR); \
 	    exit 1; \
 	fi
