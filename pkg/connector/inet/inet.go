@@ -139,6 +139,17 @@ func ValidTeslaDomainSuffix(domain string) bool {
 	return strings.HasSuffix(domain, ".tesla.com") || strings.HasSuffix(domain, ".tesla.cn") || strings.HasSuffix(domain, ".teslamotors.com")
 }
 
+// RegionRedirectHost returns the Fleet API host named in an out-of-region error message, which
+// Tesla's servers send alongside HTTP status 421. It returns an empty string if message does not
+// name a valid Tesla domain.
+func RegionRedirectHost(message string) string {
+	matches := baseDomainRE.FindStringSubmatch(message)
+	if len(matches) == 2 && ValidTeslaDomainSuffix(matches[1]) {
+		return matches[1]
+	}
+	return ""
+}
+
 // Sends a command to a Fleet API REST endpoint. Returns the response body and an error. The
 // response body is not necessarily nil if the error is set.
 func (c *Connection) SendFleetAPICommand(ctx context.Context, endpoint string, command interface{}) ([]byte, error) {
@@ -147,10 +158,9 @@ func (c *Connection) SendFleetAPICommand(ctx context.Context, endpoint string, c
 	if err != nil {
 		var httpErr *HTTPError
 		if errors.As(err, &httpErr) && httpErr.Code == http.StatusMisdirectedRequest {
-			matches := baseDomainRE.FindStringSubmatch(httpErr.Message)
-			if len(matches) == 2 && ValidTeslaDomainSuffix(matches[1]) {
+			if host := RegionRedirectHost(httpErr.Message); host != "" {
 				log.Debug("Received HTTP Status 421. Updating server URL.")
-				c.serverURL = matches[1]
+				c.serverURL = host
 			}
 		}
 	}
