@@ -1,7 +1,10 @@
 package protocol
 
 import (
+	"errors"
 	"fmt"
+	"math"
+	"strings"
 	"testing"
 
 	universal "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/universalmessage"
@@ -43,6 +46,90 @@ func TestWrappedErrorClassification(t *testing.T) {
 				t.Errorf("ShouldRetry() = %v, want %v", got, test.shouldRetry)
 			}
 		})
+	}
+}
+
+func TestRoutableMessageErrorString(t *testing.T) {
+	tests := []struct {
+		name         string
+		code         universal.MessageFault_E
+		wantContains []string
+		wantExact    string
+	}{
+		{
+			name: "response MTU exceeded is descriptive",
+			code: universal.MessageFault_E_MESSAGEFAULT_ERROR_RESPONSE_MTU_EXCEEDED,
+			wantContains: []string{
+				"MESSAGEFAULT_ERROR_RESPONSE_MTU_EXCEEDED",
+				"received the request",
+				"maximum message size",
+			},
+		},
+		{
+			name: "request MTU exceeded is descriptive",
+			code: universal.MessageFault_E_MESSAGEFAULT_ERROR_REQUEST_MTU_EXCEEDED,
+			wantContains: []string{
+				"MESSAGEFAULT_ERROR_REQUEST_MTU_EXCEEDED",
+				"not processed",
+			},
+		},
+		{
+			name:      "undocumented fault keeps bare enum name",
+			code:      universal.MessageFault_E_MESSAGEFAULT_ERROR_BUSY,
+			wantExact: "MESSAGEFAULT_ERROR_BUSY",
+		},
+		{
+			name:      "unrecognized code",
+			code:      universal.MessageFault_E(math.MaxInt32),
+			wantExact: fmt.Sprintf("unrecognized error code %d", math.MaxInt32),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := (&RoutableMessageError{Code: test.code}).Error()
+			if test.wantExact != "" && got != test.wantExact {
+				t.Errorf("Error() = %q, want %q", got, test.wantExact)
+			}
+			for _, want := range test.wantContains {
+				if !strings.Contains(got, want) {
+					t.Errorf("Error() = %q, missing %q", got, want)
+				}
+			}
+		})
+	}
+}
+
+func TestMessageFaultDescriptionsCoverKnownCodes(t *testing.T) {
+	for code := range messageFaultDescriptions {
+		if _, ok := universal.MessageFault_E_name[int32(code)]; !ok {
+			t.Errorf("description registered for unknown fault code %d", code)
+		}
+	}
+}
+
+// The vehicle drops the response, not the request, when it reports RESPONSE_MTU_EXCEEDED. Clients
+// must therefore treat the command as possibly executed, and retrying blindly will not help because
+// the vehicle will compose the same oversized reply.
+func TestResponseMTUExceededClassification(t *testing.T) {
+	err := fmt.Errorf("get drive state: %w", &RoutableMessageError{
+		Code: universal.MessageFault_E_MESSAGEFAULT_ERROR_RESPONSE_MTU_EXCEEDED,
+	})
+	if !MayHaveSucceeded(err) {
+		t.Error("MayHaveSucceeded() = false, want true")
+	}
+	if Temporary(err) {
+		t.Error("Temporary() = true, want false")
+	}
+	if ShouldRetry(err) {
+		t.Error("ShouldRetry() = true, want false")
+	}
+	var rmErr *RoutableMessageError
+	if !errors.As(err, &rmErr) {
+		t.Fatal("errors.As failed to recover *RoutableMessageError")
+	}
+	if rmErr.Code != universal.MessageFault_E_MESSAGEFAULT_ERROR_RESPONSE_MTU_EXCEEDED {
+		t.Errorf("Code = %s, want RESPONSE_MTU_EXCEEDED", rmErr.Code)
 	}
 }
 

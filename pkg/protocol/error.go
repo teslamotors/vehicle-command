@@ -191,8 +191,30 @@ func (n *NominalVCSECError) Temporary() bool {
 }
 
 // RoutableMessageError represents a protocol-layer error.
+//
+// Callers can inspect Code to react to specific faults:
+//
+//	var rmErr *protocol.RoutableMessageError
+//	if errors.As(err, &rmErr) && rmErr.Code == universal.MessageFault_E_MESSAGEFAULT_ERROR_RESPONSE_MTU_EXCEEDED {
+//		// The vehicle processed the request but could not fit the reply in a message.
+//	}
 type RoutableMessageError struct {
 	Code universal.MessageFault_E
+}
+
+// messageFaultDescriptions supplements the raw MessageFault_E enum names with an explanation of
+// what happened and what (if anything) the client can do about it. Only faults whose names are
+// not self-explanatory need an entry.
+var messageFaultDescriptions = map[universal.MessageFault_E]string{
+	universal.MessageFault_E_MESSAGEFAULT_ERROR_REQUEST_MTU_EXCEEDED: "the request contained a field that exceeds " +
+		"the vehicle's maximum message size and was not processed",
+	// The vehicle enforces its own ceiling on the size of a serialized response (roughly 450 bytes
+	// over BLE at the time of writing). This is a vehicle-side memory budget, not the negotiated
+	// link MTU, so reconnecting or renegotiating the MTU does not help. See
+	// https://github.com/teslamotors/vehicle-command/issues/472.
+	universal.MessageFault_E_MESSAGEFAULT_ERROR_RESPONSE_MTU_EXCEEDED: "the vehicle received the request but its " +
+		"response exceeded the vehicle's maximum message size and was dropped; the limit is enforced by the " +
+		"vehicle and cannot be raised by the client",
 }
 
 func (v *RoutableMessageError) MayHaveSucceeded() bool {
@@ -223,10 +245,14 @@ func (v *RoutableMessageError) Temporary() bool {
 }
 
 func (v *RoutableMessageError) Error() string {
-	if errString, ok := universal.MessageFault_E_name[int32(v.Code)]; ok {
-		return errString
+	errString, ok := universal.MessageFault_E_name[int32(v.Code)]
+	if !ok {
+		return fmt.Sprintf("unrecognized error code %d", v.Code)
 	}
-	return fmt.Sprintf("unrecognized error code %d", v.Code)
+	if description, ok := messageFaultDescriptions[v.Code]; ok {
+		return errString + ": " + description
+	}
+	return errString
 }
 
 // GetError translates a universal.RoutableMessage into an appropriate Error,
