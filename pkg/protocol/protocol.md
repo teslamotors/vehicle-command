@@ -746,6 +746,29 @@ Error codes and their remediation are summarized in
 [universal_message.proto](protobuf/universal_message.proto).
 See comments in the `MessageFault_E` definition.
 
+#### Response size limits
+
+Vehicles enforce a fixed upper bound on the size of a serialized response
+`RoutableMessage`. If a reply would exceed that bound, the vehicle discards it
+and instead returns `MESSAGEFAULT_ERROR_RESPONSE_MTU_EXCEEDED` with no payload.
+Note the following:
+
+ * The request *was* received and processed. For commands, this means the
+   command may have executed even though the client did not receive a
+   confirmation.
+ * The bound is a vehicle-side memory budget, not the negotiated transport MTU.
+   Renegotiating the BLE ATT MTU or reconnecting does not raise it. Clients
+   have observed the limit at roughly 450 bytes for the complete serialized
+   response.
+ * Retransmitting the same request produces the same oversized reply, so the
+   error is not treated as transient.
+ * The size of the reply is determined by the vehicle. Most `GetVehicleData`
+   requests are empty marker messages with no field selection, so a client
+   cannot request a smaller response. A known trigger is `GetDriveState` while
+   a navigation route with a long destination name is active; the failure
+   clears once the route ends. See
+   [issue #472](https://github.com/teslamotors/vehicle-command/issues/472).
+
 ### Response decryption
 
 If the client set the `FLAG_ENCRYPT_RESPONSE`, then vehicles running supported
