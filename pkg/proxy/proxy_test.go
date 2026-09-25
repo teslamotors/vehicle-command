@@ -688,6 +688,29 @@ func TestVehicleCommandSuccess(t *testing.T) {
 	}
 }
 
+// TestVehicleCommandActuateTrunkInvalidParam checks that a which_trunk value of the wrong JSON type
+// is rejected before the proxy talks to the vehicle.
+func TestVehicleCommandActuateTrunkInvalidParam(t *testing.T) {
+	p := newTestProxy(t)
+	mock := &mockVehicle{}
+	p.fetchVehicle = func(context.Context, *account.Account, string) (vehicleSession, error) {
+		return mock, nil
+	}
+
+	rec := httptest.NewRecorder()
+	body := strings.NewReader(`{"which_trunk": 42}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/1/vehicles/"+testVIN+"/command/actuate_trunk", body)
+	req.Header.Set("Authorization", authHeader())
+	p.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if mock.executeCalls != 0 {
+		t.Errorf("executed %d commands, want 0", mock.executeCalls)
+	}
+}
+
 func TestVehicleCommandMethodNotAllowed(t *testing.T) {
 	p := newTestProxy(t)
 	p.fetchVehicle = func(context.Context, *account.Account, string) (vehicleSession, error) {
