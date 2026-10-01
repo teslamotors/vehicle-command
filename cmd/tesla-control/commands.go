@@ -822,6 +822,14 @@ var commands = map[string]*Command{
 			return protocol.ErrChargingWhileInfotainmentAsleep
 		},
 	},
+	"infotainment-offline": {
+		help:             "GET /vehicles state=online and a VCSEC signed_command do not mean DOMAIN_INFOTAINMENT will be accepted. Tesla may return HTTP 408 vehicle is offline. See teslamotors/vehicle-command#285.",
+		requiresAuth:     false,
+		requiresFleetAPI: false,
+		handler: func(_ context.Context, _ *account.Account, _ *vehicle.Vehicle, _ map[string]string) error {
+			return protocol.ErrInfotainmentSignedCommandOffline
+		},
+	},
 	"charging-schedule": {
 		help:             "Schedule charging to MINS minutes after midnight. Delivery is this SDK; later sleep/wake of the scheduler is firmware (cabin overheat can block it on some Intel-MCU Model S cars; teslamotors/vehicle-command#342).",
 		requiresAuth:     true,

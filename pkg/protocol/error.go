@@ -196,6 +196,20 @@ var (
 	// a quota on this path. BLE still delivers these actions to Infotainment;
 	// it is not a VCSEC charging-amps command. See teslamotors/vehicle-command#452.
 	ErrChargingWhileInfotainmentAsleep = NewError("Fleet Telemetry can report charging while Infotainment is asleep. charge_stop and set_charging_amps are Infotainment VehicleActions; Tesla signed_command returns vehicle unavailable (offline or asleep) when Infotainment is unreachable. wake does not inhibit sleep. This SDK does not invent keep-awake or a charging-controller bypass. See teslamotors/vehicle-command#452", false, false)
+	// ErrInfotainmentSignedCommandOffline indicates a client asked this SDK
+	// to treat GET /api/1/vehicles state=online, or a successful
+	// DOMAIN_VEHICLE_SECURITY signed_command, as proof DOMAIN_INFOTAINMENT
+	// will accept the next session_info_request. Both domains are posted to
+	// the same signed_command endpoint; the domain is inside the protobuf.
+	// Tesla's gateway can still return HTTP 408 "vehicle is offline"
+	// (inet.ErrVehicleNotAwake) for Infotainment while the vehicle list says
+	// online, VCSEC commands succeed, BLE reaches both domains, and the
+	// operator is in the car, reported on fleet-api.prd.cn
+	// (teslamotors/vehicle-command#285). wake_up is unsigned REST and does
+	// not guarantee the next Infotainment handshake. This library does not
+	// rewrite the domain to VCSEC, skip the Infotainment handshake
+	// (#468 / closed PR #470), or invent a second transport inside the proxy.
+	ErrInfotainmentSignedCommandOffline = NewError("GET /api/1/vehicles state=online and a successful VCSEC signed_command do not mean DOMAIN_INFOTAINMENT signed_command will succeed. Tesla's gateway can return HTTP 408 vehicle is offline for Infotainment (reported on fleet-api.prd.cn while the car is occupied and BLE works for both domains). This SDK does not rewrite the domain or skip the Infotainment handshake. See teslamotors/vehicle-command#285", false, false)
 	// ErrClimateKeeperCPDFirmware indicates a client asked this SDK to enable
 	// Dog or Camp mode despite firmware refusing with NominalError
 	// "cpd_enabled", or to treat the in-car Child Left Alone Detection

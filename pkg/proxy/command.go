@@ -107,6 +107,11 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		// vehicle unavailable. Do not invent keep-awake.
 		// teslamotors/vehicle-command#452.
 		return nil, protocol.ErrChargingWhileInfotainmentAsleep
+	case "infotainment_offline", "domain_infotainment_online", "vcsec_means_infotainment_online":
+		// state=online and a VCSEC signed_command do not prove
+		// DOMAIN_INFOTAINMENT will be accepted. Do not rewrite the domain
+		// or skip that handshake. teslamotors/vehicle-command#285.
+		return nil, protocol.ErrInfotainmentSignedCommandOffline
 	case "battery_size", "get_battery_option", "get_battery_size":
 		// Pack identity is Fleet DX catalog metadata, not a signed command.
 		// teslamotors/vehicle-command#391.

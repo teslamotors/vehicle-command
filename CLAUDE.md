@@ -96,6 +96,17 @@ make proto-gen   # requires protoc + protoc-gen-go
   telemetry as proof Infotainment will accept the command. Return
   `protocol.ErrChargingWhileInfotainmentAsleep` for clients that ask this
   SDK to do that. See teslamotors/vehicle-command#452.
+* `GET /api/1/vehicles` `state=online` and a successful VCSEC
+  `signed_command` do not mean `DOMAIN_INFOTAINMENT` will accept
+  `session_info_request`. Tesla's gateway can return HTTP 408
+  `vehicle is offline` (`inet.ErrVehicleNotAwake`) for Infotainment while
+  the list says online, VCSEC works, BLE reaches both domains, and the
+  operator is in the car (reported on `fleet-api.prd.cn`). Both domains
+  share one `signed_command` POST; the domain is inside the protobuf.
+  Do not rewrite the domain to VCSEC, skip the Infotainment handshake
+  (#468 / #470), or treat `wake_up` as a guarantee. Return
+  `protocol.ErrInfotainmentSignedCommandOffline` for clients that ask this
+  SDK to do that. See teslamotors/vehicle-command#285.
 * Battery pack identity (`$BT*` option codes) is Tesla catalog metadata
   (`GET /api/1/dx/vehicles/options`), not a signed vehicle field. Tesla
   omits `bt` for many VINs. Do not invent `$BT*` codes from model codes.

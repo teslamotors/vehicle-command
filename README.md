@@ -364,6 +364,18 @@ does not inhibit sleep. The proxy returns HTTP 400
 `charging_while_asleep` / `charge_stop_asleep` /
 `set_charging_amps_asleep`. This SDK does not invent keep-awake.
 
+`GET /api/1/vehicles` `state=online` is not Infotainment reachability
+([issue #285](https://github.com/teslamotors/vehicle-command/issues/285)).
+A VCSEC `signed_command` can succeed while Tesla returns HTTP 408
+`vehicle is offline` for `DOMAIN_INFOTAINMENT` (reported on
+`fleet-api.prd.cn` while the car is occupied and BLE works for both
+domains). The proxy still sends published Infotainment commands such as
+`honk_horn`. It returns HTTP 400
+(`protocol.ErrInfotainmentSignedCommandOffline`) for
+`infotainment_offline` / `domain_infotainment_online` /
+`vcsec_means_infotainment_online`. This SDK does not rewrite the domain
+or skip the Infotainment handshake.
+
 Battery pack identity (`$BT*` option codes) is Tesla catalog metadata
 ([issue #391](https://github.com/teslamotors/vehicle-command/issues/391)),
 not a signed command. Tesla omits `bt` for many VINs; this SDK does not

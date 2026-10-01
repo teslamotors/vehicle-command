@@ -365,6 +365,19 @@ func TestErrChargingWhileInfotainmentAsleep(t *testing.T) {
 	}
 }
 
+func TestErrInfotainmentSignedCommandOffline(t *testing.T) {
+	t.Parallel()
+	if Temporary(ErrInfotainmentSignedCommandOffline) || MayHaveSucceeded(ErrInfotainmentSignedCommandOffline) || ShouldRetry(ErrInfotainmentSignedCommandOffline) {
+		t.Fatal("Infotainment signed_command 408 must not retry in Vehicle.Send")
+	}
+	if !errors.Is(fmt.Errorf("session: %w", ErrInfotainmentSignedCommandOffline), ErrInfotainmentSignedCommandOffline) {
+		t.Fatal("callers must be able to errors.Is ErrInfotainmentSignedCommandOffline")
+	}
+	if !strings.Contains(ErrInfotainmentSignedCommandOffline.Error(), "#285") {
+		t.Fatal("error must cite teslamotors/vehicle-command#285")
+	}
+}
+
 func TestErrClimateKeeperCPDFirmware(t *testing.T) {
 	t.Parallel()
 	if Temporary(ErrClimateKeeperCPDFirmware) || MayHaveSucceeded(ErrClimateKeeperCPDFirmware) || ShouldRetry(ErrClimateKeeperCPDFirmware) {

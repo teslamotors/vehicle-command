@@ -459,6 +459,38 @@ succeed get [`protocol.ErrChargingWhileInfotainmentAsleep`](error.go) from
 `charge_stop_asleep`, and `set_charging_amps_asleep` (HTTP 400 before a
 session). See [issue #452](https://github.com/teslamotors/vehicle-command/issues/452).
 
+### Infotainment `signed_command` while the vehicle list says online
+
+`POST /api/1/vehicles/{vin}/signed_command` carries one `RoutableMessage`.
+`DOMAIN_INFOTAINMENT` and `DOMAIN_VEHICLE_SECURITY` are fields inside that
+protobuf. This SDK does not have a separate HTTP path per domain.
+
+`GET /api/1/vehicles/{vin}` with `state=online` is the vehicle-list state.
+It does not mean Tesla's command gateway will accept a message addressed to
+Infotainment. A successful VCSEC `signed_command` (unlock, open door) does
+not prove the next Infotainment `session_info_request` will be accepted.
+BLE is a different transport: both domains can answer there while Fleet API
+returns HTTP 408 `vehicle is offline` for Infotainment only.
+
+[Issue #285](https://github.com/teslamotors/vehicle-command/issues/285)
+reports that 408 while the list says online, VCSEC commands succeed, the
+operator is in the car, and the host is `fleet-api.prd.cn.vn.cloud.tesla.cn`.
+The 408 body is Tesla's gateway
+([`inet.ErrVehicleNotAwake`](../connector/inet/inet.go)). This repository
+cannot make the gateway accept the message. It does not rewrite
+`DOMAIN_INFOTAINMENT` to VCSEC, skip the Infotainment handshake
+([issue #468](https://github.com/teslamotors/vehicle-command/issues/468)),
+or treat `wake_up` as a promise that the next Infotainment handshake
+succeeds. `wake_up` remains the unsigned REST wake.
+
+Callers that ask this SDK to treat `state=online` or a VCSEC success as
+Infotainment reachability get
+[`protocol.ErrInfotainmentSignedCommandOffline`](error.go) from
+`tesla-control infotainment-offline` and proxy paths `infotainment_offline`,
+`domain_infotainment_online`, and `vcsec_means_infotainment_online`
+(HTTP 400 before a session). Published Infotainment commands such as
+`honk_horn` are still sent.
+
 ### Battery option codes
 
 Pack identity (`$BT42`, `$BTF0`, …) is Tesla **catalog** metadata from

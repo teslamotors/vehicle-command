@@ -69,6 +69,15 @@ infotainment but does not keep it awake
 `tesla-control charging-while-asleep` returns
 `ErrChargingWhileInfotainmentAsleep`.
 
+`GET /api/1/vehicles` `state=online` and a successful VCSEC command do not
+mean `DOMAIN_INFOTAINMENT` `signed_command` will be accepted. Tesla can
+return HTTP 408 `vehicle is offline` for Infotainment while the operator
+is in the car and BLE reaches both domains
+([issue #285](https://github.com/teslamotors/vehicle-command/issues/285)).
+`tesla-control infotainment-offline` returns
+`ErrInfotainmentSignedCommandOffline`. This tool does not retarget the
+message to VCSEC.
+
 Battery option codes (`$BT*`) are Tesla catalog metadata, not a vehicle
 command. `tesla-control options VIN` calls
 `GET /api/1/dx/vehicles/options`. `tesla-control battery-option VIN` prints

@@ -47,6 +47,19 @@ charge_stop_asleep, or set_charging_amps_asleep returns HTTP 400 with
 session. This proxy will not invent keep-awake or a charging-controller
 bypass. See teslamotors/vehicle-command#452.
 
+# Infotainment signed_command while the vehicle list says online
+
+POST honk_horn and other published Infotainment commands are still sent.
+GET /api/1/vehicles state=online and a successful VCSEC signed_command do
+not prove DOMAIN_INFOTAINMENT will be accepted. Tesla's gateway can return
+HTTP 408 vehicle is offline for that domain (inet.ErrVehicleNotAwake),
+including on fleet-api.prd.cn while the car is occupied and BLE works.
+POST infotainment_offline, domain_infotainment_online, or
+vcsec_means_infotainment_online returns HTTP 400 with
+[protocol.ErrInfotainmentSignedCommandOffline] before opening a vehicle
+session. This proxy will not rewrite the domain to VCSEC or skip the
+Infotainment handshake. See teslamotors/vehicle-command#285.
+
 # Battery option codes
 
 POST battery_size, get_battery_option, or get_battery_size returns HTTP 400

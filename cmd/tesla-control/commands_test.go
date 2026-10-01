@@ -194,6 +194,20 @@ func TestChargingWhileAsleepCommandReturnsProtocolError(t *testing.T) {
 	}
 }
 
+func TestInfotainmentOfflineCommandReturnsProtocolError(t *testing.T) {
+	t.Parallel()
+	info, ok := commands["infotainment-offline"]
+	if !ok {
+		t.Fatal("missing infotainment-offline")
+	}
+	if info.requiresFleetAPI || info.requiresAuth {
+		t.Error("infotainment-offline help command must not require a session")
+	}
+	if err := info.handler(context.Background(), nil, nil, nil); !errors.Is(err, protocol.ErrInfotainmentSignedCommandOffline) {
+		t.Fatalf("infotainment-offline handler = %v, want ErrInfotainmentSignedCommandOffline", err)
+	}
+}
+
 func TestBLEPresenceExemptCommandReturnsProtocolError(t *testing.T) {
 	t.Parallel()
 	info, ok := commands["ble-presence-exempt"]
