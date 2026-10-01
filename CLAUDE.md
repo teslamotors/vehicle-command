@@ -107,6 +107,15 @@ make proto-gen   # requires protoc + protoc-gen-go
   (#468 / #470), or treat `wake_up` as a guarantee. Return
   `protocol.ErrInfotainmentSignedCommandOffline` for clients that ask this
   SDK to do that. See teslamotors/vehicle-command#285.
+* `SetChargingAmps` sends the same `charging_amps` integer over BLE and
+  Fleet API. Firmware may show a 5A floor in the charging UI. An awake
+  car can draw about 1A from the grid, so a wall meter can read higher
+  than the setpoint. The first set below 5A is sometimes ignored until
+  the same command is repeated. 0A stops a UMC and does not stop a TWC
+  gen 2/3. Do not clamp to 5, add an amp on BLE, or double-send. Return
+  `protocol.ErrChargingAmpsBelowFloorFirmware` for clients that ask this
+  SDK to do that. `charging-set-amps` / `set_charging_amps` still deliver
+  the requested integer. See teslamotors/vehicle-command#256.
 * Battery pack identity (`$BT*` option codes) is Tesla catalog metadata
   (`GET /api/1/dx/vehicles/options`), not a signed vehicle field. Tesla
   omits `bt` for many VINs. Do not invent `$BT*` codes from model codes.

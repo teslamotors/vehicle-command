@@ -60,6 +60,17 @@ vcsec_means_infotainment_online returns HTTP 400 with
 session. This proxy will not rewrite the domain to VCSEC or skip the
 Infotainment handshake. See teslamotors/vehicle-command#285.
 
+# Charging amps over BLE and Fleet API
+
+POST set_charging_amps still sends the requested charging_amps integer on
+both transports, including values below 5. Firmware may show a 5A floor,
+and a wall meter can read about 1A higher while the car is awake. The
+first set below 5A is sometimes ignored until the same command is
+repeated. POST charging_amps_floor, ble_charging_amps, or match_wall_amps
+returns HTTP 400 with [protocol.ErrChargingAmpsBelowFloorFirmware] before
+opening a vehicle session. This proxy will not clamp the value, add an amp
+on BLE, or send the command twice. See teslamotors/vehicle-command#256.
+
 # Battery option codes
 
 POST battery_size, get_battery_option, or get_battery_size returns HTTP 400

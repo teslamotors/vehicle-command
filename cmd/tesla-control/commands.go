@@ -784,7 +784,7 @@ var commands = map[string]*Command{
 		},
 	},
 	"charging-set-amps": {
-		help:             "Set charge current to AMPS (Infotainment SetChargingAmpsAction). Tesla may return vehicle unavailable while Fleet Telemetry still shows charging; see teslamotors/vehicle-command#452.",
+		help:             "Set charge current to AMPS (Infotainment SetChargingAmpsAction). BLE and Fleet API send the same integer. Tesla may return vehicle unavailable while Fleet Telemetry still shows charging; see teslamotors/vehicle-command#256 and #452.",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
 		args: []Argument{
@@ -796,6 +796,14 @@ var commands = map[string]*Command{
 				return fmt.Errorf("error parsing AMPS")
 			}
 			return car.SetChargingAmps(ctx, int32(limit))
+		},
+	},
+	"charging-amps-floor": {
+		help:             "BLE and Fleet API send the same charging amps. Firmware may show 5A, and a wall meter can read about 1A high. This tool does not clamp or add an amp. See teslamotors/vehicle-command#256.",
+		requiresAuth:     false,
+		requiresFleetAPI: false,
+		handler: func(_ context.Context, _ *account.Account, _ *vehicle.Vehicle, _ map[string]string) error {
+			return protocol.ErrChargingAmpsBelowFloorFirmware
 		},
 	},
 	"charging-start": {

@@ -491,6 +491,34 @@ Infotainment reachability get
 (HTTP 400 before a session). Published Infotainment commands such as
 `honk_horn` are still sent.
 
+### Charging amps over BLE and Fleet API
+
+`set_charging_amps` / `Vehicle.SetChargingAmps` sends
+`SetChargingAmpsAction.charging_amps`. BLE and Fleet API differ in
+transport and authentication. They send the same integer. This SDK does
+not add an amp on BLE, clamp the value to 5, or send the command twice.
+
+[Issue #256](https://github.com/teslamotors/vehicle-command/issues/256)
+reports a Model 3 that charged at 1A over Fleet API and looked like 2A on
+a wall meter after the same setpoint over BLE, while the phone app showed
+5A for the BLE command and 1A for Fleet API. A collaborator could not
+reproduce a transport difference and noted that vehicle firmware appears
+to enforce a 5A floor in the charging UI. An awake car can draw on the
+order of 200–300W from the grid for its low-voltage system, which is about
+1A on a single-phase supply and is not a second amp this library adds.
+Three-phase 230V charging at a 1A setpoint has been measured near 1.1A.
+Setting a current below 5A is sometimes ignored on the first call and
+accepted when the same command is repeated. `0` stops charging on a UMC
+and does not stop a TWC gen 2/3. Those are vehicle and charger behaviors.
+
+Callers that ask this SDK to make the wall meter match the setpoint, or to
+use a different integer on BLE, get
+[`protocol.ErrChargingAmpsBelowFloorFirmware`](error.go) from
+`tesla-control charging-amps-floor` and proxy paths `charging_amps_floor`,
+`ble_charging_amps`, and `match_wall_amps` (HTTP 400 before a session).
+`charging-set-amps` and `set_charging_amps` still send the requested
+integer, including values below 5.
+
 ### Battery option codes
 
 Pack identity (`$BT42`, `$BTF0`, …) is Tesla **catalog** metadata from

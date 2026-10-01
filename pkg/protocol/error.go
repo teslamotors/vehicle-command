@@ -210,6 +210,19 @@ var (
 	// rewrite the domain to VCSEC, skip the Infotainment handshake
 	// (#468 / closed PR #470), or invent a second transport inside the proxy.
 	ErrInfotainmentSignedCommandOffline = NewError("GET /api/1/vehicles state=online and a successful VCSEC signed_command do not mean DOMAIN_INFOTAINMENT signed_command will succeed. Tesla's gateway can return HTTP 408 vehicle is offline for Infotainment (reported on fleet-api.prd.cn while the car is occupied and BLE works for both domains). This SDK does not rewrite the domain or skip the Infotainment handshake. See teslamotors/vehicle-command#285", false, false)
+	// ErrChargingAmpsBelowFloorFirmware indicates a client asked this SDK to
+	// make BLE and Fleet API charging current match a wall meter, to clamp
+	// SetChargingAmpsAction to 5A, or to add an amp on BLE. charging_amps is
+	// one protobuf field. Both transports send that integer unchanged.
+	// Firmware often shows a 5A floor in the charging UI. An awake car can
+	// draw about 1A from the grid for its low-voltage system, so a wall
+	// meter can read higher than the setpoint. The first set below 5A is
+	// sometimes ignored until the same command is sent again. 0A stops a
+	// UMC and does not stop a TWC gen 2/3. Those are vehicle and charger
+	// behaviors. This library does not rewrite the amp, send the command
+	// twice, or pick a different value per transport. See
+	// teslamotors/vehicle-command#256.
+	ErrChargingAmpsBelowFloorFirmware = NewError("BLE and Fleet API send the same SetChargingAmpsAction integer. Firmware may show a 5A floor, a wall meter can read about 1A high while the car is awake, and the first set below 5A is sometimes ignored. This SDK does not clamp, add an amp on BLE, or send the command twice. See teslamotors/vehicle-command#256", false, false)
 	// ErrClimateKeeperCPDFirmware indicates a client asked this SDK to enable
 	// Dog or Camp mode despite firmware refusing with NominalError
 	// "cpd_enabled", or to treat the in-car Child Left Alone Detection

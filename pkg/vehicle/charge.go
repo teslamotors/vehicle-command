@@ -168,6 +168,11 @@ func (v *Vehicle) ChargeMaxRange(ctx context.Context) error {
 // still shows charging. wake starts Infotainment but does not keep it
 // awake. This method does not invent keep-awake or a charging-controller
 // bypass. See teslamotors/vehicle-command#452.
+//
+// BLE and Fleet API send the same charging_amps integer. Firmware may
+// show a 5A floor, and a wall meter can read about 1A higher while the
+// car is awake. This method does not clamp the value, add an amp on BLE,
+// or send the command twice. See teslamotors/vehicle-command#256.
 func (v *Vehicle) SetChargingAmps(ctx context.Context, amps int32) error {
 	return v.executeCarServerAction(ctx,
 		&carserver.Action_VehicleAction{
