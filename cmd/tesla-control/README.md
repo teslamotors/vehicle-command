@@ -78,6 +78,13 @@ is in the car and BLE reaches both domains
 `ErrInfotainmentSignedCommandOffline`. This tool does not retarget the
 message to VCSEC.
 
+`charging-set-amps` sends the same integer over BLE and Fleet API
+([issue #256](https://github.com/teslamotors/vehicle-command/issues/256)).
+The charging UI may show 5A, and a wall meter can read about 1A higher
+while the car is awake. `tesla-control charging-amps-floor` returns
+`ErrChargingAmpsBelowFloorFirmware`. This tool does not clamp the value
+or add an amp on BLE.
+
 Battery option codes (`$BT*`) are Tesla catalog metadata, not a vehicle
 command. `tesla-control options VIN` calls
 `GET /api/1/dx/vehicles/options`. `tesla-control battery-option VIN` prints

@@ -194,6 +194,20 @@ func TestChargingWhileAsleepCommandReturnsProtocolError(t *testing.T) {
 	}
 }
 
+func TestChargingAmpsFloorCommandReturnsProtocolError(t *testing.T) {
+	t.Parallel()
+	info, ok := commands["charging-amps-floor"]
+	if !ok {
+		t.Fatal("missing charging-amps-floor")
+	}
+	if info.requiresFleetAPI || info.requiresAuth {
+		t.Error("charging-amps-floor help command must not require a session")
+	}
+	if err := info.handler(context.Background(), nil, nil, nil); !errors.Is(err, protocol.ErrChargingAmpsBelowFloorFirmware) {
+		t.Fatalf("charging-amps-floor handler = %v, want ErrChargingAmpsBelowFloorFirmware", err)
+	}
+}
+
 func TestInfotainmentOfflineCommandReturnsProtocolError(t *testing.T) {
 	t.Parallel()
 	info, ok := commands["infotainment-offline"]

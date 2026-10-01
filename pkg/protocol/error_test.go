@@ -378,6 +378,19 @@ func TestErrInfotainmentSignedCommandOffline(t *testing.T) {
 	}
 }
 
+func TestErrChargingAmpsBelowFloorFirmware(t *testing.T) {
+	t.Parallel()
+	if Temporary(ErrChargingAmpsBelowFloorFirmware) || MayHaveSucceeded(ErrChargingAmpsBelowFloorFirmware) || ShouldRetry(ErrChargingAmpsBelowFloorFirmware) {
+		t.Fatal("charging amp floor must not retry in Vehicle.Send")
+	}
+	if !errors.Is(fmt.Errorf("amps: %w", ErrChargingAmpsBelowFloorFirmware), ErrChargingAmpsBelowFloorFirmware) {
+		t.Fatal("callers must be able to errors.Is ErrChargingAmpsBelowFloorFirmware")
+	}
+	if !strings.Contains(ErrChargingAmpsBelowFloorFirmware.Error(), "#256") {
+		t.Fatal("error must cite teslamotors/vehicle-command#256")
+	}
+}
+
 func TestErrClimateKeeperCPDFirmware(t *testing.T) {
 	t.Parallel()
 	if Temporary(ErrClimateKeeperCPDFirmware) || MayHaveSucceeded(ErrClimateKeeperCPDFirmware) || ShouldRetry(ErrClimateKeeperCPDFirmware) {

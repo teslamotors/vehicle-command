@@ -376,6 +376,15 @@ domains). The proxy still sends published Infotainment commands such as
 `vcsec_means_infotainment_online`. This SDK does not rewrite the domain
 or skip the Infotainment handshake.
 
+`set_charging_amps` sends the same integer over BLE and Fleet API
+([issue #256](https://github.com/teslamotors/vehicle-command/issues/256)).
+Firmware may show a 5A floor, and a wall meter can read about 1A higher
+while the car is awake. The proxy still sends the requested
+`charging_amps`, including values below 5. It returns HTTP 400
+(`protocol.ErrChargingAmpsBelowFloorFirmware`) for `charging_amps_floor` /
+`ble_charging_amps` / `match_wall_amps`. This SDK does not clamp the
+value, add an amp on BLE, or send the command twice.
+
 Battery pack identity (`$BT*` option codes) is Tesla catalog metadata
 ([issue #391](https://github.com/teslamotors/vehicle-command/issues/391)),
 not a signed command. Tesla omits `bt` for many VINs; this SDK does not
