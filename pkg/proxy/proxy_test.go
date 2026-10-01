@@ -1221,3 +1221,115 @@ func TestServeHTTPRejectsOversizedBody(t *testing.T) {
 		})
 	}
 }
+
+// outOfRegionBody mirrors the JSON error Tesla's Fleet API returns with HTTP 421. The correct
+// region is named in the body rather than in an Alt-Svc header.
+func outOfRegionBody(host string) string {
+	return fmt.Sprintf(`{"response":null,"error":"user out of region, use base URL: https://%s, see https://developer.tesla.com/docs/fleet-api#regional-requirements","error_description":""}`, host)
+}
+
+func TestForwardRequestRegionRedirectFromBody(t *testing.T) {
+	const altHost = "fleet-api.prd.eu.vn.cloud.tesla.com"
+	p := newTestProxy(t)
+	p.Timeout = 5 * time.Second
+	var hosts []string
+	var bodies []string
+	attempts := 0
+	p.client = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		attempts++
+		hosts = append(hosts, req.URL.Host)
+		body, _ := io.ReadAll(req.Body)
+		bodies = append(bodies, string(body))
+		if attempts == 1 {
+			return jsonResponse(http.StatusMisdirectedRequest, outOfRegionBody(altHost), nil), nil
+		}
+		return jsonResponse(http.StatusOK, `{"ok":true}`, nil), nil
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/1/vehicles/"+testVIN+"/wake_up", strings.NewReader(`{"n":1}`))
+	req.Header.Set("Authorization", authHeader())
+	p.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if len(hosts) != 2 || hosts[0] != testHost || hosts[1] != altHost {
+		t.Fatalf("hosts = %#v", hosts)
+	}
+	if bodies[0] != `{"n":1}` || bodies[1] != `{"n":1}` {
+		t.Fatalf("bodies = %#v", bodies)
+	}
+	if got := p.fetchDomainForSubject(testSubject); got != altHost {
+		t.Fatalf("cached domain = %q", got)
+	}
+}
+
+func TestForwardRequestIgnoresNonTeslaRedirect(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		header string
+		body   string
+	}{
+		{name: "AltSvc", header: h2Prefix + "attacker.example.com", body: `{}`},
+		{name: "Body", body: outOfRegionBody("attacker.example.com")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			p := newTestProxy(t)
+			p.Timeout = 5 * time.Second
+			var hosts []string
+			p.client = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				hosts = append(hosts, req.URL.Host)
+				header := make(http.Header)
+				if test.header != "" {
+					header.Set("Alt-Svc", test.header)
+				}
+				return jsonResponse(http.StatusMisdirectedRequest, test.body, header), nil
+			})
+
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, "/api/1/vehicles", nil)
+			req.Header.Set("Authorization", authHeader())
+			p.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusMisdirectedRequest {
+				t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+			}
+			if len(hosts) != 1 || hosts[0] != testHost {
+				t.Fatalf("hosts = %#v", hosts)
+			}
+			if got := p.fetchDomainForSubject(testSubject); got != "" {
+				t.Fatalf("cached domain = %q, want no update", got)
+			}
+		})
+	}
+}
+
+func TestRegionRedirectHost(t *testing.T) {
+	const teslaHost = "fleet-api.prd.eu.vn.cloud.tesla.com"
+	for _, test := range []struct {
+		name   string
+		altSvc []string
+		body   string
+		want   string
+	}{
+		{name: "SingleValue", altSvc: []string{h2Prefix + teslaHost}, want: teslaHost},
+		{name: "MatchNotFirst", altSvc: []string{"h3=\":443\"", h2Prefix + teslaHost}, want: teslaHost},
+		{name: "WithPort", altSvc: []string{h2Prefix + teslaHost + ":443"}, want: teslaHost + ":443"},
+		{name: "NoMatch", altSvc: []string{"h3=\":443\""}, body: `{}`, want: ""},
+		{name: "NoHeader", body: outOfRegionBody(teslaHost), want: teslaHost},
+		{name: "HeaderBeforeBody", altSvc: []string{h2Prefix + teslaHost}, body: outOfRegionBody("other.tesla.com"), want: teslaHost},
+		{name: "NonTeslaHeaderFallsBackToBody", altSvc: []string{h2Prefix + "attacker.example.com"}, body: outOfRegionBody(teslaHost), want: teslaHost},
+		{name: "NonTeslaBody", body: outOfRegionBody("attacker.example.com"), want: ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			header := make(http.Header)
+			for _, value := range test.altSvc {
+				header.Add("Alt-Svc", value)
+			}
+			if got := regionRedirectHost(header, []byte(test.body)); got != test.want {
+				t.Fatalf("regionRedirectHost = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
