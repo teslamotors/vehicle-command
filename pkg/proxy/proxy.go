@@ -10,7 +10,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -247,11 +246,13 @@ func validRedirectHost(host string) bool {
 // empty string if there is none to follow. Tesla names the correct region either in an Alt-Svc
 // header or in the JSON error body, so both are checked.
 func regionRedirectHost(header http.Header, body []byte) string {
-	altSvc := header.Values("Alt-Svc")
-	idx := slices.IndexFunc(altSvc, func(str string) bool { return strings.HasPrefix(str, h2Prefix) })
-	if idx >= 0 {
-		if host := altSvc[idx][len(h2Prefix):]; validRedirectHost(host) {
-			return host
+	for _, value := range header.Values("Alt-Svc") {
+		if host, ok := strings.CutPrefix(value, h2Prefix); ok {
+			// Only the first h2 entry is considered, as before.
+			if validRedirectHost(host) {
+				return host
+			}
+			break
 		}
 	}
 	return inet.RegionRedirectHost(string(body))

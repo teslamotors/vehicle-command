@@ -1304,3 +1304,32 @@ func TestForwardRequestIgnoresNonTeslaRedirect(t *testing.T) {
 		})
 	}
 }
+
+func TestRegionRedirectHost(t *testing.T) {
+	const teslaHost = "fleet-api.prd.eu.vn.cloud.tesla.com"
+	for _, test := range []struct {
+		name   string
+		altSvc []string
+		body   string
+		want   string
+	}{
+		{name: "SingleValue", altSvc: []string{h2Prefix + teslaHost}, want: teslaHost},
+		{name: "MatchNotFirst", altSvc: []string{"h3=\":443\"", h2Prefix + teslaHost}, want: teslaHost},
+		{name: "WithPort", altSvc: []string{h2Prefix + teslaHost + ":443"}, want: teslaHost + ":443"},
+		{name: "NoMatch", altSvc: []string{"h3=\":443\""}, body: `{}`, want: ""},
+		{name: "NoHeader", body: outOfRegionBody(teslaHost), want: teslaHost},
+		{name: "HeaderBeforeBody", altSvc: []string{h2Prefix + teslaHost}, body: outOfRegionBody("other.tesla.com"), want: teslaHost},
+		{name: "NonTeslaHeaderFallsBackToBody", altSvc: []string{h2Prefix + "attacker.example.com"}, body: outOfRegionBody(teslaHost), want: teslaHost},
+		{name: "NonTeslaBody", body: outOfRegionBody("attacker.example.com"), want: ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			header := make(http.Header)
+			for _, value := range test.altSvc {
+				header.Add("Alt-Svc", value)
+			}
+			if got := regionRedirectHost(header, []byte(test.body)); got != test.want {
+				t.Fatalf("regionRedirectHost = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
