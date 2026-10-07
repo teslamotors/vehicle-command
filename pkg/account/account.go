@@ -64,11 +64,21 @@ func buildUserAgent(app string) string {
 // Account allows interaction with a Tesla account.
 type Account struct {
 	// The default UserAgent is constructed from the global UserAgent, but can be overridden.
-	UserAgent  string
-	authHeader string
-	Host       string
-	Subject    string
-	client     http.Client
+	UserAgent string
+	Host      string
+	Subject   string
+	client    *http.Client
+}
+
+// bearerTransport sets a fixed Authorization header on every request.
+type bearerTransport struct {
+	header string
+}
+
+func (t *bearerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req = req.Clone(req.Context())
+	req.Header.Set("Authorization", t.header)
+	return http.DefaultTransport.RoundTrip(req)
 }
 
 // We don't parse JWTs beyond what's required to extract the API server domain name
@@ -115,8 +125,35 @@ func (p *oauthPayload) domain() string {
 }
 
 // New returns an [Account] that can be used to fetch a [vehicle.Vehicle].
+//
+// The Account sends oauthToken with every request and stops working once that token expires. Use
+// [NewWithClient] to authenticate with credentials that refresh.
+//
 // Optional userAgent can be passed in - otherwise it will be generated from code
 func New(oauthToken, userAgent string) (*Account, error) {
+	client := &http.Client{
+		Transport: &bearerTransport{header: "Bearer " + strings.TrimSpace(oauthToken)},
+	}
+	return NewWithClient(client, oauthToken, userAgent)
+}
+
+// NewWithClient returns an [Account] that sends its requests with client.
+//
+// The client is responsible for authenticating the requests: the Account sets no Authorization
+// header of its own. Typically client is built from an OAuth token source, so that expired
+// tokens are refreshed transparently:
+//
+//	ts := oauth2.StaticTokenSource(&oauth2.Token{RefreshToken: refreshToken})
+//	conf := &oauth2.Config{ClientID: clientID, Endpoint: teslaEndpoint}
+//	acct, err := account.NewWithClient(conf.Client(ctx, ts), accessToken, userAgent)
+//
+// oauthToken is still required, but it is only parsed, never sent: its audiences determine which
+// regional Fleet API host the Account talks to. A nil client is replaced by
+// [http.DefaultClient], which sends unauthenticated requests.
+func NewWithClient(client *http.Client, oauthToken, userAgent string) (*Account, error) {
+	if client == nil {
+		client = http.DefaultClient
+	}
 	parts := strings.Split(oauthToken, ".")
 	if len(parts) != 3 {
 		return nil, fmt.Errorf("client provided malformed OAuth token")
@@ -135,10 +172,10 @@ func New(oauthToken, userAgent string) (*Account, error) {
 		return nil, fmt.Errorf("client provided OAuth token with invalid audiences")
 	}
 	return &Account{
-		UserAgent:  buildUserAgent(userAgent),
-		authHeader: "Bearer " + strings.TrimSpace(oauthToken),
-		Host:       domain,
-		Subject:    payload.Subject,
+		UserAgent: buildUserAgent(userAgent),
+		Host:      domain,
+		Subject:   payload.Subject,
+		client:    client,
 	}, nil
 }
 
@@ -150,7 +187,7 @@ func New(oauthToken, userAgent string) (*Account, error) {
 // sessions parameter may also be nil, but providing a cache.SessionCache avoids a round-trip
 // handshake with the Vehicle in subsequent connections.
 func (a *Account) GetVehicle(_ context.Context, vin string, privateKey authentication.ECDHPrivateKey, sessions *cache.SessionCache) (*vehicle.Vehicle, error) {
-	conn := inet.NewConnection(vin, a.authHeader, a.Host, a.UserAgent)
+	conn := inet.NewConnectionWithClient(a.client, vin, a.Host, a.UserAgent)
 	car, err := vehicle.NewVehicle(conn, privateKey, sessions)
 	if err != nil {
 		conn.Close()
@@ -171,7 +208,6 @@ func (a *Account) Get(ctx context.Context, endpoint string) ([]byte, error) {
 	log.Debug("Requesting %s...", url)
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("User-Agent", a.UserAgent)
-	request.Header.Set("Authorization", a.authHeader)
 	response, err := a.client.Do(request)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching %s: %w", endpoint, err)
@@ -193,7 +229,7 @@ func (a *Account) Get(ctx context.Context, endpoint string) ([]byte, error) {
 }
 
 func (a *Account) sendFleetAPICommand(ctx context.Context, endpoint string, command interface{}) ([]byte, error) {
-	return inet.SendFleetAPICommand(ctx, &a.client, a.UserAgent, a.authHeader, fmt.Sprintf("https://%s/%s", a.Host, endpoint), command)
+	return inet.SendFleetAPICommand(ctx, a.client, a.UserAgent, "", fmt.Sprintf("https://%s/%s", a.Host, endpoint), command)
 }
 
 // Post sends an HTTP POST request to endpoint.
