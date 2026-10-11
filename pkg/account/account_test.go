@@ -7,9 +7,9 @@ import (
 	"testing"
 )
 
-// b64Encode encodes a string to base64 without padding.
+// b64Encode encodes a string to base64url without padding.
 func b64Encode(payload string) string {
-	return base64.RawStdEncoding.EncodeToString([]byte(payload))
+	return base64.RawURLEncoding.EncodeToString([]byte(payload))
 }
 
 // TestNewAccount tests the creation of a new account with various JWT scenarios.
@@ -39,6 +39,33 @@ func TestNewAccount(t *testing.T) {
 			}
 			if !test.shouldError && (acct == nil || acct.Host != validDomain) {
 				t.Errorf("acct = %+v, expected Host = %s", acct, validDomain)
+			}
+		})
+	}
+}
+
+func TestNewAccountBase64URL(t *testing.T) {
+	const domain = "fleet-api.prd.eu.vn.cloud.tesla.com"
+	tests := []struct {
+		name    string
+		subject string
+	}{
+		{"hyphen", ">>>"},
+		{"underscore", "???"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			payload := fmt.Sprintf(`{"aud":["https://%s"],"sub":"%s"}`, domain, test.subject)
+			token := "x." + b64Encode(payload) + ".y"
+			acct, err := New(token, "")
+			if err != nil {
+				t.Fatalf("Returned error on valid base64url JWT: %s", err)
+			}
+			if acct.Host != domain || acct.Subject != test.subject {
+				t.Errorf("acct = %+v, expected Host = %s and Subject = %s", acct, domain, test.subject)
+			}
+			if acct.authHeader != "Bearer "+token {
+				t.Errorf("Authorization header does not preserve the original JWT")
 			}
 		})
 	}

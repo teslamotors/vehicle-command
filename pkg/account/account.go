@@ -121,7 +121,7 @@ func New(oauthToken, userAgent string) (*Account, error) {
 	if len(parts) != 3 {
 		return nil, fmt.Errorf("client provided malformed OAuth token")
 	}
-	payloadJSON, err := base64.RawStdEncoding.DecodeString(parts[1])
+	payloadJSON, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
 		return nil, fmt.Errorf("client provided malformed OAuth token: %s (%s)", err, parts[1])
 	}
