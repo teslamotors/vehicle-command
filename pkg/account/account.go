@@ -183,10 +183,13 @@ func (a *Account) Get(ctx context.Context, endpoint string) ([]byte, error) {
 		err := fmt.Errorf("http error when sending command to %s: %s", url, response.Status)
 		return nil, err
 	}
-	reader := io.LimitedReader{R: response.Body, N: connector.MaxResponseLength}
+	reader := io.LimitedReader{R: response.Body, N: connector.MaxResponseLength + 1}
 	body, err := io.ReadAll(&reader)
 	if err != nil {
 		return nil, err
+	}
+	if len(body) > connector.MaxResponseLength {
+		return nil, fmt.Errorf("response exceeds maximum length")
 	}
 	log.Debug("Received: %s\n", body)
 	return body, err
