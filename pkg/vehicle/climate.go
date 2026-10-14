@@ -7,7 +7,11 @@ import (
 	carserver "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/carserver"
 )
 
-// SetSeatCooler sets seat cooling level.
+// SetSeatCooler sets seat cooling via published HvacSeatCoolerActions
+// (VehicleAction field 49). tesla-http-proxy maps remote_seat_cooler_request
+// onto this method. HTTP 501 Unauthorized from Tesla signed_command is Fleet
+// API partner/region/OAuth allowlist, not a missing handler. See
+// teslamotors/vehicle-command#383.
 func (v *Vehicle) SetSeatCooler(ctx context.Context, level Level, seat SeatPosition) error {
 	// The protobuf index starts at 0 for unknown, we want to start with 0 for off
 	seatMap := map[SeatPosition]carserver.HvacSeatCoolerActions_HvacSeatCoolerPosition_E{
@@ -35,30 +39,41 @@ func (v *Vehicle) SetSeatCooler(ctx context.Context, level Level, seat SeatPosit
 		})
 }
 
-func (v *Vehicle) ClimateOn(ctx context.Context) error {
+// SetClimatePower turns climate control on or off via HvacAutoAction.power_on
+// (Fleet API auto_conditioning_start / auto_conditioning_stop).
+//
+// Despite the protobuf name, this is climate power, not the in-car Auto vs
+// Manual HVAC toggle. Tesla has not published a VehicleAction for that mode.
+// Callers that ask for Auto vs Manual should use
+// protocol.ErrHvacAutoModeNotInProtocol instead of guessing a field number.
+// See teslamotors/vehicle-command#283.
+//
+// manualOverride is the published HvacAutoAction.manual_override bit: a
+// low-SOC override, the same pattern as SetPreconditioningMax,
+// SetBioweaponDefenseMode, and SetClimateKeeperMode. It is not Auto vs
+// Manual HVAC mode.
+func (v *Vehicle) SetClimatePower(ctx context.Context, on, manualOverride bool) error {
 	return v.executeCarServerAction(ctx,
 		&carserver.Action_VehicleAction{
 			VehicleAction: &carserver.VehicleAction{
 				VehicleActionMsg: &carserver.VehicleAction_HvacAutoAction{
 					HvacAutoAction: &carserver.HvacAutoAction{
-						PowerOn: true,
+						PowerOn:        on,
+						ManualOverride: manualOverride,
 					},
 				},
 			},
 		})
 }
 
+// ClimateOn turns climate control on. See SetClimatePower.
+func (v *Vehicle) ClimateOn(ctx context.Context) error {
+	return v.SetClimatePower(ctx, true, false)
+}
+
+// ClimateOff turns climate control off. See SetClimatePower.
 func (v *Vehicle) ClimateOff(ctx context.Context) error {
-	return v.executeCarServerAction(ctx,
-		&carserver.Action_VehicleAction{
-			VehicleAction: &carserver.VehicleAction{
-				VehicleActionMsg: &carserver.VehicleAction_HvacAutoAction{
-					HvacAutoAction: &carserver.HvacAutoAction{
-						PowerOn: false,
-					},
-				},
-			},
-		})
+	return v.SetClimatePower(ctx, false, false)
 }
 
 func (v *Vehicle) AutoSeatAndClimate(ctx context.Context, positions []SeatPosition, enabled bool) error {
@@ -85,6 +100,18 @@ func (v *Vehicle) AutoSeatAndClimate(ctx context.Context, positions []SeatPositi
 		})
 }
 
+// ChangeClimateTemp sets the driver and passenger climate setpoints in Celsius.
+//
+// Firmware applies driver_temp_celsius and passenger_temp_celsius. Proto3
+// leaves unset floats at 0, which the vehicle treats as LO. Sending only
+// absolute_celsius (or a zone) without those fields therefore drops the
+// setpoint to LO. Level TEMP_MIN / TEMP_MAX are LO / HI, not a flag that
+// "numeric temps are present"; this method does not send them. See
+// teslamotors/vehicle-command#283.
+//
+// Independent driver and passenger setpoints are this action. Tesla has not
+// published a VehicleAction to toggle the in-car climate split/SYNC control,
+// and ClimateState has no split boolean. See teslamotors/vehicle-command#386.
 func (v *Vehicle) ChangeClimateTemp(ctx context.Context, driverCelsius float32, passengerCelsius float32) error {
 	return v.executeCarServerAction(ctx,
 		&carserver.Action_VehicleAction{
@@ -93,9 +120,6 @@ func (v *Vehicle) ChangeClimateTemp(ctx context.Context, driverCelsius float32, 
 					HvacTemperatureAdjustmentAction: &carserver.HvacTemperatureAdjustmentAction{
 						DriverTempCelsius:    driverCelsius,
 						PassengerTempCelsius: passengerCelsius,
-						Level: &carserver.HvacTemperatureAdjustmentAction_Temperature{
-							Type: &carserver.HvacTemperatureAdjustmentAction_Temperature_TEMP_MAX{},
-						},
 					},
 				},
 			},
@@ -156,6 +180,12 @@ func (s Level) addToHeaterAction(action *carserver.HvacSeatHeaterActions_HvacSea
 	}
 }
 
+// SetSeatHeater sets seat heating via published HvacSeatHeaterActions
+// (VehicleAction field 36). tesla-http-proxy maps remote_seat_heater_request
+// onto this method (Owner/Fleet JSON "heater" is an alias for
+// "seat_position"). HTTP 501 Unauthorized from Tesla signed_command is Fleet
+// API partner/region/OAuth allowlist, not a missing handler. See
+// teslamotors/vehicle-command#383.
 func (v *Vehicle) SetSeatHeater(ctx context.Context, levels map[SeatPosition]Level) error {
 	var actions []*carserver.HvacSeatHeaterActions_HvacSeatHeaterAction
 
@@ -220,6 +250,13 @@ func (v *Vehicle) SetBioweaponDefenseMode(ctx context.Context, enabled bool, man
 
 }
 
+// SetCabinOverheatProtection enables or disables cabin overheat protection.
+// fanOnly uses the fan without A/C when the vehicle supports it.
+//
+// This setting is independent of scheduled charging. On some Intel-MCU Model S
+// vehicles, leaving cabin overheat on can prevent the sleep/wake cycle the
+// scheduler needs; this method does not couple the two. See
+// teslamotors/vehicle-command#342.
 func (v *Vehicle) SetCabinOverheatProtection(ctx context.Context, enabled bool, fanOnly bool) error {
 	return v.executeCarServerAction(ctx,
 		&carserver.Action_VehicleAction{
@@ -256,6 +293,12 @@ const (
 	ClimateKeeperModeCamp = carserver.HvacClimateKeeperAction_ClimateKeeperAction_Camp
 )
 
+// SetClimateKeeperMode sends HvacClimateKeeperAction (Off/On/Dog/Camp).
+// Firmware may refuse Dog/Camp with NominalError "cpd_enabled" (Child
+// Presence Detection occupancy). That is not the in-car Child Left Alone
+// Detection setting. override is a low-SOC bit, not a CPD bypass
+// (teslamotors/vehicle-command#437). This method still delivers the
+// published action. See teslamotors/vehicle-command#509.
 func (v *Vehicle) SetClimateKeeperMode(ctx context.Context, mode ClimateKeeperMode, override bool) error {
 	return v.executeCarServerAction(ctx,
 		&carserver.Action_VehicleAction{

@@ -163,6 +163,133 @@ encoding of the message length.
 *Note*: Due to hardware constraints, VCSEC can only reliably maintain up to
 three simultaneous BLE connections. These are shared by keyfobs and phone keys.
 
+### BLE keys and Walk-Away Door Lock
+
+Enrolling a public key with `add-key-request` / `Vehicle.AddKey` puts that
+key on the VCSEC **whitelist**. From the vehicle's point of view it is a
+key, the same whitelist used by phone keys and keyfobs. Role (Owner,
+Driver, …) only decides which **commands** the key may authorize. Form
+factor (`nfc_card`, `ios_device`, `android_device`, `cloud_key`) is
+`KeyMetadata` display metadata, not a documented exemption from presence
+detection.
+
+Tesla's owner documentation treats a paired phone left inside with
+Bluetooth enabled as equivalent to leaving keys in the car: Walk-Away Door
+Lock does not lock because an authenticated BLE key is still present.
+VCSEC has no published field that marks a whitelist entry as
+"command-only, ignore for passive-entry / Walk-Away Door Lock." Inventing
+one would collide with firmware this repository cannot update.
+
+An in-car BLE button that stays connected, or reconnects on a timer, can
+therefore prevent automatic locking. That is expected firmware behavior,
+not a library bug. The supported architecture is:
+
+1. Connect over BLE when a command is needed.
+2. Handshake, send the command, then `Vehicle.Disconnect` /
+   `connector.Close` so the GATT session ends.
+3. Do not advertise or reconnect while the vehicle is parked with people
+   walking away.
+
+`tesla-control` already disconnects when the process exits. Embedded
+controllers must do the same after each button press. The library returns
+[`protocol.ErrBLEKeyPresenceNotInProtocol`](error.go) for
+`tesla-control ble-presence-exempt` and proxy paths `ble_presence_exempt`
+/ `command_only_key` rather than guessing a whitelist flag. See
+[issue #480](https://github.com/teslamotors/vehicle-command/issues/480).
+
+### BLE GetDriveState / GetVehicleData latency
+
+`GetState` (for example `StateCategoryDrive`: gear, speed) is a signed
+Infotainment request/response. Callers looping over BLE have measured
+**~250–300ms** of radio plus vehicle time, with client construction and
+encryption only a few milliseconds
+([issue #414](https://github.com/teslamotors/vehicle-command/issues/414)).
+Targets of under 150ms (or 50–100ms) are below that vehicle round-trip.
+This SDK has no timer that pads the poll to 250ms, and it cannot shorten
+Infotainment processing.
+
+There is **no** published streaming or subscription `VehicleAction` for
+DriveState. `GetVehicleData` markers have no field mask that would make
+the vehicle answer faster. Disabling `FLAG_ENCRYPT_RESPONSE`, shortening
+UUIDs, or skipping the session handshake does not raise a firmware poll
+cap and is unsafe (response-size workarounds are also forbidden; see
+[Response size limits](#response-size-limits)).
+
+Practical client advice:
+
+1. `StartSession` once on Infotainment and **reuse** the session for each
+   poll. Handshake plus GetState is two round-trips (~500ms), which matches
+   reports of "250ms × 2".
+2. Request **one** `StateCategory` per poll (`tesla-control state drive`).
+   Extra categories are extra RTTs.
+3. Gear and speed are Infotainment `DriveState`, not VCSEC
+   `BodyControllerState` (that path works while infotainment sleeps but
+   does not carry speed).
+4. High-rate telemetry is [fleet-telemetry](https://github.com/teslamotors/fleet-telemetry),
+   not this repository.
+
+Callers that ask this library to guarantee a sub-150ms BLE poll get
+[`protocol.ErrBLEStateLatencyFirmware`](error.go) from
+`tesla-control ble-state-fast` and proxy paths `ble_state_fast` /
+`drive_state_fast` / `set_ble_poll_interval` (HTTP 400 before a session).
+
+### Seat heater / cooler vs Tesla `signed_command` HTTP 501
+
+`remote_seat_heater_request` and `remote_seat_cooler_request` are
+**implemented**. tesla-http-proxy maps them to published
+`HvacSeatHeaterActions` (VehicleAction field 36) and
+`HvacSeatCoolerActions` (field 49). `tesla-control seat-heater` and
+`seat-cooler` send those actions over BLE or Fleet API.
+
+Owner/Fleet JSON historically used `"heater"` (0–8) plus `"level"`
+(0–3) for the heater endpoint; the proxy also accepts `"seat_position"`
+(the same 0–8 index). Cooler uses `"seat_position"` plus
+`"seat_cooler_level"` (`"level"` is an alias). Missing parameters are
+HTTP 400 **before** a vehicle session.
+
+If Tesla `POST .../signed_command` returns HTTP **501** with JSON
+`"error":"Unauthorized"`, tesla-http-proxy **already signed and
+forwarded** the command. [`writeJSONError`](../proxy/proxy.go) copies
+Tesla's status, so clients see "Not Implemented"
+(`http.StatusText(501)`). That is Tesla Fleet API partner/region/OAuth
+allowlist, not `proxy.ErrCommandNotImplemented`. Other REST commands
+succeeding does not mean these handlers are missing
+([issue #383](https://github.com/teslamotors/vehicle-command/issues/383)).
+
+This SDK does not invent unused VehicleAction numbers or skip command
+signing. Callers that ask to treat the published paths as unimplemented
+get [`protocol.ErrSeatClimateFleetAPI`](error.go) from
+`tesla-control seat-heater-not-implemented` and proxy paths
+`seat_heater_not_implemented` / `seat_cooler_not_implemented` /
+`remote_seat_climate_not_implemented` (HTTP 400 before a session).
+
+### Partner token `invalid_audience` and `/authorize` "No policy rules"
+
+This repository **does not mint Tesla OAuth tokens**.
+`tesla-auth-token` writes a token the caller already obtained to the
+system keyring. [`account.New`](../account/account.go) reads the JWT
+`aud` claim of that token to pick a Fleet API host. That is unrelated
+to Tesla Fleet Auth rejecting `grant_type=client_credentials` with
+`invalid_audience`, or `GET /oauth2/v3/authorize` showing
+"No policy rules".
+
+Those errors mean Tesla's Identity Provider has not bound OAuth
+policy/audience to the application, even when the developer dashboard
+shows the app as Active and `client_id`/`client_secret` are accepted
+(`unauthorized_client` vs `invalid_audience` vs `client_not_found`).
+`POST /api/1/partner_accounts` requires a partner token Tesla has not
+issued. This SDK does not invent an audience, POST partner
+registration without a token, or send client secrets. Retrying NA/EU/CN
+`fleet-api` audience URLs does not provision Tesla's IdP. File a
+Support Inquiry from the Tesla developer dashboard
+([issue #460](https://github.com/teslamotors/vehicle-command/issues/460)).
+
+Callers that ask this library to obtain a partner token or bind
+audiences get [`protocol.ErrPartnerOAuthNotProvisioned`](error.go) from
+`tesla-control partner-oauth` and proxy paths `partner_token` /
+`register_partner` / `oauth_audience` / `invalid_audience` (HTTP 400
+before a session).
+
 ## Protocol concepts
 
 This section provides an overview of concepts handled by the protocol.
@@ -206,8 +333,20 @@ using [Fleet API](https://developer.tesla.com/docs/fleet-api/endpoints/vehicle-c
 A **Vehicle Monitor** can read vehicle data, such as location information, but
 cannot authorize commands that change the vehicle's state.
 
-A **Charging Manager** can read vehicle data and authorize commands that affect
-vehicle charging.
+A **Charging Manager** can read vehicle data and authorize commands that
+affect vehicle charging (`charging-start` / `stop` / `set-amps` work over
+BLE). Role enforcement is firmware, not this SDK. `ChargePortDoorOpen` /
+`ChargePortDoorClose` are published Infotainment actions and are still
+delivered (`Vehicle.OpenChargePort`). Vehicles have historically refused
+those for Charging Manager keys with
+`MESSAGEFAULT_ERROR_INSUFFICIENT_PRIVILEGES`
+([issue #232](https://github.com/teslamotors/vehicle-command/issues/232)).
+Tesla has not expanded that ACL. This SDK does not enroll Owner for a
+charge-door gadget, invent extra `KeyMetadata` permissions, or rewrite the
+command as a VCSEC `ClosureMoveRequest.chargePort` bypass. Callers that
+ask for that workaround get
+[`protocol.ErrChargingManagerChargePortFirmware`](error.go). See
+[issue #413](https://github.com/teslamotors/vehicle-command/issues/413).
 
 A **Guest** key is essentially a temporary Driver key, with an automated
 lifecycle intended to facilitate vehicle rentals. See
@@ -218,6 +357,367 @@ behalf of service technicians. Service keys can remotely (un)lock vehicles in
 order to provide roadside assistance, as well as remotely delete (but not add)
 Driver, Guest, and Fleet Manager keys. Vehicles in their default state prevent
 Service keys from authorizing other commands over the Internet.
+
+### Key display names
+
+The Locks screen shows a human-readable label for each enrolled key. That
+string is **not** stored on the vehicle. VCSEC [`KeyMetadata`](protobuf/vcsec.proto)
+only contains `keyFormFactor`. Tesla's account service holds the label
+(`POST api/1/users/keys`, implemented as `Account.UpdateKey` /
+`tesla-control rename-key`). Vehicles fetch it when they have connectivity.
+
+BLE-only clients can enroll keys and update role or form factor locally
+(`Vehicle.AddKey`, `Vehicle.UpdateKeyMetadata` /
+`tesla-control -ble update-key`) but cannot rename the Locks-screen label.
+The library returns [`protocol.ErrKeyNameRequiresFleetAPI`](error.go) in that
+case. See [issue #418](https://github.com/teslamotors/vehicle-command/issues/418).
+
+### Virtual key enrollment page
+
+`https://tesla.com/_ak/<domain>` is Tesla's hosted page for pairing a
+partner public key. `account.VirtualKeyInstallURL` builds that link from
+the registered hostname and does not add a query string. The Finish Setup
+button is part of Tesla's page. On a desktop browser it can return to the
+same page.
+
+This repository does not host that page and cannot retarget the button.
+An unconstrained `return_uri` (for example `?return_uri=https://other.example/finish`)
+is an open redirect. A Tesla collaborator said any such redirect must stay
+on the registered partner domain and/or be configured with Tesla in advance
+([issue #444](https://github.com/teslamotors/vehicle-command/issues/444)).
+Callers that ask this SDK to append `return_uri` get
+[`protocol.ErrVirtualKeyReturnURI`](error.go) from
+`tesla-control virtual-key-return` and proxy paths `virtual_key_return` /
+`ak_return_uri` / `set_virtual_key_return` (HTTP 400 before a session).
+`account.VirtualKeyReturnHostAllowed` reports whether an https URL's host
+is the partner domain or a subdomain. That check does not make Tesla's
+page follow the URL.
+
+### WiFi configuration
+
+The in-car UX can enable WiFi, add a network (SSID, security, PSK), forget a
+network, and toggle connect-in-drive. Tesla has **not** published
+`VehicleAction` members for those operations. They are also absent from
+independent public firmware dumps of `car_server.proto`. Filling an unused
+oneof number would collide with firmware Tesla cannot update from this
+repository, and could put a PSK on the wire under the wrong tag.
+
+The SDK therefore does not guess field numbers. `protocol.ErrWiFiNotInProtocol`
+is returned for `tesla-control wifi` and for proxy paths `wifi_on`,
+`wifi_off`, `set_wifi`, `add_wifi_network`, `forget_wifi_network`, and
+`wifi_connect_in_drive` (HTTP 400 before a session is opened; the PSK is not
+forwarded). Connectivity *telemetry* (SSID, RSSI, cellular) belongs in
+[fleet-telemetry#407](https://github.com/teslamotors/fleet-telemetry/issues/407),
+not this command SDK. See [issue #419](https://github.com/teslamotors/vehicle-command/issues/419).
+
+### Keeping infotainment awake
+
+`wake` (`RKE_ACTION_WAKE_VEHICLE` over BLE, or Fleet API wakeup over inet)
+starts infotainment if it is asleep. It does not inhibit subsequent sleep.
+Repeating `wake` has the same limitation. `body-controller-state` talks to
+VCSEC and does not keep infotainment awake.
+
+`SetKeepAccessoryPowerMode` (`tesla-control keep-accessory-power`) is the
+published setting for the 12V jack and charging USB ports. Tesla firmware
+does not apply it to the glovebox dashcam/data USB port.
+
+Tesla has **not** published a `VehicleAction` that keeps infotainment (or the
+dashcam USB) powered for USB offload. Inventing an unused oneof number would
+collide with firmware. The SDK therefore returns
+[`protocol.ErrKeepAwakeNotInProtocol`](error.go) for `tesla-control keep-awake`
+and proxy paths `keep_awake` / `keep_alive` (HTTP 400 before a session).
+Wrapping an Infotainment mutation (for example `charge-port-close`) as a
+library keep-alive is not supported: it changes vehicle state and fights
+designed sleep. See [issue #397](https://github.com/teslamotors/vehicle-command/issues/397).
+
+### Charging commands while Infotainment is asleep
+
+`charge_stop` / `Vehicle.ChargeStop` and `set_charging_amps` /
+`Vehicle.SetChargingAmps` are published Infotainment `VehicleAction`s
+(`ChargingStartStopAction` stop, `SetChargingAmpsAction`). tesla-http-proxy
+already maps those Fleet REST paths. Paid Fleet API usage is not a quota on
+this path.
+
+[Fleet Telemetry](https://github.com/teslamotors/fleet-telemetry)
+(`ACChargingPower`, `Soc`) is a separate product. Charging hardware can
+continue while Infotainment is asleep, so telemetry can look live while
+Tesla's `signed_command` gateway returns HTTP 408 or 503
+`vehicle unavailable: vehicle is offline or asleep`
+([`inet.ErrVehicleNotAwake`](../connector/inet/inet.go)). `wake` starts
+Infotainment but does not inhibit later sleep (see above) and does not
+guarantee Tesla's command relay is ready for the next signed command.
+
+There is no published `VehicleAction` that talks to the charging controller
+while Infotainment is unreachable. BLE still delivers these actions to
+Infotainment after handshake; it is not a VCSEC charging-amps command.
+Inventing keep-awake or wrapping `charge-port-close` as a library workaround
+is not supported.
+
+Callers that ask this SDK to treat telemetry as proof `signed_command` will
+succeed get [`protocol.ErrChargingWhileInfotainmentAsleep`](error.go) from
+`tesla-control charging-while-asleep` and proxy paths `charging_while_asleep`,
+`charge_stop_asleep`, and `set_charging_amps_asleep` (HTTP 400 before a
+session). See [issue #452](https://github.com/teslamotors/vehicle-command/issues/452).
+
+### Infotainment `signed_command` while the vehicle list says online
+
+`POST /api/1/vehicles/{vin}/signed_command` carries one `RoutableMessage`.
+`DOMAIN_INFOTAINMENT` and `DOMAIN_VEHICLE_SECURITY` are fields inside that
+protobuf. This SDK does not have a separate HTTP path per domain.
+
+`GET /api/1/vehicles/{vin}` with `state=online` is the vehicle-list state.
+It does not mean Tesla's command gateway will accept a message addressed to
+Infotainment. A successful VCSEC `signed_command` (unlock, open door) does
+not prove the next Infotainment `session_info_request` will be accepted.
+BLE is a different transport: both domains can answer there while Fleet API
+returns HTTP 408 `vehicle is offline` for Infotainment only.
+
+[Issue #285](https://github.com/teslamotors/vehicle-command/issues/285)
+reports that 408 while the list says online, VCSEC commands succeed, the
+operator is in the car, and the host is `fleet-api.prd.cn.vn.cloud.tesla.cn`.
+The 408 body is Tesla's gateway
+([`inet.ErrVehicleNotAwake`](../connector/inet/inet.go)). This repository
+cannot make the gateway accept the message. It does not rewrite
+`DOMAIN_INFOTAINMENT` to VCSEC, skip the Infotainment handshake
+([issue #468](https://github.com/teslamotors/vehicle-command/issues/468)),
+or treat `wake_up` as a promise that the next Infotainment handshake
+succeeds. `wake_up` remains the unsigned REST wake.
+
+Callers that ask this SDK to treat `state=online` or a VCSEC success as
+Infotainment reachability get
+[`protocol.ErrInfotainmentSignedCommandOffline`](error.go) from
+`tesla-control infotainment-offline` and proxy paths `infotainment_offline`,
+`domain_infotainment_online`, and `vcsec_means_infotainment_online`
+(HTTP 400 before a session). Published Infotainment commands such as
+`honk_horn` are still sent.
+
+### Charging amps over BLE and Fleet API
+
+`set_charging_amps` / `Vehicle.SetChargingAmps` sends
+`SetChargingAmpsAction.charging_amps`. BLE and Fleet API differ in
+transport and authentication. They send the same integer. This SDK does
+not add an amp on BLE, clamp the value to 5, or send the command twice.
+
+[Issue #256](https://github.com/teslamotors/vehicle-command/issues/256)
+reports a Model 3 that charged at 1A over Fleet API and looked like 2A on
+a wall meter after the same setpoint over BLE, while the phone app showed
+5A for the BLE command and 1A for Fleet API. A collaborator could not
+reproduce a transport difference and noted that vehicle firmware appears
+to enforce a 5A floor in the charging UI. An awake car can draw on the
+order of 200–300W from the grid for its low-voltage system, which is about
+1A on a single-phase supply and is not a second amp this library adds.
+Three-phase 230V charging at a 1A setpoint has been measured near 1.1A.
+Setting a current below 5A is sometimes ignored on the first call and
+accepted when the same command is repeated. `0` stops charging on a UMC
+and does not stop a TWC gen 2/3. Those are vehicle and charger behaviors.
+
+Callers that ask this SDK to make the wall meter match the setpoint, or to
+use a different integer on BLE, get
+[`protocol.ErrChargingAmpsBelowFloorFirmware`](error.go) from
+`tesla-control charging-amps-floor` and proxy paths `charging_amps_floor`,
+`ble_charging_amps`, and `match_wall_amps` (HTTP 400 before a session).
+`charging-set-amps` and `set_charging_amps` still send the requested
+integer, including values below 5.
+
+### Pre-send semantic validation
+
+Session signatures prove who sent a command. They do not decide whether
+the command conflicts with the vehicle's current state. That decision is
+the vehicle's, after the signed round-trip:
+
+- Application refusals are [`NominalError`](error.go) (HTTP 200
+  `result:false`). Dog/Camp `cpd_enabled` is one of those
+  ([issue #509](https://github.com/teslamotors/vehicle-command/issues/509)).
+- Protocol faults are [`RoutableMessageError`](error.go).
+
+[Issue #517](https://github.com/teslamotors/vehicle-command/issues/517)
+asks for an optional hook that vetoes a command before sign and send,
+using declared state and a fixed limits table, and that appends every
+send and refusal to a local audit log. The proposal states the table is
+an example operator policy, not Tesla's rules, and that no vehicle field
+data was used. Tesla has not published that table. A mistaken check drops
+legitimate commands: the reference extraction flagged every `ChargeStart`
+until the parser was fixed. This SDK does not insert the hook into
+`Vehicle.Send`, does not block `ChargeStart` or `SetClimateKeeperMode`,
+and does not hash-chain a command log. Key management for such a log is
+unspecified, and the log would be a new store of command history.
+
+Callers that ask this SDK for the veto get
+[`protocol.ErrPreSendValidationNotInProtocol`](error.go) from
+`Vehicle.ValidateCommand`, `tesla-control validate-command`, and proxy
+paths `validate_command`, `pre_send_veto`, and `command_audit` (HTTP 400
+before a session). Published commands are still signed and sent.
+`ErrPreSendValidationNotInProtocol` is not temporary and must not be
+retried by `Vehicle.Send`.
+
+### Battery option codes
+
+Pack identity (`$BT42`, `$BTF0`, …) is Tesla **catalog** metadata from
+[`GET /api/1/dx/vehicles/options?vin=`](https://developer.tesla.com/docs/fleet-api/endpoints/vehicle-management),
+not a signed `VehicleAction` or `ChargeState` field. `ChargeState` reports
+SOC and rated range, not pack kWh.
+
+Tesla's options response for many VINs omits any `$BT*` code (see the sample
+in [issue #391](https://github.com/teslamotors/vehicle-command/issues/391)).
+This SDK does not invent a battery code from a model option such as `$MT322`.
+`account.FindBatteryOption` / `tesla-control battery-option VIN` return
+[`protocol.ErrBatteryOptionNotInCatalog`](error.go) in that case.
+`tesla-control -ble options` returns
+[`protocol.ErrBatteryOptionRequiresFleetAPI`](error.go). Proxy paths
+`battery_size`, `get_battery_option`, and `get_battery_size` return that
+Fleet-required error as HTTP 400 before a vehicle session.
+
+Tesla's documented kWh alternative is partner-token
+`GET /api/1/vehicles/{vin}/specs` (`batteryCapacityKwh`). That endpoint is
+billed ($0.10 per successful result) and is not called by this SDK.
+
+### Scheduled charging and cabin overheat protection
+
+`ScheduledChargingAction` (field 41) and `ScheduledDepartureAction` (field
+42) are published. `Vehicle.ScheduleCharging` /
+`tesla-control charging-schedule` and `Vehicle.ScheduleDeparture` /
+proxy `set_scheduled_departure` deliver those commands. `charge-start`
+starts charging immediately and is a separate action.
+
+Whether the vehicle later **sleeps and fires the scheduler** is firmware,
+not a missing client field. On some Intel-MCU Model S vehicles, cabin
+overheat protection (`SetCabinOverheatProtectionAction`, field 50) can
+prevent that sleep/wake cycle, so scheduled departure or scheduled
+charging does not run at the configured time even though the command was
+accepted. Turning cabin overheat off restores the schedule on those cars.
+Newer Model Y firmware is reported to schedule correctly with cabin
+overheat on. See [issue #342](https://github.com/teslamotors/vehicle-command/issues/342).
+
+This SDK does not disable cabin overheat as a workaround (that would
+change climate settings the driver enabled) and does not invent a
+"force schedule despite overheat" VehicleAction. Callers that ask for
+that workaround get [`protocol.ErrScheduledChargingFirmware`](error.go)
+from `tesla-control charging-schedule-overheat` and proxy paths
+`scheduled_charging_overheat` / `force_scheduled_charging` (HTTP 400
+before a session).
+
+### Remote boombox (external speaker)
+
+Fleet API documents `POST .../command/remote_boombox` with `{"sound": 0}`
+(random) or `{"sound": 2000}` (locate ping). Vehicles that require the
+Vehicle Command Protocol reject **unsigned** REST with HTTP 403.
+
+The published [`car_server.proto`](protobuf/car_server.proto) in this
+repository has `VehicleControlHonkHornAction` (field 27) and
+`VehicleControlFlashLightsAction` (field 26), but **no** boombox /
+play-sound `VehicleAction`. Tesla has not added one. A Tesla collaborator
+stated on [issue #266](https://github.com/teslamotors/vehicle-command/issues/266)
+that boombox stays unpublished pending legal approval and a disclaimer:
+Pedestrian Warning System use is restricted in some jurisdictions.
+Third-party firmware dumps and closed-source apps are **not** Tesla's
+published protocol. Copying an unpublished oneof member into this
+repository would collide with firmware this SDK cannot update and would
+release code Tesla has not cleared.
+
+Mapping boombox onto honk would change vehicle behavior (horn vs external
+speaker). Locate ping is also firmware-gated (for example robotaxi /
+speed limits reported by third parties); this SDK does not guess those
+rules.
+
+The proxy therefore returns [`protocol.ErrBoomboxNotInProtocol`](error.go)
+for `remote_boombox` (HTTP 400 before a session) instead of a generic
+"command not implemented". `tesla-control boombox` returns the same
+error. See [issue #266](https://github.com/teslamotors/vehicle-command/issues/266)
+and [issue #411](https://github.com/teslamotors/vehicle-command/issues/411).
+
+### HVAC Auto vs climate power
+
+`HvacAutoAction` (VehicleAction field 10) is climate **power**.
+`power_on: true` is Fleet API `auto_conditioning_start`; `power_on: false`
+is `auto_conditioning_stop`. The protobuf name is historical. It is **not**
+the in-car Auto vs Manual HVAC toggle, and `manual_override` is a low-SOC
+override (same pattern as preconditioning-max, bioweapon, and climate
+keeper), not Auto vs Manual mode.
+
+Tesla has not published a VehicleAction for Auto vs Manual HVAC, or for
+heater-off / vent-only as requested in
+[issue #112](https://github.com/teslamotors/vehicle-command/issues/112).
+Guessing an unused oneof number would collide with firmware this SDK
+cannot update. Callers that ask for that mode get
+[`protocol.ErrHvacAutoModeNotInProtocol`](error.go) from
+`tesla-control hvac-auto-mode` and proxy paths `hvac_auto_mode` /
+`set_hvac_auto` / `climate_manual` / `hvac_manual` / `auto_hvac_mode`
+(HTTP 400 before a session). See
+[issue #283](https://github.com/teslamotors/vehicle-command/issues/283).
+
+Climate setpoints use `HvacTemperatureAdjustmentAction`. Firmware applies
+`driver_temp_celsius` and `passenger_temp_celsius`. Proto3 leaves unset
+floats at 0, which the vehicle treats as LO. Sending only
+`absolute_celsius` (or a temperature zone) without those fields therefore
+drops the setpoint to LO. `level` `TEMP_MIN` / `TEMP_MAX` are LO / HI,
+not a flag that numeric temps are present. `Vehicle.ChangeClimateTemp`
+and proxy `set_temps` encode driver and passenger Celsius and omit
+`absolute_celsius` and `level`. `set_temps` requires at least one of
+`driver_temp` / `passenger_temp` and copies a single value to both
+seats; an empty body is not encoded as 0 °C.
+
+`ClimateState.is_auto_conditioning_on` / `hvac_auto_request` are
+**state**, not a command to switch Auto vs Manual.
+
+Tesla has not published a VehicleAction for the in-car climate
+**split / SYNC** control (linked vs independent driver and passenger
+HVAC), and `ClimateState` has no `is_climate_split` / `is_sync` boolean
+([issue #386](https://github.com/teslamotors/vehicle-command/issues/386)).
+Independent setpoints over BLE are already
+`HvacTemperatureAdjustmentAction.driver_temp_celsius` /
+`passenger_temp_celsius` (`tesla-control climate-set-temp`, proxy
+`set_temps`). `GetClimateState` returns `driver_temp_setting` and
+`passenger_temp_setting`; unequal values are not the UI SYNC flag.
+Guessing an unused oneof number, or adding a ClimateState field Tesla
+has not shipped, would collide with firmware. Callers that ask for
+that toggle get [`protocol.ErrClimateSplitNotInProtocol`](error.go)
+from `tesla-control climate-split` and proxy paths `climate_split` /
+`set_climate_split` / `climate_sync` / `set_climate_sync` (HTTP 400
+before a session).
+
+### Climate keeper Dog/Camp vs Child Presence Detection
+
+`set_climate_keeper_mode` / `Vehicle.SetClimateKeeperMode` is published
+(`HvacClimateKeeperAction`, VehicleAction field 44). Mode 2 is Dog,
+mode 3 is Camp. tesla-http-proxy already maps the Fleet REST path.
+HTTP 200 with `result: false` and reason `cpd_enabled` is an
+application-layer [`NominalError`](error.go) from the car, not a missing
+handler.
+
+`cpd` is **Child Presence Detection** (occupancy / cabin radar firmware).
+It is not the in-car **Child Left Alone Detection** setting. Turning that
+UX toggle off does not clear `cpd_enabled`. Occupants (including adults)
+can still trip CPD. `HvacClimateKeeperAction.manual_override` is a
+low-SOC override, the same pattern as climate power; it is **not** a CPD
+bypass. Tesla firmware still refuses Dog/Camp with `cpd_enabled` when
+`manual_override` is true
+([issue #437](https://github.com/teslamotors/vehicle-command/issues/437)).
+A Tesla collaborator noted that exposing a CPD override in a public API
+would require care.
+
+Tesla has not published a `VehicleAction` to disable CPD, a confirmation
+flow, or an extra OAuth scope for third-party Dog/Camp. Inventing an
+unused oneof would collide with firmware. This SDK still delivers the
+published action so a future firmware grant works without an SDK change.
+Callers that ask this library to bypass CPD, or to treat Child Left Alone
+Detection as sufficient, get
+[`protocol.ErrClimateKeeperCPDFirmware`](error.go) from
+`tesla-control climate-keeper-cpd` and proxy paths `climate_keeper_cpd`,
+`override_cpd`, `dog_mode_cpd`, and `camp_mode_cpd` (HTTP 400 before a
+session). Live vehicle refusals stay `NominalError` so tesla-http-proxy
+keeps HTTP 200 `result:false`.
+[`protocol.IsClimateKeeperCPDEnabled`](error.go) matches both. See
+[issue #509](https://github.com/teslamotors/vehicle-command/issues/509).
+
+### Charging Manager vs charge port
+
+Enroll BLE charging gadgets as `ROLE_CHARGING_MANAGER` (not Owner). Owner
+can unlock and remote-start; a charge-door automator should not. Charging
+Manager already authorizes charging start/stop/amps. Opening the charge
+port is a separate Infotainment action whose ACL is firmware. Until Tesla
+expands it, the vehicle returns insufficient privileges; this client still
+sends `ChargePortDoorOpen` so a future firmware grant works without an SDK
+change. See [issue #413](https://github.com/teslamotors/vehicle-command/issues/413).
 
 ### Metadata serialization
 
@@ -745,6 +1245,29 @@ then the vehicle sets the
 Error codes and their remediation are summarized in
 [universal_message.proto](protobuf/universal_message.proto).
 See comments in the `MessageFault_E` definition.
+
+#### Response size limits
+
+Vehicles enforce a fixed upper bound on the size of a serialized response
+`RoutableMessage`. If a reply would exceed that bound, the vehicle discards it
+and instead returns `MESSAGEFAULT_ERROR_RESPONSE_MTU_EXCEEDED` with no payload.
+Note the following:
+
+ * The request *was* received and processed. For commands, this means the
+   command may have executed even though the client did not receive a
+   confirmation.
+ * The bound is a vehicle-side memory budget, not the negotiated transport MTU.
+   Renegotiating the BLE ATT MTU or reconnecting does not raise it. Clients
+   have observed the limit at roughly 450 bytes for the complete serialized
+   response.
+ * Retransmitting the same request produces the same oversized reply, so the
+   error is not treated as transient.
+ * The size of the reply is determined by the vehicle. Most `GetVehicleData`
+   requests are empty marker messages with no field selection, so a client
+   cannot request a smaller response. A known trigger is `GetDriveState` while
+   a navigation route with a long destination name is active; the failure
+   clears once the route ends. See
+   [issue #472](https://github.com/teslamotors/vehicle-command/issues/472).
 
 ### Response decryption
 

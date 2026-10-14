@@ -129,7 +129,7 @@ func main() {
 		logger.Printf("Failed to connect to vehicle: %s\n", err)
 		return
 	}
-	defer car.Disconnect()
+	defer car.Disconnect() // ends the BLE session so the car does not treat this client as a key still present (Walk-Away Door Lock; teslamotors/vehicle-command#480)
 
 	// Most interactions with the car require an authenticated client.
 	// StartSession() performs a handshake with the vehicle that allows
@@ -146,11 +146,12 @@ func main() {
 	}
 	fmt.Println("Vehicle unlocked!")
 
-	fmt.Println("Turning on HVAC...")
+	// ClimateOn is HvacAutoAction.power_on (climate power), not Auto vs Manual HVAC.
+	fmt.Println("Turning on climate...")
 	if err := car.ClimateOn(ctx); err != nil {
-		logger.Printf("Failed to turn on HVAC: %s\n", err)
+		logger.Printf("Failed to turn on climate: %s\n", err)
 		return
 	}
-	fmt.Println("HVAC on!")
+	fmt.Println("Climate on!")
 	status = 0
 }

@@ -36,6 +36,7 @@ type testSender struct {
 	lock          sync.Mutex
 	listening     bool
 	fixedResponse *universal.RoutableMessage
+	lastMessage   *universal.RoutableMessage
 	ch            chan *universal.RoutableMessage
 
 	// If SendError is set, Send() returns SendError. Otherwise, Send() returns
@@ -128,9 +129,10 @@ func (s *testSender) Stop() {
 	s.lock.Unlock()
 }
 
-func (s *testSender) Send(_ context.Context, _ *universal.RoutableMessage, _ connector.AuthMethod) (protocol.Receiver, error) {
+func (s *testSender) Send(_ context.Context, message *universal.RoutableMessage, _ connector.AuthMethod) (protocol.Receiver, error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
+	s.lastMessage = message
 	if s.SendError != nil {
 		return nil, s.SendError
 	}
@@ -259,6 +261,17 @@ func TestVehicleRetryTimeout(t *testing.T) {
 	_, err := vehicle.Send(ctx, universal.Domain_DOMAIN_VEHICLE_SECURITY, nil, connector.AuthMethodNone)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("Unexpected error: %s", err)
+	}
+}
+
+func TestValidateCommandDoesNotSend(t *testing.T) {
+	car, sender := newTestVehicle()
+	sender.Listen(nil)
+	if err := car.ValidateCommand(context.Background()); !errors.Is(err, protocol.ErrPreSendValidationNotInProtocol) {
+		t.Fatalf("ValidateCommand = %v, want ErrPreSendValidationNotInProtocol", err)
+	}
+	if sender.lastMessage != nil {
+		t.Fatal("ValidateCommand must not dispatch a command")
 	}
 }
 

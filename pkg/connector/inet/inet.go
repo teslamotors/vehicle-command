@@ -41,6 +41,17 @@ func ReadWithContext(ctx context.Context, r io.Reader, p []byte) ([]byte, error)
 	}
 }
 
+// ErrVehicleNotAwake is Tesla Fleet API HTTP 503, or HTTP 408 whose body
+// contains "vehicle is offline". The string matches Tesla's
+// "vehicle unavailable: vehicle is offline or asleep".
+// Fleet Telemetry (ACChargingPower, Soc) is a different path: charging
+// hardware can run while Infotainment is asleep, so telemetry can look
+// live while signed_command fails. Temporary is false so Vehicle.Send
+// does not retry in a tight loop; callers that wake then retry do that
+// at the application layer. See teslamotors/vehicle-command#452.
+// GET /api/1/vehicles state=online does not mean an Infotainment
+// signed_command will be accepted; a 408 body "vehicle is offline" on
+// that domain stays this error (teslamotors/vehicle-command#285).
 var ErrVehicleNotAwake = protocol.NewError("vehicle unavailable: vehicle is offline or asleep", false, false)
 
 /*

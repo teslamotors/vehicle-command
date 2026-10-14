@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/teslamotors/vehicle-command/pkg/connector/inet"
@@ -67,5 +68,28 @@ func TestWriteJSONErrorStatus(t *testing.T) {
 	writeJSONError(recorder, http.StatusOK, &protocol.NominalError{Details: errors.New("could not execute command")})
 	if recorder.Code != http.StatusOK {
 		t.Errorf("nominal error status = %d, want %d", recorder.Code, http.StatusOK)
+	}
+}
+
+func TestWriteJSONErrorForwardsTeslaSignedCommand501(t *testing.T) {
+	// teslamotors/vehicle-command#383: Tesla signed_command HTTP 501 with
+	// JSON error Unauthorized is forwarded as 501 Not Implemented. That is
+	// Tesla Fleet API, not proxy.ErrCommandNotImplemented. Do not include a
+	// VIN in this fixture.
+	body := `{"response":null,"error":"Unauthorized","error_description":"","txid":"test"}`
+	httpErr := &inet.HTTPError{Code: http.StatusNotImplemented, Message: body}
+	recorder := httptest.NewRecorder()
+	writeJSONError(recorder, http.StatusBadGateway, httpErr)
+	if recorder.Code != http.StatusNotImplemented {
+		t.Errorf("status = %d, want 501", recorder.Code)
+	}
+	if !strings.Contains(recorder.Body.String(), "Unauthorized") {
+		t.Errorf("body = %q, want Tesla Unauthorized payload", recorder.Body.String())
+	}
+	if strings.Contains(recorder.Body.String(), protocol.ErrSeatClimateFleetAPI.Error()) {
+		t.Error("writeJSONError must forward Tesla's body, not replace it with ErrSeatClimateFleetAPI")
+	}
+	if strings.Contains(recorder.Body.String(), ErrCommandNotImplemented.Error()) {
+		t.Error("501 Unauthorized must not be rewritten as ErrCommandNotImplemented")
 	}
 }

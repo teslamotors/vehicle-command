@@ -22,7 +22,13 @@ type StateCategory int32
 
 const (
 	StateCategoryCharge StateCategory = iota
+	// StateCategoryClimate returns [carserver.ClimateState], including
+	// driver_temp_setting and passenger_temp_setting. Tesla has not published
+	// a climate split/SYNC boolean; teslamotors/vehicle-command#386.
 	StateCategoryClimate
+	// StateCategoryDrive returns [carserver.DriveState], which carries gear, speed, power, and
+	// odometer as well as the active navigation route. See the note on response size limits in
+	// [Vehicle.GetState].
 	StateCategoryDrive
 	StateCategoryLocation
 	StateCategoryClosures
@@ -65,6 +71,36 @@ func (c StateCategory) submessage() *carserver.GetVehicleData {
 //
 // StateCategoryLocation may return a few different (latitude, longitude) fields. See
 // [carserver.LocationState] documentation for an explanation.
+//
+// # BLE poll latency
+//
+// Each GetState is one signed Infotainment round-trip. Callers have measured
+// ~250–300ms of BLE time versus a few milliseconds of client construction and
+// encryption (teslamotors/vehicle-command#414). That floor is vehicle
+// firmware plus radio, not a client sleep. Handshake once (StartSession) and
+// reuse the session; reconnecting or requesting extra categories adds another
+// RTT (~500ms for handshake+GetState). There is no published streaming
+// DriveState VehicleAction. Do not disable FLAG_ENCRYPT_RESPONSE or shorten
+// UUIDs to chase a sub-150ms poll. High-rate streaming is
+// teslamotors/fleet-telemetry. Clients that ask this library to guarantee
+// <150ms get protocol.ErrBLEStateLatencyFirmware from tesla-control
+// ble-state-fast rather than an unsafe workaround.
+//
+// # Response size limits
+//
+// The vehicle enforces a fixed ceiling on the size of a serialized response. If the requested
+// state does not fit, the vehicle discards the reply and returns a [protocol.RoutableMessageError]
+// with Code MESSAGEFAULT_ERROR_RESPONSE_MTU_EXCEEDED instead of a partial payload. The ceiling is
+// a vehicle-side memory budget, not the negotiated BLE MTU, so reconnecting does not help, and the
+// request messages carry no field mask that would let a client ask for a smaller reply.
+//
+// In practice this affects StateCategoryDrive: the vehicle always populates the
+// DriveState.active_route_* fields while navigation is active, and a long destination name can
+// push the response over the limit. The failure clears on its own once the route ends or the
+// destination changes. Clients that poll DriveState should treat this error as "no new sample"
+// and keep their last known values rather than retrying in a tight loop; GetState already does
+// not retry it because retransmitting the same request produces the same oversized reply. See
+// https://github.com/teslamotors/vehicle-command/issues/472 for measurements.
 //
 // [vehicle data]: https://developer.tesla.com/docs/fleet-api/endpoints/vehicle-endpoints#vehicle-data
 func (v *Vehicle) GetState(ctx context.Context, category StateCategory) (*carserver.VehicleData, error) {

@@ -5,6 +5,8 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -665,6 +667,54 @@ func TestConnect(t *testing.T) {
 	}
 }
 
+func blockedStartSessionsResultSenders() int {
+	buf := make([]byte, 1<<20)
+	n := runtime.Stack(buf, true)
+	count := 0
+	for _, stack := range strings.Split(string(buf[:n]), "\n\n") {
+		if strings.Contains(stack, "(*Dispatcher).StartSessions.func1") &&
+			strings.Contains(stack, "[chan send]") {
+			count++
+		}
+	}
+	return count
+}
+
+func TestStartSessionsDoesNotLeakResultSender(t *testing.T) {
+	conn := newDummyConnector(t)
+	defer conn.Close()
+	conn.AckRequests = false
+
+	key, err := authentication.NewECDHPrivateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("Couldn't create private key: %s", err)
+	}
+	dispatcher, err := New(conn, key)
+	if err != nil {
+		t.Fatalf("Couldn't initialize dispatcher: %s", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := dispatcher.Start(ctx); err != nil {
+		t.Fatalf("Couldn't start dispatcher: %s", err)
+	}
+	defer dispatcher.Stop()
+
+	before := blockedStartSessionsResultSenders()
+	if err := dispatcher.StartSessions(context.Background(), nil); !errors.Is(err, errTimeout) {
+		t.Fatalf("Unexpected error: %s", err)
+	}
+
+	for i := 0; i < 100; i++ {
+		runtime.Gosched()
+	}
+
+	if leaked := blockedStartSessionsResultSenders() - before; leaked != 0 {
+		t.Fatalf("StartSessions left %d worker goroutine(s) blocked sending results", leaked)
+	}
+}
+
 func TestWaitForAllSessions(t *testing.T) {
 	conn := newDummyConnector(t)
 	defer conn.Close()
@@ -787,6 +837,33 @@ func TestStopDispatcher(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Errorf("Dispatcher Listen() goroutine didn't exit")
 	}
+}
+
+func TestStartCanceledStopsListener(t *testing.T) {
+	conn := newDummyConnector(t)
+	defer conn.Close()
+
+	key, err := authentication.NewECDHPrivateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("Couldn't create private key: %s", err)
+	}
+	dispatcher, err := New(conn, key)
+	if err != nil {
+		t.Fatalf("Couldn't initialize dispatcher: %s", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := dispatcher.Start(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Start = %v, want context.Canceled", err)
+	}
+
+	sendCtx, sendCancel := context.WithTimeout(context.Background(), time.Second)
+	defer sendCancel()
+	if _, err := dispatcher.Send(sendCtx, testCommand(), connector.AuthMethodHMAC); !errors.Is(err, protocol.ErrNotConnected) {
+		t.Fatalf("Send after canceled Start = %v, want ErrNotConnected", err)
+	}
+	dispatcher.Stop()
 }
 
 func TestDoNotBlockOnResponder(t *testing.T) {

@@ -69,6 +69,7 @@ message VehicleAction {
         VehicleControlResetPinToDriveAction vehicleControlResetPinToDriveAction = 78;
         DrivingClearSpeedLimitPinAdminAction drivingClearSpeedLimitPinAdminAction = 79;
         VehicleControlResetPinToDriveAdminAction vehicleControlResetPinToDriveAdminAction = 89;
+        SetTentModeRequestAction setTentModeRequestAction = 94; // Cybertruck tent mode
         ChargeSchedule addChargeScheduleAction = 97;
         RemoveChargeScheduleAction removeChargeScheduleAction = 98;
         PreconditionSchedule addPreconditionScheduleAction = 99;
@@ -80,6 +81,7 @@ message VehicleAction {
         ParentalControlsAction parentalControlsAction = 111;
         ParentalControlsEnableSettingsAction parentalControlsEnableSettingsAction = 112;
         ParentalControlsSetSpeedLimitAction parentalControlsSetSpeedLimitAction = 113;
+        SetSuspensionLevelAction setSuspensionLevelAction = 118; // Air-suspension ride height
         SetLowPowerModeAction setLowPowerModeAction = 130;
         SetKeepAccessoryPowerModeAction setKeepAccessoryPowerModeAction = 138;
     }
@@ -396,6 +398,14 @@ message VehicleControlSunroofOpenCloseAction {
 message VehicleControlTriggerHomelinkAction {
     LatLong location = 1;
     string token = 2;
+    // Optional 0-based index of the HomeLink device to trigger, matching the
+    // in-vehicle UI order (0 is the first configured device). Omit to preserve
+    // the historical default of triggering the first device. Vehicles that do
+    // not yet honor this field ignore it. See teslamotors/vehicle-command#416.
+    oneof optional_homelink_device_index { uint32 homelink_device_index = 3; }
+    // Optional device name as shown in the in-vehicle UI. Ignored by the
+    // client when homelink_device_index is also set. Firmware support required.
+    oneof optional_homelink_device_name { string homelink_device_name = 4; }
 }
 
 message VehicleControlWindowAction {
@@ -543,6 +553,25 @@ message ParentalControlsSetSpeedLimitAction {
 }
 
 message VehicleControlResetPinToDriveAdminAction {
+}
+
+message SetTentModeRequestAction {
+    // Cybertruck tent mode. Vehicles typically refuse unless in Park.
+    bool on = 1;
+}
+
+message SetSuspensionLevelAction {
+    enum SuspensionLevel {
+        SUSPENSION_LEVEL_INVALID = 0;
+        SUSPENSION_LEVEL_ENTRY = 1;
+        SUSPENSION_LEVEL_LOW = 2;
+        SUSPENSION_LEVEL_MEDIUM = 3;
+        SUSPENSION_LEVEL_HIGH = 4;
+        SUSPENSION_LEVEL_VERY_HIGH = 5;
+        SUSPENSION_LEVEL_EXTRACT = 6;
+    }
+    // Ride height. Vehicles typically refuse unless in Park.
+    SuspensionLevel suspension_level = 1;
 }
 
 message SetLowPowerModeAction {

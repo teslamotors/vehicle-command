@@ -127,17 +127,19 @@ func (d *Dispatcher) tryStartSession(ctx context.Context, s *session, domain uni
 // StartSessions starts sessions with the provided vehicle domains (or all supported domains, if
 // domains is nil).
 //
-// If multiple connections fail, only returns the first error.
+// If multiple connections fail, only returns the first error. Workers send
+// into a buffered results channel sized to the domain list so an early return
+// cannot leave a handshake goroutine blocked on send (teslamotors/vehicle-command#494).
 func (d *Dispatcher) StartSessions(ctx context.Context, domains []universal.Domain) error {
 	aggregateContext, cancel := context.WithCancel(ctx)
 	defer cancel()
-	results := make(chan error)
 	if domains == nil {
 		domains = []universal.Domain{
 			universal.Domain_DOMAIN_VEHICLE_SECURITY,
 			universal.Domain_DOMAIN_INFOTAINMENT,
 		}
 	}
+	results := make(chan error, len(domains))
 	for _, domain := range domains {
 		go func(dom universal.Domain) {
 			results <- d.StartSession(aggregateContext, dom)
@@ -315,33 +317,40 @@ func (d *Dispatcher) process(message *universal.RoutableMessage) {
 }
 
 // Start runs d's Listen method in a new goroutine. Returns an error if d does
-// not signal it's ready before ctx expires.
+// not signal it's ready before ctx expires. If ctx is canceled before the
+// listener is ready, Start stops that goroutine so callers do not have to
+// invoke Stop after a failed Connect.
 func (d *Dispatcher) Start(ctx context.Context) error {
+	d.doneLock.Lock()
+	if d.terminate != nil {
+		d.doneLock.Unlock()
+		return nil
+	}
+	d.terminate = make(chan struct{})
+	terminate := d.terminate
+	d.doneLock.Unlock()
+
 	ready := make(chan struct{})
-	go d.listen(ready)
+	go d.listen(ready, terminate)
 	select {
 	case <-ready:
 		return nil
 	case <-ctx.Done():
+		d.Stop()
+		<-ready
 		return ctx.Err()
 	}
 }
 
 // Listen for incoming commands and dispatch them to registered receivers.
-func (d *Dispatcher) listen(ready chan<- struct{}) {
+func (d *Dispatcher) listen(ready chan<- struct{}, terminate <-chan struct{}) {
 	log.Info("Starting dispatcher service...")
-	d.doneLock.Lock()
-	if d.terminate == nil {
-		d.terminate = make(chan struct{})
-	} else {
-		d.doneLock.Unlock()
-		return
-	}
-	terminate := d.terminate
-	d.doneLock.Unlock()
+	var signalReady sync.Once
+	signalReadyFn := func() { signalReady.Do(func() { close(ready) }) }
 	listening := make(chan struct{}, 2)
 	listening <- struct{}{}
 	defer func() {
+		signalReadyFn()
 		d.done <- true
 	}()
 	for {
@@ -359,7 +368,7 @@ func (d *Dispatcher) listen(ready chan<- struct{}) {
 		case <-terminate:
 			return
 		case <-listening:
-			close(ready)
+			signalReadyFn()
 		}
 	}
 }

@@ -617,6 +617,102 @@ func TestForwardRequestRetryContextTimeout(t *testing.T) {
 	}
 }
 
+func TestForwardRequestPropagatesRequestCancellation(t *testing.T) {
+	p := newTestProxy(t)
+	started := make(chan struct{})
+	release := make(chan struct{})
+	upstreamErr := make(chan error, 1)
+	p.client = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		close(started)
+		select {
+		case <-req.Context().Done():
+		case <-release:
+		}
+		err := req.Context().Err()
+		upstreamErr <- err
+		if err != nil {
+			return nil, err
+		}
+		return jsonResponse(http.StatusOK, `{}`, nil), nil
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/1/vehicles", nil).WithContext(ctx)
+	req.Header.Set("Authorization", authHeader())
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		p.ServeHTTP(rec, req)
+	}()
+
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("upstream request did not start")
+	}
+	cancel()
+	close(release)
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("proxy did not return after cancellation")
+	}
+
+	if err := <-upstreamErr; !errors.Is(err, context.Canceled) {
+		t.Fatalf("upstream context error = %v, want context.Canceled", err)
+	}
+}
+
+func TestHandleVehicleCommandPropagatesRequestCancellation(t *testing.T) {
+	p := newTestProxy(t)
+	started := make(chan struct{})
+	release := make(chan struct{})
+	lookupErr := make(chan error, 1)
+	p.fetchVehicle = func(ctx context.Context, _ *account.Account, _ string) (vehicleSession, error) {
+		close(started)
+		select {
+		case <-ctx.Done():
+		case <-release:
+		}
+		err := ctx.Err()
+		lookupErr <- err
+		if err != nil {
+			return nil, err
+		}
+		return &mockVehicle{}, nil
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/1/vehicles/"+testVIN+"/command/door_lock", strings.NewReader(`{}`)).WithContext(ctx)
+	req.Header.Set("Authorization", authHeader())
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		p.ServeHTTP(rec, req)
+	}()
+
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("vehicle lookup did not start")
+	}
+	cancel()
+	close(release)
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("proxy did not return after cancellation")
+	}
+
+	if err := <-lookupErr; !errors.Is(err, context.Canceled) {
+		t.Fatalf("lookup context error = %v, want context.Canceled", err)
+	}
+}
+
 func TestServeHTTPUnsupportedVINForwards(t *testing.T) {
 	p := newTestProxy(t)
 	p.markUnsupportedVIN(testVIN)
@@ -761,8 +857,9 @@ func TestVehicleCommandFetchErrors(t *testing.T) {
 func TestVehicleCommandConnectAndSessionErrors(t *testing.T) {
 	t.Run("connect error", func(t *testing.T) {
 		p := newTestProxy(t)
+		mock := &mockVehicle{connectErr: errors.New("connect failed")}
 		p.fetchVehicle = func(context.Context, *account.Account, string) (vehicleSession, error) {
-			return &mockVehicle{connectErr: errors.New("connect failed")}, nil
+			return mock, nil
 		}
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodPost, "/api/1/vehicles/"+testVIN+"/command/door_lock", nil)
@@ -770,6 +867,9 @@ func TestVehicleCommandConnectAndSessionErrors(t *testing.T) {
 		p.ServeHTTP(rec, req)
 		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("status=%d", rec.Code)
+		}
+		if !mock.disconnected {
+			t.Fatal("Disconnect must run after Connect error so the dispatcher listener cannot leak")
 		}
 	})
 

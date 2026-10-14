@@ -25,6 +25,12 @@ Next, use [github.com/teslamotors/vehicle-command/cmd/tesla-control] an send add
 Approve the request by tapping your NFC card or keyfob on the center console and then tapping
 "Confirm" on the vehicle screen.
 
+Enrollment puts the public key on the VCSEC whitelist: the device is a vehicle
+key. A BLE controller left connected (or reconnecting) inside the cabin can
+prevent Walk-Away Door Lock, the same as leaving a phone key behind. Tesla has
+not published a "command-only, ignore for presence" whitelist flag. After
+sending commands, Disconnect so the GATT session ends. See teslamotors/vehicle-command#480.
+
 # Sending "unlock" and "climate on" commands
 
 Sending commands to the vehicle requires the private key you generated above:

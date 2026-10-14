@@ -171,6 +171,10 @@ func (v *Vehicle) StartSession(ctx context.Context, domains []universal.Domain) 
 // [connector.Connector] interface definition requires that multiple calls to Close() are safe, and so
 // it is safe to defer both this method and the Connector's Close() method; however, Disconnect must
 // be invoked first.
+//
+// Over BLE, ending the session is required for in-car gadgets: an enrolled
+// client that stays connected can be treated as a key still present and can
+// prevent Walk-Away Door Lock. See teslamotors/vehicle-command#480.
 func (v *Vehicle) Disconnect() {
 	v.dispatcher.Stop()
 	if v.conn != nil {
@@ -229,7 +233,9 @@ func (v *Vehicle) SendMessage(ctx context.Context, message *universal.RoutableMe
 // Send a payload to a Vehicle. This is a low-level method that most clients will not need.
 //
 // The method retries until vehicle responds with a terminal result (success or non-transient
-// failure) or the provided context expires.
+// failure) or the provided context expires. Send does not run a client-side semantic veto.
+// Callers that ask for one get protocol.ErrPreSendValidationNotInProtocol from
+// ValidateCommand. See teslamotors/vehicle-command#517.
 //
 // The domain controls what vehicle subsystem receives the message, and auth controls how the
 // message is authenticated (if it all).
@@ -256,6 +262,23 @@ func (v *Vehicle) Send(ctx context.Context, domain universal.Domain, payload []b
 	}
 }
 
+// ValidateCommand reports that this SDK does not veto a command before sign
+// and send. Authenticity is the session signature. A conflict with vehicle
+// state is a NominalError or RoutableMessageError after the round-trip.
+// An operator limits table is not Tesla's published rules. This method does
+// not contact the vehicle and does not write an audit log.
+// See teslamotors/vehicle-command#517.
+func (*Vehicle) ValidateCommand(context.Context) error {
+	return protocol.ErrPreSendValidationNotInProtocol
+}
+
+// Wakeup starts the infotainment system if it is asleep. It does not inhibit
+// subsequent sleep. There is no published VehicleAction to keep infotainment
+// awake (teslamotors/vehicle-command#397); callers that ask for that get
+// protocol.ErrKeepAwakeNotInProtocol from tesla-control keep-awake and the
+// proxy keep_awake / keep_alive paths. Fleet Telemetry can report charging
+// while Infotainment is still unreachable for signed_command
+// (teslamotors/vehicle-command#452).
 func (v *Vehicle) Wakeup(ctx context.Context) error {
 	if oapi, ok := v.conn.(connector.FleetAPIConnector); ok {
 		return oapi.Wakeup(ctx)

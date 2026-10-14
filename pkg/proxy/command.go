@@ -16,7 +16,10 @@ import (
 )
 
 var (
-	// ErrCommandNotImplemented indicates a command has not be implemented in the SDK
+	// ErrCommandNotImplemented indicates a command has not be implemented in the SDK.
+	// remote_boombox is not this case: Tesla has not published a VehicleAction.
+	// Use protocol.ErrBoomboxNotInProtocol. Tesla has not published the
+	// VehicleAction pending legal review (teslamotors/vehicle-command#266).
 	ErrCommandNotImplemented = errors.New("command not implemented")
 
 	// ErrCommandUseRESTAPI indicates vehicle/command is not supported by the protocol
@@ -68,7 +71,89 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		}
 		return func(v *vehicle.Vehicle) error { return v.SetVolume(ctx, float32(volume)) }, nil
 	case "remote_boombox":
-		return nil, ErrCommandNotImplemented
+		// Fleet API lists this REST path; Tesla has not published a
+		// VehicleAction. Legal has not cleared Pedestrian Warning System
+		// use (teslamotors/vehicle-command#266). Do not invent a field,
+		// copy a firmware dump, or map it to honk.
+		return nil, protocol.ErrBoomboxNotInProtocol
+	case "wifi_on", "wifi_off", "set_wifi", "add_wifi_network", "forget_wifi_network", "wifi_connect_in_drive":
+		// In-car UX exists; Tesla has not published VehicleAction numbers. Do not
+		// invent fields or send a PSK. teslamotors/vehicle-command#419.
+		return nil, protocol.ErrWiFiNotInProtocol
+	case "hvac_auto_mode", "set_hvac_auto", "climate_manual", "hvac_manual", "auto_hvac_mode":
+		// HvacAutoAction is climate power, not Auto vs Manual HVAC.
+		// teslamotors/vehicle-command#283.
+		return nil, protocol.ErrHvacAutoModeNotInProtocol
+	case "climate_split", "set_climate_split", "climate_sync", "set_climate_sync":
+		// In-car SYNC/split is unpublished. Independent temps are set_temps.
+		// teslamotors/vehicle-command#386.
+		return nil, protocol.ErrClimateSplitNotInProtocol
+	case "virtual_key_return", "ak_return_uri", "set_virtual_key_return":
+		// https://tesla.com/_ak/<domain> is Tesla's hosted page. An
+		// unconstrained return_uri is an open redirect. teslamotors/vehicle-command#444.
+		return nil, protocol.ErrVirtualKeyReturnURI
+	case "climate_keeper_cpd", "override_cpd", "dog_mode_cpd", "camp_mode_cpd":
+		// set_climate_keeper_mode is published. Firmware may refuse Dog/Camp
+		// with cpd_enabled. Do not invent a CPD bypass.
+		// teslamotors/vehicle-command#509.
+		return nil, protocol.ErrClimateKeeperCPDFirmware
+	case "keep_awake", "keep_alive":
+		// wake does not inhibit sleep; Tesla has not published a keep-awake
+		// VehicleAction. Do not wrap charge-port-close. teslamotors/vehicle-command#397.
+		return nil, protocol.ErrKeepAwakeNotInProtocol
+	case "charging_while_asleep", "charge_stop_asleep", "set_charging_amps_asleep":
+		// charge_stop / set_charging_amps are published Infotainment actions.
+		// Fleet Telemetry can look live while Tesla signed_command returns
+		// vehicle unavailable. Do not invent keep-awake.
+		// teslamotors/vehicle-command#452.
+		return nil, protocol.ErrChargingWhileInfotainmentAsleep
+	case "infotainment_offline", "domain_infotainment_online", "vcsec_means_infotainment_online":
+		// state=online and a VCSEC signed_command do not prove
+		// DOMAIN_INFOTAINMENT will be accepted. Do not rewrite the domain
+		// or skip that handshake. teslamotors/vehicle-command#285.
+		return nil, protocol.ErrInfotainmentSignedCommandOffline
+	case "charging_amps_floor", "ble_charging_amps", "match_wall_amps":
+		// BLE and Fleet API send the same charging_amps integer. Do not
+		// clamp to 5, add an amp on BLE, or double-send. teslamotors/vehicle-command#256.
+		return nil, protocol.ErrChargingAmpsBelowFloorFirmware
+	case "validate_command", "pre_send_veto", "command_audit":
+		// Signing proves authenticity. Semantic conflicts are vehicle
+		// responses after the round-trip. Do not veto published commands
+		// or append a client audit log. teslamotors/vehicle-command#517.
+		return nil, protocol.ErrPreSendValidationNotInProtocol
+	case "battery_size", "get_battery_option", "get_battery_size":
+		// Pack identity is Fleet DX catalog metadata, not a signed command.
+		// teslamotors/vehicle-command#391.
+		return nil, protocol.ErrBatteryOptionRequiresFleetAPI
+	case "ble_presence_exempt", "command_only_key":
+		// Enrolled BLE clients are VCSEC whitelist keys. Tesla has not
+		// published a flag that ignores them for Walk-Away Door Lock.
+		// teslamotors/vehicle-command#480.
+		return nil, protocol.ErrBLEKeyPresenceNotInProtocol
+	case "charging_manager_charge_port", "grant_charging_manager_charge_port", "charging_manager_port":
+		// ChargePortDoorOpen/Close are published. Charging Manager ACL is firmware.
+		// Do not enroll Owner or bypass via VCSEC closures. teslamotors/vehicle-command#413.
+		return nil, protocol.ErrChargingManagerChargePortFirmware
+	case "ble_state_fast", "drive_state_fast", "set_ble_poll_interval":
+		// GetState latency is the vehicle BLE round-trip. Do not disable
+		// encryption or invent a streaming DriveState. teslamotors/vehicle-command#414.
+		return nil, protocol.ErrBLEStateLatencyFirmware
+	case "seat_heater_not_implemented", "seat_cooler_not_implemented", "remote_seat_climate_not_implemented":
+		// remote_seat_heater_request / remote_seat_cooler_request already map
+		// to published HvacSeatHeaterActions / HvacSeatCoolerActions.
+		// Tesla signed_command HTTP 501 Unauthorized is Fleet API, not a
+		// missing handler. teslamotors/vehicle-command#383.
+		return nil, protocol.ErrSeatClimateFleetAPI
+	case "partner_token", "register_partner", "oauth_audience", "invalid_audience":
+		// Tesla Fleet Auth invalid_audience /authorize "No policy rules" is
+		// Tesla IdP provisioning, not a missing VehicleAction.
+		// teslamotors/vehicle-command#460.
+		return nil, protocol.ErrPartnerOAuthNotProvisioned
+	case "scheduled_charging_overheat", "force_scheduled_charging":
+		// Schedule commands are published; later sleep/wake is firmware.
+		// Do not disable cabin overheat as a workaround.
+		// teslamotors/vehicle-command#342.
+		return nil, protocol.ErrScheduledChargingFirmware
 	case "media_next_fav":
 		return func(v *vehicle.Vehicle) error { return v.MediaNextFavorite(ctx) }, nil
 	case "media_prev_fav":
@@ -85,7 +170,11 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		return func(v *vehicle.Vehicle) error { return v.ToggleMediaPlayback(ctx) }, nil
 	// Climate Controls
 	case "auto_conditioning_start":
-		return func(v *vehicle.Vehicle) error { return v.ClimateOn(ctx) }, nil
+		override, err := params.getBool("manual_override", false)
+		if err != nil {
+			return nil, err
+		}
+		return func(v *vehicle.Vehicle) error { return v.SetClimatePower(ctx, true, override) }, nil
 	case "auto_conditioning_stop":
 		return func(v *vehicle.Vehicle) error { return v.ClimateOff(ctx) }, nil
 	case "charge_max_range":
@@ -97,6 +186,9 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		}
 		return func(v *vehicle.Vehicle) error { return v.SetSeatCooler(ctx, level, seat) }, nil
 	case "remote_seat_heater_request":
+		// Published HvacSeatHeaterActions. Owner/Fleet JSON "heater" is an
+		// alias for "seat_position". Tesla signed_command HTTP 501 is Fleet
+		// API, not a missing handler. teslamotors/vehicle-command#383.
 		setting, err := params.settingForHeatSeatPosition()
 		if err != nil {
 			return nil, err
@@ -138,6 +230,8 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		}
 		return func(v *vehicle.Vehicle) error { return v.SetCabinOverheatProtection(ctx, on, fanOnly) }, nil
 	case "set_climate_keeper_mode":
+		// HvacClimateKeeperAction. Firmware may refuse Dog/Camp with
+		// NominalError cpd_enabled. teslamotors/vehicle-command#509.
 		// 0 : off
 		// 1 : On
 		// 2 : Dog
@@ -172,13 +266,24 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		}
 		return func(v *vehicle.Vehicle) error { return v.SetPreconditioningMax(ctx, on, override) }, nil
 	case "set_temps":
-		driverTemp, err := params.getNumber("driver_temp", false)
+		_, hasDriver := params["driver_temp"]
+		_, hasPassenger := params["passenger_temp"]
+		if !hasDriver && !hasPassenger {
+			return nil, missingParamError("driver_temp")
+		}
+		driverTemp, err := params.getNumber("driver_temp", hasDriver)
 		if err != nil {
 			return nil, err
 		}
-		passengerTemp, err := params.getNumber("passenger_temp", false)
+		passengerTemp, err := params.getNumber("passenger_temp", hasPassenger)
 		if err != nil {
 			return nil, err
+		}
+		if !hasDriver {
+			driverTemp = passengerTemp
+		}
+		if !hasPassenger {
+			passengerTemp = driverTemp
 		}
 		return func(v *vehicle.Vehicle) error {
 			return v.ChangeClimateTemp(ctx, float32(driverTemp), float32(passengerTemp))
@@ -225,13 +330,32 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 			return nil, err
 		}
 		return func(v *vehicle.Vehicle) error { return v.SetKeepAccessoryPowerMode(ctx, on) }, nil
+	case "set_tent_mode":
+		on, err := params.getBool("on", true)
+		if err != nil {
+			return nil, err
+		}
+		return func(v *vehicle.Vehicle) error { return v.SetTentMode(ctx, on) }, nil
+	case "set_suspension_level":
+		level, err := params.suspensionLevel()
+		if err != nil {
+			return nil, err
+		}
+		return func(v *vehicle.Vehicle) error { return v.SetSuspensionLevel(ctx, level) }, nil
+	case "level_suspension":
+		return func(v *vehicle.Vehicle) error { return v.LevelSuspension(ctx) }, nil
 	case "charge_standard":
 		return func(v *vehicle.Vehicle) error { return v.ChargeStandardRange(ctx) }, nil
 	case "charge_start":
 		return func(v *vehicle.Vehicle) error { return v.ChargeStart(ctx) }, nil
 	case "charge_stop":
+		// ChargingStartStopAction stop. Tesla may return
+		// inet.ErrVehicleNotAwake while Fleet Telemetry still shows charging.
+		// teslamotors/vehicle-command#452.
 		return func(v *vehicle.Vehicle) error { return v.ChargeStop(ctx) }, nil
 	case "set_charging_amps":
+		// Same SetChargingAmpsAction integer on BLE and Fleet API. Do not
+		// clamp below 5A or add an amp. teslamotors/vehicle-command#256.
 		amps, err := params.getNumber("charging_amps", true)
 		if err != nil {
 			return nil, err
@@ -528,7 +652,13 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		if err != nil {
 			return nil, err
 		}
-		return func(v *vehicle.Vehicle) error { return v.TriggerHomelink(ctx, float32(lat), float32(lon)) }, nil
+		device, err := params.homelinkDevice()
+		if err != nil {
+			return nil, err
+		}
+		return func(v *vehicle.Vehicle) error {
+			return v.TriggerHomelinkDevice(ctx, float32(lat), float32(lon), device)
+		}, nil
 	// Updates
 	case "schedule_software_update":
 		offsetSeconds, err := params.getNumber("offset_sec", true)
@@ -612,6 +742,24 @@ func (p RequestParameters) getNumber(key string, required bool) (float64, error)
 	return 0, missingParamError(key)
 }
 
+// getNumberAny returns the first present key among keys. The first key is
+// used in missing-param errors. Owner API remote_seat_heater_request uses
+// "heater"; tesla-http-proxy historically documented "seat_position".
+func (p RequestParameters) getNumberAny(required bool, keys ...string) (float64, error) {
+	for _, key := range keys {
+		if _, exists := p[key]; exists {
+			return p.getNumber(key, true)
+		}
+	}
+	if !required {
+		return 0, nil
+	}
+	if len(keys) == 0 {
+		return 0, missingParamError("number")
+	}
+	return 0, missingParamError(keys[0])
+}
+
 func (p RequestParameters) getDays(key string, required bool) (int32, error) {
 	daysStr, err := p.getString(key, required)
 	if err != nil {
@@ -657,7 +805,9 @@ func (p RequestParameters) getTimeAfterMidnight(key string) (time.Duration, erro
 }
 
 func (p RequestParameters) settingForHeatSeatPosition() (map[vehicle.SeatPosition]vehicle.Level, error) {
-	index, err := p.getNumber("seat_position", true)
+	// Fleet/Owner API documents "heater"; tesla-http-proxy uses "seat_position"
+	// (teslamotors/vehicle-command#133, #383). Prefer seat_position when both are set.
+	index, err := p.getNumberAny(true, "seat_position", "heater")
 	if err != nil {
 		return nil, err
 	}
@@ -690,7 +840,7 @@ func (p RequestParameters) settingForCoolerSeatPosition() (vehicle.Level, vehicl
 		seat = vehicle.SeatUnknown
 	}
 
-	level, err := p.getNumber("seat_cooler_level", true)
+	level, err := p.getNumberAny(true, "seat_cooler_level", "level")
 	if err != nil {
 		return 0, 0, err
 	}
@@ -720,6 +870,52 @@ func (p RequestParameters) settingForAutoSeatPosition() (vehicle.SeatPosition, b
 	}
 
 	return seat, enabled, nil
+}
+
+func (p RequestParameters) homelinkDevice() (vehicle.HomelinkDevice, error) {
+	index, err := p.getOptionalUint32("homelink_device_index")
+	if err != nil {
+		return vehicle.HomelinkDevice{}, err
+	}
+	name, err := p.getString("homelink_device_name", false)
+	if err != nil {
+		return vehicle.HomelinkDevice{}, err
+	}
+	return vehicle.HomelinkDevice{Index: index, Name: name}, nil
+}
+
+func (p RequestParameters) suspensionLevel() (vehicle.SuspensionLevel, error) {
+	if value, exists := p["suspension_level"]; exists {
+		switch v := value.(type) {
+		case string:
+			level, err := vehicle.ParseSuspensionLevel(v)
+			if err != nil {
+				return 0, invalidParamError("suspension_level")
+			}
+			return level, nil
+		case float64:
+			if v != float64(int(v)) || v < 1 || v > 6 {
+				return 0, invalidParamError("suspension_level")
+			}
+			return vehicle.SuspensionLevel(int(v)), nil
+		default:
+			return 0, invalidParamError("suspension_level")
+		}
+	}
+	return 0, missingParamError("suspension_level")
+}
+
+func (p RequestParameters) getOptionalUint32(key string) (*uint32, error) {
+	value, exists := p[key]
+	if !exists {
+		return nil, nil
+	}
+	num, isFloat64 := value.(float64)
+	if !isFloat64 || num < 0 || num != float64(uint32(num)) {
+		return nil, invalidParamError(key)
+	}
+	v := uint32(num)
+	return &v, nil
 }
 
 func missingParamError(key string) error {

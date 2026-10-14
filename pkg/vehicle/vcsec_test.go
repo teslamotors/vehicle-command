@@ -10,6 +10,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
+	"github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/keys"
 
 	verror "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/errors"
 	universal "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/universalmessage"
@@ -229,4 +230,46 @@ func TestWhitelistOperationError(t *testing.T) {
 	dispatch.EnqueueAuthenticationSuccessResponse(t)
 	dispatch.EnqueueWhitelistOperationStatus(t, errCode)
 	checkWhitelistOperationStatus(t, vehicle.AddKey(ctx, testPublicKey(), true, 0), errCode)
+}
+
+func TestUpdateKeyPayloadIsUpdateNotAdd(t *testing.T) {
+	t.Parallel()
+	msg := updateKeyPayload(testPublicKey(), keys.Role_ROLE_DRIVER, vcsec.KeyFormFactor_KEY_FORM_FACTOR_CLOUD_KEY)
+	op := msg.GetWhitelistOperation()
+	if op == nil {
+		t.Fatal("missing WhitelistOperation")
+	}
+	if op.GetAddKeyToWhitelistAndAddPermissions() != nil {
+		t.Error("update payload must not add a key")
+	}
+	change := op.GetUpdateKeyAndPermissions()
+	if change == nil {
+		t.Fatal("missing updateKeyAndPermissions (VCSEC field 7)")
+	}
+	if change.GetKeyRole() != keys.Role_ROLE_DRIVER {
+		t.Errorf("role = %v, want DRIVER", change.GetKeyRole())
+	}
+	if got := op.GetMetadataForKey().GetKeyFormFactor(); got != vcsec.KeyFormFactor_KEY_FORM_FACTOR_CLOUD_KEY {
+		t.Errorf("form factor = %v, want CLOUD_KEY", got)
+	}
+}
+
+func TestUpdateKeyMetadataWhitelistError(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	car, dispatch := newTestVehicle()
+	if err := car.Connect(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer car.Disconnect()
+	if err := car.StartSession(ctx, nil); err != nil {
+		t.Fatalf("StartSession: %s", err)
+	}
+	errCode := vcsec.WhitelistOperationInformation_E_WHITELISTOPERATION_INFORMATION_WHITELIST_FULL
+	dispatch.EnqueueVCSECBusy(t)
+	dispatch.EnqueueVCSECBusy(t)
+	dispatch.EnqueueAuthenticationSuccessResponse(t)
+	dispatch.EnqueueWhitelistOperationStatus(t, errCode)
+	checkWhitelistOperationStatus(t, car.UpdateKeyMetadata(ctx, testPublicKey(), keys.Role_ROLE_DRIVER, vcsec.KeyFormFactor_KEY_FORM_FACTOR_CLOUD_KEY), errCode)
 }

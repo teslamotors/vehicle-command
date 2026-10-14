@@ -128,6 +128,11 @@ func (v *Vehicle) ChargeStart(ctx context.Context) error {
 		})
 }
 
+// ChargeStop sends ChargingStartStopAction stop (Infotainment). Tesla
+// Fleet API may return inet.ErrVehicleNotAwake while Fleet Telemetry
+// still shows charging. wake starts Infotainment but does not keep it
+// awake. This method does not invent keep-awake or a charging-controller
+// bypass. See teslamotors/vehicle-command#452.
 func (v *Vehicle) ChargeStop(ctx context.Context) error {
 	return v.executeCarServerAction(ctx,
 		&carserver.Action_VehicleAction{
@@ -158,6 +163,16 @@ func (v *Vehicle) ChargeMaxRange(ctx context.Context) error {
 		})
 }
 
+// SetChargingAmps sends SetChargingAmpsAction (Infotainment). Tesla
+// Fleet API may return inet.ErrVehicleNotAwake while Fleet Telemetry
+// still shows charging. wake starts Infotainment but does not keep it
+// awake. This method does not invent keep-awake or a charging-controller
+// bypass. See teslamotors/vehicle-command#452.
+//
+// BLE and Fleet API send the same charging_amps integer. Firmware may
+// show a 5A floor, and a wall meter can read about 1A higher while the
+// car is awake. This method does not clamp the value, add an amp on BLE,
+// or send the command twice. See teslamotors/vehicle-command#256.
 func (v *Vehicle) SetChargingAmps(ctx context.Context, amps int32) error {
 	return v.executeCarServerAction(ctx,
 		&carserver.Action_VehicleAction{
@@ -187,6 +202,13 @@ func (v *Vehicle) ChargeStandardRange(ctx context.Context) error {
 		})
 }
 
+// OpenChargePort sends ChargePortDoorOpen (Infotainment). Role checks are
+// firmware. Charging Manager keys can typically charging-start/stop/set-amps
+// over BLE but may receive MESSAGEFAULT_ERROR_INSUFFICIENT_PRIVILEGES for
+// charge-port until Tesla expands that ACL. This method still delivers the
+// published action and does not enroll Owner or rewrite the command as a
+// VCSEC ClosureMoveRequest.chargePort bypass. See
+// teslamotors/vehicle-command#413.
 func (v *Vehicle) OpenChargePort(ctx context.Context) error {
 	return v.executeCarServerAction(ctx,
 		&carserver.Action_VehicleAction{
@@ -198,6 +220,7 @@ func (v *Vehicle) OpenChargePort(ctx context.Context) error {
 		})
 }
 
+// CloseChargePort sends ChargePortDoorClose. See OpenChargePort.
 func (v *Vehicle) CloseChargePort(ctx context.Context) error {
 	return v.executeCarServerAction(ctx,
 		&carserver.Action_VehicleAction{
@@ -212,6 +235,12 @@ func (v *Vehicle) CloseChargePort(ctx context.Context) error {
 // ScheduledDeparture tells the vehicle to charge based on an expected departure time.
 //
 // Set departAt and offPeakEndTime relative to midnight.
+//
+// This command is delivered immediately. Whether the vehicle later sleeps and
+// fires the scheduler is firmware. Cabin overheat protection can prevent that
+// cycle on some Intel-MCU Model S vehicles; this method does not disable
+// cabin overheat as a workaround. See teslamotors/vehicle-command#342 and
+// [protocol.ErrScheduledChargingFirmware].
 func (v *Vehicle) ScheduleDeparture(ctx context.Context, departAt, offPeakEndTime time.Duration, preconditioning, offpeak ChargingPolicy) error {
 	if departAt < 0 || departAt > 24*time.Hour {
 		return fmt.Errorf("invalid departure time")
@@ -270,6 +299,12 @@ func (v *Vehicle) ScheduleDeparture(ctx context.Context, departAt, offPeakEndTim
 // example, set timeAfterMidnight to 2*time.Hour.
 //
 // See the Owner's Manual for more information.
+//
+// This command is delivered immediately. Whether the vehicle later sleeps and
+// fires the scheduler is firmware. Cabin overheat protection can prevent that
+// cycle on some Intel-MCU Model S vehicles; this method does not disable
+// cabin overheat as a workaround. See teslamotors/vehicle-command#342 and
+// [protocol.ErrScheduledChargingFirmware].
 func (v *Vehicle) ScheduleCharging(ctx context.Context, enabled bool, timeAfterMidnight time.Duration) error {
 	minutesFromMidnight := int32(timeAfterMidnight / time.Minute)
 	return v.executeCarServerAction(ctx,
@@ -317,6 +352,8 @@ func (v *Vehicle) SetLowPowerMode(ctx context.Context, enable bool) error {
 // SetKeepAccessoryPowerMode enables or disables accessory power mode. Phone chargers, USB ports,
 // and low voltage outlets remain powered after exit until the vehicle enters Low Power Mode. When
 // enabled, this feature consumes additional energy even if no devices are connected.
+// Tesla firmware does not apply this setting to the glovebox dashcam/data USB
+// port (teslamotors/vehicle-command#397). It is not a keep-infotainment-awake command.
 func (v *Vehicle) SetKeepAccessoryPowerMode(ctx context.Context, enable bool) error {
 	return v.executeCarServerAction(ctx,
 		&carserver.Action_VehicleAction{

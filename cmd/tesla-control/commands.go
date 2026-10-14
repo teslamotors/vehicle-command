@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -100,6 +101,33 @@ func GetDegree(degStr string) (float32, error) {
 	return float32(deg), nil
 }
 
+// parseHomelinkDevice interprets a CLI DEVICE argument. A decimal integer is a
+// 0-based in-vehicle UI index; anything else is treated as a device name.
+func parseHomelinkDevice(selector string) vehicle.HomelinkDevice {
+	if selector == "" {
+		return vehicle.HomelinkDevice{}
+	}
+	if n, err := strconv.ParseUint(selector, 10, 32); err == nil {
+		return vehicle.HomelinkByIndex(uint32(n))
+	}
+	return vehicle.HomelinkByName(selector)
+}
+
+func parseClimateKeeperMode(mode string) (vehicle.ClimateKeeperMode, error) {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "off", "0":
+		return vehicle.ClimateKeeperModeOff, nil
+	case "on", "1":
+		return vehicle.ClimateKeeperModeOn, nil
+	case "dog", "2":
+		return vehicle.ClimateKeeperModeDog, nil
+	case "camp", "3":
+		return vehicle.ClimateKeeperModeCamp, nil
+	default:
+		return 0, fmt.Errorf("climate keeper mode must be off, on, dog, or camp")
+	}
+}
+
 func GetDays(days string) (int32, error) {
 	var mask int32
 	for _, d := range strings.Split(days, ",") {
@@ -161,7 +189,7 @@ func configureFlags(c *cli.Config, commandName string, forceBLE bool) error {
 	}
 	if forceBLE {
 		if info.requiresFleetAPI {
-			return ErrRequiresOAuth
+			return fleetCommandBlockedByBLE(commandName)
 		}
 	} else {
 		c.Flags |= cli.FlagOAuth
@@ -181,6 +209,16 @@ var (
 	ErrRequiresPrivateKey = errors.New("command requires a private key")
 	ErrUnknownCommand     = errors.New("unrecognized command")
 )
+
+func fleetCommandBlockedByBLE(commandName string) error {
+	if commandName == "rename-key" {
+		return protocol.ErrKeyNameRequiresFleetAPI
+	}
+	if commandName == "options" || commandName == "battery-option" {
+		return protocol.ErrBatteryOptionRequiresFleetAPI
+	}
+	return ErrRequiresOAuth
+}
 
 func checkReadiness(commandName string, havePrivateKey, haveOAuth, haveVIN bool) (*Command, error) {
 	info, ok := commands[commandName]
@@ -317,7 +355,7 @@ var commands = map[string]*Command{
 		},
 	},
 	"climate-on": {
-		help:             "Turn on climate control",
+		help:             "Turn on climate control (HvacAutoAction.power_on / Fleet auto_conditioning_start). Not Auto vs Manual HVAC mode; see teslamotors/vehicle-command#283.",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
 		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, _ map[string]string) error {
@@ -325,15 +363,82 @@ var commands = map[string]*Command{
 		},
 	},
 	"climate-off": {
-		help:             "Turn off climate control",
+		help:             "Turn off climate control (HvacAutoAction.power_on=false). Not Auto vs Manual HVAC mode; see teslamotors/vehicle-command#283.",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
 		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, _ map[string]string) error {
 			return car.ClimateOff(ctx)
 		},
 	},
+	"hvac-auto-mode": {
+		help:             "There is no published VehicleAction for Auto vs Manual HVAC. climate-on/off is climate power. See teslamotors/vehicle-command#283.",
+		requiresAuth:     false,
+		requiresFleetAPI: false,
+		handler: func(_ context.Context, _ *account.Account, _ *vehicle.Vehicle, _ map[string]string) error {
+			return protocol.ErrHvacAutoModeNotInProtocol
+		},
+	},
+	"climate-split": {
+		help:             "There is no published VehicleAction for climate split/SYNC. climate-set-temp already sets driver and passenger temps over BLE. ClimateState has the two setpoints, not a split boolean. See teslamotors/vehicle-command#386.",
+		requiresAuth:     false,
+		requiresFleetAPI: false,
+		handler: func(_ context.Context, _ *account.Account, _ *vehicle.Vehicle, _ map[string]string) error {
+			return protocol.ErrClimateSplitNotInProtocol
+		},
+	},
+	"climate-keeper": {
+		help:             "Set climate keeper MODE (off, on, dog, camp). Firmware may refuse dog/camp with cpd_enabled (Child Presence Detection occupancy, not Child Left Alone Detection). See teslamotors/vehicle-command#509.",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		args: []Argument{
+			{name: "MODE", help: "off, on, dog, or camp"},
+		},
+		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			mode, err := parseClimateKeeperMode(args["MODE"])
+			if err != nil {
+				return err
+			}
+			return car.SetClimateKeeperMode(ctx, mode, false)
+		},
+	},
+	"virtual-key-link": {
+		help:             "Print Tesla's hosted virtual-key enrollment link for DOMAIN (https://tesla.com/_ak/DOMAIN). No return_uri. See teslamotors/vehicle-command#444.",
+		requiresAuth:     false,
+		requiresFleetAPI: false,
+		args: []Argument{
+			{name: "DOMAIN", help: "Registered partner hostname, such as example.com"},
+		},
+		handler: func(_ context.Context, _ *account.Account, _ *vehicle.Vehicle, args map[string]string) error {
+			link, err := account.VirtualKeyInstallURL(args["DOMAIN"])
+			if err != nil {
+				return err
+			}
+			fmt.Println(link)
+			return nil
+		},
+	},
+	"virtual-key-return": {
+		help:             "Tesla hosts the Finish Setup button. This SDK does not append return_uri. Off-domain redirects are rejected. See teslamotors/vehicle-command#444.",
+		requiresAuth:     false,
+		requiresFleetAPI: false,
+		args: []Argument{
+			{name: "DOMAIN", help: "Registered partner hostname"},
+			{name: "RETURN_URI", help: "https URL on that domain; not sent"},
+		},
+		handler: func(_ context.Context, _ *account.Account, _ *vehicle.Vehicle, args map[string]string) error {
+			return account.RejectVirtualKeyReturnURI(args["DOMAIN"], args["RETURN_URI"])
+		},
+	},
+	"climate-keeper-cpd": {
+		help:             "Firmware may refuse Dog/Camp with cpd_enabled. That occupancy radar is not Child Left Alone Detection, and manual_override is not a CPD bypass. See teslamotors/vehicle-command#509.",
+		requiresAuth:     false,
+		requiresFleetAPI: false,
+		handler: func(_ context.Context, _ *account.Account, _ *vehicle.Vehicle, _ map[string]string) error {
+			return protocol.ErrClimateKeeperCPDFirmware
+		},
+	},
 	"climate-set-temp": {
-		help:             "Set temperature (Celsius)",
+		help:             "Set driver and passenger climate setpoints (driver_temp_celsius / passenger_temp_celsius). Do not send absolute_celsius alone (proto3 0 is LO).",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
 		args: []Argument{
@@ -378,14 +483,39 @@ var commands = map[string]*Command{
 			return car.AddKeyWithRole(ctx, publicKey, keys.Role(role), vcsec.KeyFormFactor(formFactor))
 		},
 	},
-	"add-key-request": {
-		help:             "Request NFC-card approval for an enrolling PUBLIC_KEY with ROLE and FORM_FACTOR",
-		requiresAuth:     false,
+	"update-key": {
+		help:             "Update ROLE and FORM_FACTOR of an enrolled PUBLIC_KEY over VCSEC (works over BLE). Does not change the Locks-screen name.",
+		requiresAuth:     true,
 		requiresFleetAPI: false,
 		args: []Argument{
 			{name: "PUBLIC_KEY", help: "file containing public key (or corresponding private key)"},
 			{name: "ROLE", help: "One of: owner, driver, fm (fleet manager), vehicle_monitor, charging_manager"},
 			{name: "FORM_FACTOR", help: "One of: nfc_card, ios_device, android_device, cloud_key"},
+		},
+		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			role, ok := keys.Role_value["ROLE_"+strings.ToUpper(args["ROLE"])]
+			if !ok {
+				return fmt.Errorf("%w: invalid ROLE", ErrCommandLineArgs)
+			}
+			formFactor, ok := vcsec.KeyFormFactor_value["KEY_FORM_FACTOR_"+strings.ToUpper(args["FORM_FACTOR"])]
+			if !ok {
+				return fmt.Errorf("%w: unrecognized FORM_FACTOR", ErrCommandLineArgs)
+			}
+			publicKey, err := protocol.LoadPublicKey(args["PUBLIC_KEY"])
+			if err != nil {
+				return fmt.Errorf("invalid public key: %s", err)
+			}
+			return car.UpdateKeyMetadata(ctx, publicKey, keys.Role(role), vcsec.KeyFormFactor(formFactor))
+		},
+	},
+	"add-key-request": {
+		help:             "Request NFC-card approval for an enrolling PUBLIC_KEY. The result is a VCSEC whitelist key; a BLE client left connected inside can prevent Walk-Away Door Lock. See teslamotors/vehicle-command#480.",
+		requiresAuth:     false,
+		requiresFleetAPI: false,
+		args: []Argument{
+			{name: "PUBLIC_KEY", help: "file containing public key (or corresponding private key)"},
+			{name: "ROLE", help: "One of: owner, driver, fm (fleet manager), vehicle_monitor, charging_manager"},
+			{name: "FORM_FACTOR", help: "One of: nfc_card, ios_device, android_device, cloud_key. Form factor is display metadata, not a Walk-Away Door Lock exemption; see teslamotors/vehicle-command#480."},
 		},
 		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, args map[string]string) error {
 			role, ok := keys.Role_value["ROLE_"+strings.ToUpper(args["ROLE"])]
@@ -423,7 +553,7 @@ var commands = map[string]*Command{
 		},
 	},
 	"rename-key": {
-		help:             "Change the human-readable name of PUBLIC_KEY to NAME",
+		help:             "Change the Locks-screen name of PUBLIC_KEY to NAME (Fleet API only; names are not stored on the vehicle)",
 		requiresAuth:     false,
 		requiresFleetAPI: true,
 		args: []Argument{
@@ -539,8 +669,32 @@ var commands = map[string]*Command{
 			return car.FlashLights(ctx)
 		},
 	},
+	"homelink": {
+		help:             "Trigger a HomeLink device (garage door / gate)",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		args: []Argument{
+			{name: "LATITUDE", help: "Current latitude of the vehicle"},
+			{name: "LONGITUDE", help: "Current longitude of the vehicle"},
+		},
+		optional: []Argument{
+			{name: "DEVICE", help: "0-based device index matching the in-vehicle UI, or the device name. Omit to trigger the first configured device."},
+		},
+		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			lat, err := GetDegree(args["LATITUDE"])
+			if err != nil {
+				return err
+			}
+			lon, err := GetDegree(args["LONGITUDE"])
+			if err != nil {
+				return err
+			}
+			device := parseHomelinkDevice(args["DEVICE"])
+			return car.TriggerHomelinkDevice(ctx, lat, lon, device)
+		},
+	},
 	"keep-accessory-power": {
-		help:             "Set keep accessory power mode to STATE ('on' or 'off')",
+		help:             "Set keep accessory power (12V jack and charging USB, not glovebox dashcam port) to STATE ('on' or 'off')",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
 		args: []Argument{
@@ -579,6 +733,41 @@ var commands = map[string]*Command{
 			return car.SetLowPowerMode(ctx, state)
 		},
 	},
+	"tent-mode": {
+		help:             "Set Cybertruck tent mode to STATE ('on' or 'off'). Vehicle must be in Park.",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		args: []Argument{
+			{name: "STATE", help: "'on' or 'off'"},
+		},
+		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			var state bool
+			switch args["STATE"] {
+			case "on":
+				state = true
+			case "off":
+				state = false
+			default:
+				return fmt.Errorf("tent mode state must be 'on' or 'off'")
+			}
+			return car.SetTentMode(ctx, state)
+		},
+	},
+	"suspension-level": {
+		help:             "Set air-suspension ride height to LEVEL (entry, low, medium/level, high, very-high, extract). Vehicle must be in Park.",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		args: []Argument{
+			{name: "LEVEL", help: "entry, low, medium (alias: level), high, very-high, extract, or 1-6"},
+		},
+		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			level, err := vehicle.ParseSuspensionLevel(args["LEVEL"])
+			if err != nil {
+				return err
+			}
+			return car.SetSuspensionLevel(ctx, level)
+		},
+	},
 	"charging-set-limit": {
 		help:             "Set charge limit to PERCENT",
 		requiresAuth:     true,
@@ -595,7 +784,7 @@ var commands = map[string]*Command{
 		},
 	},
 	"charging-set-amps": {
-		help:             "Set charge current to AMPS",
+		help:             "Set charge current to AMPS (Infotainment SetChargingAmpsAction). BLE and Fleet API send the same integer. Tesla may return vehicle unavailable while Fleet Telemetry still shows charging; see teslamotors/vehicle-command#256 and #452.",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
 		args: []Argument{
@@ -609,6 +798,14 @@ var commands = map[string]*Command{
 			return car.SetChargingAmps(ctx, int32(limit))
 		},
 	},
+	"charging-amps-floor": {
+		help:             "BLE and Fleet API send the same charging amps. Firmware may show 5A, and a wall meter can read about 1A high. This tool does not clamp or add an amp. See teslamotors/vehicle-command#256.",
+		requiresAuth:     false,
+		requiresFleetAPI: false,
+		handler: func(_ context.Context, _ *account.Account, _ *vehicle.Vehicle, _ map[string]string) error {
+			return protocol.ErrChargingAmpsBelowFloorFirmware
+		},
+	},
 	"charging-start": {
 		help:             "Start charging",
 		requiresAuth:     true,
@@ -618,15 +815,39 @@ var commands = map[string]*Command{
 		},
 	},
 	"charging-stop": {
-		help:             "Stop charging",
+		help:             "Stop charging (Infotainment ChargingStartStopAction). Tesla may return vehicle unavailable while Fleet Telemetry still shows charging; see teslamotors/vehicle-command#452.",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
 		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, _ map[string]string) error {
 			return car.ChargeStop(ctx)
 		},
 	},
+	"charging-while-asleep": {
+		help:             "Fleet Telemetry can report charging while Infotainment is asleep. charge_stop / set_charging_amps are Infotainment actions; wake does not keep Infotainment awake. See teslamotors/vehicle-command#452.",
+		requiresAuth:     false,
+		requiresFleetAPI: false,
+		handler: func(_ context.Context, _ *account.Account, _ *vehicle.Vehicle, _ map[string]string) error {
+			return protocol.ErrChargingWhileInfotainmentAsleep
+		},
+	},
+	"infotainment-offline": {
+		help:             "GET /vehicles state=online and a VCSEC signed_command do not mean DOMAIN_INFOTAINMENT will be accepted. Tesla may return HTTP 408 vehicle is offline. See teslamotors/vehicle-command#285.",
+		requiresAuth:     false,
+		requiresFleetAPI: false,
+		handler: func(_ context.Context, _ *account.Account, _ *vehicle.Vehicle, _ map[string]string) error {
+			return protocol.ErrInfotainmentSignedCommandOffline
+		},
+	},
+	"validate-command": {
+		help:             "Signing proves who sent a command. Vehicle-state conflicts are a response after the round-trip. This tool does not veto a command before send. See teslamotors/vehicle-command#517.",
+		requiresAuth:     false,
+		requiresFleetAPI: false,
+		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, _ map[string]string) error {
+			return car.ValidateCommand(ctx)
+		},
+	},
 	"charging-schedule": {
-		help:             "Schedule charging to MINS minutes after midnight and enable daily scheduling",
+		help:             "Schedule charging to MINS minutes after midnight. Delivery is this SDK; later sleep/wake of the scheduler is firmware (cabin overheat can block it on some Intel-MCU Model S cars; teslamotors/vehicle-command#342).",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
 		args: []Argument{
@@ -771,11 +992,57 @@ var commands = map[string]*Command{
 		},
 	},
 	"wake": {
-		help:             "Wake up vehicle",
+		help:             "Wake infotainment if asleep. Does not inhibit later sleep; see teslamotors/vehicle-command#397.",
 		requiresAuth:     false,
 		requiresFleetAPI: false,
 		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, _ map[string]string) error {
 			return car.Wakeup(ctx)
+		},
+	},
+	"keep-awake": {
+		help:             "There is no published command to keep infotainment awake. wake does not inhibit sleep. See teslamotors/vehicle-command#397.",
+		requiresAuth:     false,
+		requiresFleetAPI: false,
+		handler: func(_ context.Context, _ *account.Account, _ *vehicle.Vehicle, _ map[string]string) error {
+			return protocol.ErrKeepAwakeNotInProtocol
+		},
+	},
+	"wifi": {
+		help:             "WiFi provision commands are not in the published protocol (enable/add/forget/connect-in-drive). See teslamotors/vehicle-command#419.",
+		requiresAuth:     false,
+		requiresFleetAPI: false,
+		optional: []Argument{
+			{name: "ACTION", help: "enable, disable, add, forget, or connect-in-drive (all return the same protocol error; no PSK is sent)"},
+		},
+		handler: func(_ context.Context, _ *account.Account, _ *vehicle.Vehicle, _ map[string]string) error {
+			return protocol.ErrWiFiNotInProtocol
+		},
+	},
+	"ble-presence-exempt": {
+		help:             "There is no published VCSEC flag to enroll a BLE client that is ignored for Walk-Away Door Lock. Enrolled BLE devices are keys; disconnect after commands. See teslamotors/vehicle-command#480.",
+		requiresAuth:     false,
+		requiresFleetAPI: false,
+		handler: func(_ context.Context, _ *account.Account, _ *vehicle.Vehicle, _ map[string]string) error {
+			return protocol.ErrBLEKeyPresenceNotInProtocol
+		},
+	},
+	"charging-schedule-overheat": {
+		help:             "This SDK cannot make scheduled charging fire while cabin overheat blocks sleep on some Intel-MCU Model S vehicles. charging-schedule still delivers the command. See teslamotors/vehicle-command#342.",
+		requiresAuth:     false,
+		requiresFleetAPI: false,
+		handler: func(_ context.Context, _ *account.Account, _ *vehicle.Vehicle, _ map[string]string) error {
+			return protocol.ErrScheduledChargingFirmware
+		},
+	},
+	"boombox": {
+		help:             "remote_boombox is not in the published protocol. Tesla has not released a VehicleAction pending legal review of Pedestrian Warning System restrictions. See teslamotors/vehicle-command#266.",
+		requiresAuth:     false,
+		requiresFleetAPI: false,
+		optional: []Argument{
+			{name: "SOUND", help: "Fleet API sound id (0 random, 2000 locate). Ignored; no request is sent."},
+		},
+		handler: func(_ context.Context, _ *account.Account, _ *vehicle.Vehicle, _ map[string]string) error {
+			return protocol.ErrBoomboxNotInProtocol
 		},
 	},
 	"tonneau-open": {
@@ -835,7 +1102,7 @@ var commands = map[string]*Command{
 		},
 	},
 	"charge-port-open": {
-		help:             "Open charge port",
+		help:             "Open charge port (ChargePortDoorOpen). Charging Manager keys may be refused by firmware (INSUFFICIENT_PRIVILEGES); this tool does not enroll Owner as a workaround. See teslamotors/vehicle-command#413.",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
 		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, _ map[string]string) error {
@@ -843,11 +1110,43 @@ var commands = map[string]*Command{
 		},
 	},
 	"charge-port-close": {
-		help:             "Close charge port",
+		help:             "Close charge port (ChargePortDoorClose). Charging Manager keys may be refused by firmware; see teslamotors/vehicle-command#413.",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
 		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, _ map[string]string) error {
 			return car.CloseChargePort(ctx)
+		},
+	},
+	"charging-manager-charge-port": {
+		help:             "This SDK cannot expand Charging Manager firmware ACLs to charge-port. charge-port-open still sends ChargePortDoorOpen. Do not enroll Owner for a charge-door gadget. See teslamotors/vehicle-command#413.",
+		requiresAuth:     false,
+		requiresFleetAPI: false,
+		handler: func(_ context.Context, _ *account.Account, _ *vehicle.Vehicle, _ map[string]string) error {
+			return protocol.ErrChargingManagerChargePortFirmware
+		},
+	},
+	"ble-state-fast": {
+		help:             "BLE GetDriveState latency is the vehicle round-trip (~250-300ms). This tool cannot guarantee <150ms, disable encryption, or stream DriveState. Reuse the session; see teslamotors/vehicle-command#414.",
+		requiresAuth:     false,
+		requiresFleetAPI: false,
+		handler: func(_ context.Context, _ *account.Account, _ *vehicle.Vehicle, _ map[string]string) error {
+			return protocol.ErrBLEStateLatencyFirmware
+		},
+	},
+	"seat-heater-not-implemented": {
+		help:             "remote_seat_heater_request and remote_seat_cooler_request already map to published HvacSeatHeaterActions / HvacSeatCoolerActions. Tesla signed_command HTTP 501 Unauthorized is Fleet API partner/region/OAuth allowlist, not a missing handler. See teslamotors/vehicle-command#383.",
+		requiresAuth:     false,
+		requiresFleetAPI: false,
+		handler: func(_ context.Context, _ *account.Account, _ *vehicle.Vehicle, _ map[string]string) error {
+			return protocol.ErrSeatClimateFleetAPI
+		},
+	},
+	"partner-oauth": {
+		help:             "Tesla Fleet Auth invalid_audience and /authorize No policy rules are Tesla IdP provisioning. tesla-auth-token only stores a token; this tool cannot mint a partner token or bind audiences. See teslamotors/vehicle-command#460.",
+		requiresAuth:     false,
+		requiresFleetAPI: false,
+		handler: func(_ context.Context, _ *account.Account, _ *vehicle.Vehicle, _ map[string]string) error {
+			return protocol.ErrPartnerOAuthNotProvisioned
 		},
 	},
 	"autosecure-modelx": {
@@ -926,6 +1225,36 @@ var commands = map[string]*Command{
 			return car.SetSeatHeater(ctx, spec)
 		},
 	},
+	"seat-cooler": {
+		help:             "Set seat cooler at SEAT to LEVEL (front seats only)",
+		requiresAuth:     true,
+		requiresFleetAPI: false,
+		args: []Argument{
+			{name: "SEAT", help: "front-left or front-right"},
+			{name: "LEVEL", help: "off, low, medium, or high"},
+		},
+		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			seats := map[string]vehicle.SeatPosition{
+				"front-left":  vehicle.SeatFrontLeft,
+				"front-right": vehicle.SeatFrontRight,
+			}
+			position, ok := seats[args["SEAT"]]
+			if !ok {
+				return fmt.Errorf("invalid seat position")
+			}
+			levels := map[string]vehicle.Level{
+				"off":    vehicle.LevelOff,
+				"low":    vehicle.LevelLow,
+				"medium": vehicle.LevelMed,
+				"high":   vehicle.LevelHigh,
+			}
+			level, ok := levels[args["LEVEL"]]
+			if !ok {
+				return fmt.Errorf("invalid seat cooler level")
+			}
+			return car.SetSeatCooler(ctx, level, position)
+		},
+	},
 	"steering-wheel-heater": {
 		help:             "Set steering wheel mode to STATE ('on' or 'off')",
 		requiresAuth:     true,
@@ -956,6 +1285,46 @@ var commands = map[string]*Command{
 				return err
 			}
 			fmt.Println(string(productsJSON))
+			return nil
+		},
+	},
+	"options": {
+		help:             "Print Tesla catalog option codes for VIN (GET /api/1/dx/vehicles/options). Battery ($BT*) is often omitted; see teslamotors/vehicle-command#391.",
+		requiresAuth:     false,
+		requiresFleetAPI: true,
+		args: []Argument{
+			{name: "VIN", help: "Vehicle Identification Number"},
+		},
+		handler: func(ctx context.Context, acct *account.Account, _ *vehicle.Vehicle, args map[string]string) error {
+			codes, err := acct.GetVehicleOptions(ctx, args["VIN"])
+			if err != nil {
+				return err
+			}
+			out, err := json.MarshalIndent(codes, "", "  ")
+			if err != nil {
+				return err
+			}
+			fmt.Println(string(out))
+			return nil
+		},
+	},
+	"battery-option": {
+		help:             "Print the catalog $BT* battery option for VIN if Tesla included it. Does not invent codes. See teslamotors/vehicle-command#391.",
+		requiresAuth:     false,
+		requiresFleetAPI: true,
+		args: []Argument{
+			{name: "VIN", help: "Vehicle Identification Number"},
+		},
+		handler: func(ctx context.Context, acct *account.Account, _ *vehicle.Vehicle, args map[string]string) error {
+			codes, err := acct.GetVehicleOptions(ctx, args["VIN"])
+			if err != nil {
+				return err
+			}
+			opt, err := account.FindBatteryOption(codes)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("%s\t%s\n", opt.Code, opt.DisplayName)
 			return nil
 		},
 	},
@@ -1339,7 +1708,7 @@ var commands = map[string]*Command{
 		},
 	},
 	"state": {
-		help:             "Fetch vehicle state over BLE.",
+		help:             "Fetch one vehicle-state category over BLE (one Infotainment round-trip, typically ~250-300ms). Reuse the session; this is not a sub-150ms stream. See teslamotors/vehicle-command#414.",
 		requiresAuth:     true,
 		requiresFleetAPI: false,
 		args: []Argument{

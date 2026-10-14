@@ -87,6 +87,9 @@ func (c *Connection) flush() bool {
 }
 
 func (c *Connection) Close() {
+	// Drop the GATT session. An enrolled BLE client that stays connected
+	// inside the vehicle can be treated as a key still present and can
+	// prevent Walk-Away Door Lock (teslamotors/vehicle-command#480).
 	_ = c.client.ClearSubscriptions()
 	_ = c.client.CancelConnection()
 }

@@ -168,6 +168,26 @@ func addKeyPayload(publicKey *ecdh.PublicKey, role keys.Role, formFactor vcsec.K
 	}
 }
 
+func updateKeyPayload(publicKey *ecdh.PublicKey, role keys.Role, formFactor vcsec.KeyFormFactor) *vcsec.UnsignedMessage {
+	return &vcsec.UnsignedMessage{
+		SubMessage: &vcsec.UnsignedMessage_WhitelistOperation{
+			WhitelistOperation: &vcsec.WhitelistOperation{
+				SubMessage: &vcsec.WhitelistOperation_UpdateKeyAndPermissions{
+					UpdateKeyAndPermissions: &vcsec.PermissionChange{
+						Key: &vcsec.PublicKey{
+							PublicKeyRaw: publicKey.Bytes(),
+						},
+						KeyRole: role,
+					},
+				},
+				MetadataForKey: &vcsec.KeyMetadata{
+					KeyFormFactor: formFactor,
+				},
+			},
+		},
+	}
+}
+
 // executeRKEAction sends an RKE action command to the vehicle. (RKE originally
 // referred to "Remote Keyless Entry" but now refers more generally to commands
 // that can be sent by a keyfob).

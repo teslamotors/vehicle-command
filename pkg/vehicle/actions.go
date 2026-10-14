@@ -94,6 +94,8 @@ func (v *Vehicle) VentWindows(ctx context.Context) error {
 		})
 }
 
+// ChargePortClose is an alias of CloseChargePort. See OpenChargePort for
+// Charging Manager firmware ACL notes (teslamotors/vehicle-command#413).
 func (v *Vehicle) ChargePortClose(ctx context.Context) error {
 	return v.executeCarServerAction(ctx,
 		&carserver.Action_VehicleAction{
