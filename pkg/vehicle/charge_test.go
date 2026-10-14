@@ -130,6 +130,31 @@ func TestChargeStopDeliversPublishedAction(t *testing.T) {
 	}
 }
 
+func TestChargeStartIsNotPreSendVetoed(t *testing.T) {
+	car, sender := newTestVehicle()
+	sender.Listen(nil)
+	sender.fixedResponse = &universal.RoutableMessage{}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	if err := car.ChargeStart(ctx); err != nil {
+		if errors.Is(err, protocol.ErrPreSendValidationNotInProtocol) {
+			t.Fatal("ChargeStart must still send ChargingStartStopAction; a client-side limits table is not Tesla's rules")
+		}
+		t.Fatalf("ChargeStart: %v", err)
+	}
+	if sender.lastMessage == nil {
+		t.Fatal("dispatcher did not capture a request")
+	}
+	var action carserver.Action
+	if err := proto.Unmarshal(sender.lastMessage.GetProtobufMessageAsBytes(), &action); err != nil {
+		t.Fatalf("unmarshal Action: %v", err)
+	}
+	if action.GetVehicleAction().GetChargingStartStopAction().GetStart() == nil {
+		t.Fatal("request was not ChargingStartStopAction start")
+	}
+}
+
 func TestSetChargingAmpsDeliversPublishedAction(t *testing.T) {
 	car, sender := newTestVehicle()
 	sender.Listen(nil)

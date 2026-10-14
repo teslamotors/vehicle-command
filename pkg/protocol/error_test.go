@@ -378,6 +378,19 @@ func TestErrInfotainmentSignedCommandOffline(t *testing.T) {
 	}
 }
 
+func TestErrPreSendValidationNotInProtocol(t *testing.T) {
+	t.Parallel()
+	if Temporary(ErrPreSendValidationNotInProtocol) || MayHaveSucceeded(ErrPreSendValidationNotInProtocol) || ShouldRetry(ErrPreSendValidationNotInProtocol) {
+		t.Fatal("pre-send semantic veto must not retry in Vehicle.Send")
+	}
+	if !errors.Is(fmt.Errorf("validate: %w", ErrPreSendValidationNotInProtocol), ErrPreSendValidationNotInProtocol) {
+		t.Fatal("callers must be able to errors.Is ErrPreSendValidationNotInProtocol")
+	}
+	if !strings.Contains(ErrPreSendValidationNotInProtocol.Error(), "#517") {
+		t.Fatal("error must cite teslamotors/vehicle-command#517")
+	}
+}
+
 func TestErrChargingAmpsBelowFloorFirmware(t *testing.T) {
 	t.Parallel()
 	if Temporary(ErrChargingAmpsBelowFloorFirmware) || MayHaveSucceeded(ErrChargingAmpsBelowFloorFirmware) || ShouldRetry(ErrChargingAmpsBelowFloorFirmware) {

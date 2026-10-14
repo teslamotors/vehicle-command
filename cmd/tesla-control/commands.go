@@ -838,6 +838,14 @@ var commands = map[string]*Command{
 			return protocol.ErrInfotainmentSignedCommandOffline
 		},
 	},
+	"validate-command": {
+		help:             "Signing proves who sent a command. Vehicle-state conflicts are a response after the round-trip. This tool does not veto a command before send. See teslamotors/vehicle-command#517.",
+		requiresAuth:     false,
+		requiresFleetAPI: false,
+		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, _ map[string]string) error {
+			return car.ValidateCommand(ctx)
+		},
+	},
 	"charging-schedule": {
 		help:             "Schedule charging to MINS minutes after midnight. Delivery is this SDK; later sleep/wake of the scheduler is firmware (cabin overheat can block it on some Intel-MCU Model S cars; teslamotors/vehicle-command#342).",
 		requiresAuth:     true,

@@ -519,6 +519,37 @@ use a different integer on BLE, get
 `charging-set-amps` and `set_charging_amps` still send the requested
 integer, including values below 5.
 
+### Pre-send semantic validation
+
+Session signatures prove who sent a command. They do not decide whether
+the command conflicts with the vehicle's current state. That decision is
+the vehicle's, after the signed round-trip:
+
+- Application refusals are [`NominalError`](error.go) (HTTP 200
+  `result:false`). Dog/Camp `cpd_enabled` is one of those
+  ([issue #509](https://github.com/teslamotors/vehicle-command/issues/509)).
+- Protocol faults are [`RoutableMessageError`](error.go).
+
+[Issue #517](https://github.com/teslamotors/vehicle-command/issues/517)
+asks for an optional hook that vetoes a command before sign and send,
+using declared state and a fixed limits table, and that appends every
+send and refusal to a local audit log. The proposal states the table is
+an example operator policy, not Tesla's rules, and that no vehicle field
+data was used. Tesla has not published that table. A mistaken check drops
+legitimate commands: the reference extraction flagged every `ChargeStart`
+until the parser was fixed. This SDK does not insert the hook into
+`Vehicle.Send`, does not block `ChargeStart` or `SetClimateKeeperMode`,
+and does not hash-chain a command log. Key management for such a log is
+unspecified, and the log would be a new store of command history.
+
+Callers that ask this SDK for the veto get
+[`protocol.ErrPreSendValidationNotInProtocol`](error.go) from
+`Vehicle.ValidateCommand`, `tesla-control validate-command`, and proxy
+paths `validate_command`, `pre_send_veto`, and `command_audit` (HTTP 400
+before a session). Published commands are still signed and sent.
+`ErrPreSendValidationNotInProtocol` is not temporary and must not be
+retried by `Vehicle.Send`.
+
 ### Battery option codes
 
 Pack identity (`$BT42`, `$BTF0`, …) is Tesla **catalog** metadata from

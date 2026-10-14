@@ -233,7 +233,9 @@ func (v *Vehicle) SendMessage(ctx context.Context, message *universal.RoutableMe
 // Send a payload to a Vehicle. This is a low-level method that most clients will not need.
 //
 // The method retries until vehicle responds with a terminal result (success or non-transient
-// failure) or the provided context expires.
+// failure) or the provided context expires. Send does not run a client-side semantic veto.
+// Callers that ask for one get protocol.ErrPreSendValidationNotInProtocol from
+// ValidateCommand. See teslamotors/vehicle-command#517.
 //
 // The domain controls what vehicle subsystem receives the message, and auth controls how the
 // message is authenticated (if it all).
@@ -258,6 +260,16 @@ func (v *Vehicle) Send(ctx context.Context, domain universal.Domain, payload []b
 			continue
 		}
 	}
+}
+
+// ValidateCommand reports that this SDK does not veto a command before sign
+// and send. Authenticity is the session signature. A conflict with vehicle
+// state is a NominalError or RoutableMessageError after the round-trip.
+// An operator limits table is not Tesla's published rules. This method does
+// not contact the vehicle and does not write an audit log.
+// See teslamotors/vehicle-command#517.
+func (*Vehicle) ValidateCommand(context.Context) error {
+	return protocol.ErrPreSendValidationNotInProtocol
 }
 
 // Wakeup starts the infotainment system if it is asleep. It does not inhibit

@@ -116,6 +116,16 @@ make proto-gen   # requires protoc + protoc-gen-go
   `protocol.ErrChargingAmpsBelowFloorFirmware` for clients that ask this
   SDK to do that. `charging-set-amps` / `set_charging_amps` still deliver
   the requested integer. See teslamotors/vehicle-command#256.
+* Signing proves who sent a command. Whether the command conflicts with
+  vehicle state is a vehicle response after the signed round-trip
+  (`*protocol.NominalError` or `*protocol.RoutableMessageError`). Tesla
+  has not published a client-side semantic-bounds table. An example
+  operator policy is not those limits; a mistaken table drops legitimate
+  commands. Do not insert a pre-send veto into `Vehicle.Send`, block
+  `ChargeStart` or `SetClimateKeeperMode`, or hash-chain a local command
+  audit log. Return `protocol.ErrPreSendValidationNotInProtocol` for
+  clients that ask this SDK to do that. See
+  teslamotors/vehicle-command#517.
 * Battery pack identity (`$BT*` option codes) is Tesla catalog metadata
   (`GET /api/1/dx/vehicles/options`), not a signed vehicle field. Tesla
   omits `bt` for many VINs. Do not invent `$BT*` codes from model codes.

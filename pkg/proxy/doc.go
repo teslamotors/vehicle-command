@@ -71,6 +71,18 @@ returns HTTP 400 with [protocol.ErrChargingAmpsBelowFloorFirmware] before
 opening a vehicle session. This proxy will not clamp the value, add an amp
 on BLE, or send the command twice. See teslamotors/vehicle-command#256.
 
+# Pre-send command validation
+
+POST charge_start, set_climate_keeper_mode, and other published commands
+are still signed and sent. A conflict with vehicle state is a vehicle
+response after that round-trip (NominalError or RoutableMessageError),
+not a client-side limits table. POST validate_command, pre_send_veto, or
+command_audit returns HTTP 400 with
+[protocol.ErrPreSendValidationNotInProtocol] before opening a vehicle
+session. This proxy will not veto a published command before send and
+will not append a client-side audit log. See
+teslamotors/vehicle-command#517.
+
 # Battery option codes
 
 POST battery_size, get_battery_option, or get_battery_size returns HTTP 400

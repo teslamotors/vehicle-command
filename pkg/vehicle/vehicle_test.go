@@ -264,6 +264,17 @@ func TestVehicleRetryTimeout(t *testing.T) {
 	}
 }
 
+func TestValidateCommandDoesNotSend(t *testing.T) {
+	car, sender := newTestVehicle()
+	sender.Listen(nil)
+	if err := car.ValidateCommand(context.Background()); !errors.Is(err, protocol.ErrPreSendValidationNotInProtocol) {
+		t.Fatalf("ValidateCommand = %v, want ErrPreSendValidationNotInProtocol", err)
+	}
+	if sender.lastMessage != nil {
+		t.Fatal("ValidateCommand must not dispatch a command")
+	}
+}
+
 func TestVehicleNoResponseTimeout(t *testing.T) {
 	vehicle, _ := newTestVehicle()
 	if err := vehicle.Connect(context.Background()); err != nil {

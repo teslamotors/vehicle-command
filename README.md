@@ -385,6 +385,15 @@ while the car is awake. The proxy still sends the requested
 `ble_charging_amps` / `match_wall_amps`. This SDK does not clamp the
 value, add an amp on BLE, or send the command twice.
 
+Signing proves who sent a command
+([issue #517](https://github.com/teslamotors/vehicle-command/issues/517)).
+Whether it conflicts with vehicle state is a vehicle response after the
+round-trip (`NominalError` or `RoutableMessageError`). The proxy still
+sends published commands such as `charge_start`. It returns HTTP 400
+(`protocol.ErrPreSendValidationNotInProtocol`) for `validate_command` /
+`pre_send_veto` / `command_audit`. This SDK does not veto commands before
+send and does not append a client-side audit log.
+
 Battery pack identity (`$BT*` option codes) is Tesla catalog metadata
 ([issue #391](https://github.com/teslamotors/vehicle-command/issues/391)),
 not a signed command. Tesla omits `bt` for many VINs; this SDK does not

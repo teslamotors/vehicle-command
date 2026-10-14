@@ -85,6 +85,13 @@ while the car is awake. `tesla-control charging-amps-floor` returns
 `ErrChargingAmpsBelowFloorFirmware`. This tool does not clamp the value
 or add an amp on BLE.
 
+Signing proves who sent a command. A conflict with vehicle state is the
+vehicle's response after the round-trip
+([issue #517](https://github.com/teslamotors/vehicle-command/issues/517)).
+`tesla-control validate-command` returns
+`ErrPreSendValidationNotInProtocol`. This tool does not veto `charge-start`
+or `climate-keeper` before send.
+
 Battery option codes (`$BT*`) are Tesla catalog metadata, not a vehicle
 command. `tesla-control options VIN` calls
 `GET /api/1/dx/vehicles/options`. `tesla-control battery-option VIN` prints

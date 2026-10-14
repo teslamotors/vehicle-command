@@ -223,6 +223,19 @@ var (
 	// twice, or pick a different value per transport. See
 	// teslamotors/vehicle-command#256.
 	ErrChargingAmpsBelowFloorFirmware = NewError("BLE and Fleet API send the same SetChargingAmpsAction integer. Firmware may show a 5A floor, a wall meter can read about 1A high while the car is awake, and the first set below 5A is sometimes ignored. This SDK does not clamp, add an amp on BLE, or send the command twice. See teslamotors/vehicle-command#256", false, false)
+	// ErrPreSendValidationNotInProtocol indicates a client asked this SDK to
+	// veto a command before sign and send because it conflicts with declared
+	// vehicle state or an operator limits table, or to append every send and
+	// refusal to a local audit log. Signing already proves who sent the
+	// command. Whether the command conflicts with vehicle state is a vehicle
+	// response after the round-trip: NominalError (for example cpd_enabled,
+	// teslamotors/vehicle-command#509) or RoutableMessageError. Tesla has not
+	// published a client-side semantic-bounds table. An example operator
+	// policy is not those limits; a mistaken table drops legitimate commands
+	// (a command-surface extraction bug flagged every ChargeStart). This
+	// library does not insert that hook into Send and does not hash-chain a
+	// command log. See teslamotors/vehicle-command#517.
+	ErrPreSendValidationNotInProtocol = NewError("signing proves who sent a command. Whether it conflicts with vehicle state is a vehicle response after the signed round-trip (NominalError or RoutableMessageError). This SDK does not veto published commands before send and does not append a client-side audit log. See teslamotors/vehicle-command#517", false, false)
 	// ErrClimateKeeperCPDFirmware indicates a client asked this SDK to enable
 	// Dog or Camp mode despite firmware refusing with NominalError
 	// "cpd_enabled", or to treat the in-car Child Left Alone Detection

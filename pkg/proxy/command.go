@@ -116,6 +116,11 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 		// BLE and Fleet API send the same charging_amps integer. Do not
 		// clamp to 5, add an amp on BLE, or double-send. teslamotors/vehicle-command#256.
 		return nil, protocol.ErrChargingAmpsBelowFloorFirmware
+	case "validate_command", "pre_send_veto", "command_audit":
+		// Signing proves authenticity. Semantic conflicts are vehicle
+		// responses after the round-trip. Do not veto published commands
+		// or append a client audit log. teslamotors/vehicle-command#517.
+		return nil, protocol.ErrPreSendValidationNotInProtocol
 	case "battery_size", "get_battery_option", "get_battery_size":
 		// Pack identity is Fleet DX catalog metadata, not a signed command.
 		// teslamotors/vehicle-command#391.

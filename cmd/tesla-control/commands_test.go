@@ -208,6 +208,20 @@ func TestChargingAmpsFloorCommandReturnsProtocolError(t *testing.T) {
 	}
 }
 
+func TestValidateCommandReturnsProtocolError(t *testing.T) {
+	t.Parallel()
+	info, ok := commands["validate-command"]
+	if !ok {
+		t.Fatal("missing validate-command")
+	}
+	if info.requiresFleetAPI || info.requiresAuth {
+		t.Error("validate-command help command must not require a session")
+	}
+	if err := info.handler(context.Background(), nil, nil, nil); !errors.Is(err, protocol.ErrPreSendValidationNotInProtocol) {
+		t.Fatalf("validate-command handler = %v, want ErrPreSendValidationNotInProtocol", err)
+	}
+}
+
 func TestInfotainmentOfflineCommandReturnsProtocolError(t *testing.T) {
 	t.Parallel()
 	info, ok := commands["infotainment-offline"]
