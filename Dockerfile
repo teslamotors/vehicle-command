@@ -1,4 +1,4 @@
-FROM golang:1.23.0 AS build
+FROM golang:1.27.2 AS build
 
 WORKDIR /app
 
@@ -8,9 +8,9 @@ RUN go mod download
 COPY . .
 
 RUN mkdir build
-RUN go build -o ./build ./...
+RUN CGO_ENABLED=0 go build -o ./build ./...
 
-FROM gcr.io/distroless/base-debian12:nonroot AS runtime
+FROM gcr.io/distroless/static-debian12:nonroot AS runtime
 
 COPY --from=build /app/build /usr/local/bin
 
