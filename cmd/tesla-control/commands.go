@@ -1219,9 +1219,8 @@ var commands = map[string]*Command{
 						return errors.New("expected numeric ID")
 					}
 					return car.RemoveChargeSchedule(ctx, id)
-				} else {
-					return errors.New("missing schedule ID")
 				}
+				return errors.New("missing schedule ID")
 			case "HOME":
 				home = true
 			case "WORK":
@@ -1323,9 +1322,8 @@ var commands = map[string]*Command{
 						return errors.New("expected numeric ID")
 					}
 					return car.RemovePreconditionSchedule(ctx, id)
-				} else {
-					return errors.New("missing schedule ID")
 				}
+				return errors.New("missing schedule ID")
 			case "HOME":
 				home = true
 			case "WORK":
