@@ -124,7 +124,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, "It is unsafe to use the same private key for TLS and command authentication.")
 			fmt.Fprintln(os.Stderr, "")
 			fmt.Fprintln(os.Stderr, "Generate a new TLS key for this server.")
-			return
+			os.Exit(1)
 		}
 		log.Debug("Verified that TLS key is not the same as the command-authentication key.")
 	} else {
@@ -147,7 +147,10 @@ func main() {
 	// method of your implementation can perform your business logic and then, if the request is
 	// authorized, invoke p.ServeHTTP. Finally, replace p in the below ListenAndServeTLS call with
 	// an object of your newly created type.
-	log.Error("Server stopped: %s", http.ListenAndServeTLS(addr, httpConfig.certFilename, httpConfig.keyFilename, p))
+
+	// ListenAndServeTLS always returns a non-nil error. Assigning it to err reports the reason on
+	// stderr and exits with a non-zero status, even when logging is disabled.
+	err = http.ListenAndServeTLS(addr, httpConfig.certFilename, httpConfig.keyFilename, p)
 }
 
 // readConfig applies configuration from environment variables.
