@@ -3,8 +3,10 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -34,6 +36,13 @@ const nonLocalhostWarning = `
 Do not listen on a network interface without adding client authentication. Unauthorized clients may
 be used to create excessive traffic from your IP address to Tesla's servers, which Tesla may respond
 to by rate limiting or blocking your connections.`
+
+const sharedKeyWarning = `It is unsafe to use the same private key for TLS and command authentication.
+
+Generate a new TLS key for this server.`
+
+// errSharedKey is returned when the TLS key is a copy of the command-authentication key.
+var errSharedKey = errors.New(sharedKeyWarning)
 
 type HTTProxyConfig struct {
 	keyFilename  string
@@ -82,24 +91,15 @@ func main() {
 	// that package.
 
 	config, err := cli.NewConfig(cli.FlagPrivateKey)
-
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load credential configuration: %s\n", err)
 		os.Exit(1)
 	}
 
-	defer func() {
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-			os.Exit(1)
-		}
-	}()
-
 	flag.Usage = Usage
 	config.RegisterCommandLineFlags()
 	flag.Parse()
-	err = readFromEnvironment()
-	if err != nil {
+	if err := readFromEnvironment(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading environment: %s\n", err)
 		os.Exit(1)
 	}
@@ -113,44 +113,85 @@ func main() {
 		fmt.Fprintln(os.Stderr, nonLocalhostWarning)
 	}
 
-	var skey protocol.ECDHPrivateKey
-	skey, err = config.PrivateKey()
+	// Startup failures are reported here instead of through the logger, which is silent at the
+	// default log level.
+	if err := run(config, httpConfig); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+		os.Exit(1)
+	}
+}
+
+// commandKey loads the private key used to authenticate commands sent to vehicles, and verifies
+// that it is not also serving as the server's TLS key.
+func commandKey(config *cli.Config, tlsKeyFilename string) (protocol.ECDHPrivateKey, error) {
+	skey, err := config.PrivateKey()
 	if err != nil {
-		return
+		return nil, fmt.Errorf("could not load command-authentication private key: %w", err)
 	}
 
-	if tlsPublicKey, err := protocol.LoadPublicKey(httpConfig.keyFilename); err == nil {
+	if tlsPublicKey, err := protocol.LoadPublicKey(tlsKeyFilename); err == nil {
 		if bytes.Equal(tlsPublicKey.Bytes(), skey.PublicBytes()) {
-			fmt.Fprintln(os.Stderr, "It is unsafe to use the same private key for TLS and command authentication.")
-			fmt.Fprintln(os.Stderr, "")
-			fmt.Fprintln(os.Stderr, "Generate a new TLS key for this server.")
-			os.Exit(1)
+			return nil, errSharedKey
 		}
 		log.Debug("Verified that TLS key is not the same as the command-authentication key.")
 	} else {
 		// Discarding the error here is deliberate
 		log.Debug("Verified that TLS key is not a recycled command-authentication key, because it is not NIST P256.")
 	}
+	return skey, nil
+}
+
+// newProxyServer creates the HTTPS server that fronts the proxy. Failures are returned instead of
+// terminating the process, so that callers report them consistently.
+func newProxyServer(config *cli.Config, httpConfig *HTTProxyConfig) (*http.Server, error) {
+	skey, err := commandKey(config, httpConfig.keyFilename)
+	if err != nil {
+		return nil, err
+	}
 
 	log.Debug("Creating proxy")
 	p, err := proxy.New(context.Background(), skey, cacheSize)
 	if err != nil {
-		log.Error("Error initializing proxy service: %v", err)
-		return
+		return nil, fmt.Errorf("could not initialize proxy service: %w", err)
 	}
 	p.Timeout = httpConfig.timeout
-	addr := fmt.Sprintf("%s:%d", httpConfig.host, httpConfig.port)
-	log.Info("Listening on %s", addr)
 
 	// To add more application logic requests, such as alternative client authentication, create
 	// a http.HandleFunc implementation (https://pkg.go.dev/net/http#HandlerFunc). The ServeHTTP
 	// method of your implementation can perform your business logic and then, if the request is
-	// authorized, invoke p.ServeHTTP. Finally, replace p in the below ListenAndServeTLS call with
-	// an object of your newly created type.
+	// authorized, invoke p.ServeHTTP. Finally, replace p below with an object of your newly
+	// created type.
+	return &http.Server{
+		Addr:    fmt.Sprintf("%s:%d", httpConfig.host, httpConfig.port),
+		Handler: p,
+	}, nil
+}
 
-	// ListenAndServeTLS always returns a non-nil error. Assigning it to err reports the reason on
-	// stderr and exits with a non-zero status, even when logging is disabled.
-	err = http.ListenAndServeTLS(addr, httpConfig.certFilename, httpConfig.keyFilename, p)
+// serve accepts TLS connections on listener until server stops. A deliberate shutdown is not an
+// error.
+func serve(server *http.Server, listener net.Listener, certFilename, keyFilename string) error {
+	if err := server.ServeTLS(listener, certFilename, keyFilename); !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return nil
+}
+
+// run starts the proxy and blocks until it stops serving, returning the reason it stopped.
+func run(config *cli.Config, httpConfig *HTTProxyConfig) error {
+	server, err := newProxyServer(config, httpConfig)
+	if err != nil {
+		return err
+	}
+
+	listener, err := net.Listen("tcp", server.Addr)
+	if err != nil {
+		return err
+	}
+	// ServeTLS leaves the listener open if it cannot load the certificate or key.
+	defer func() { _ = listener.Close() }()
+
+	log.Info("Listening on %s", listener.Addr())
+	return serve(server, listener, httpConfig.certFilename, httpConfig.keyFilename)
 }
 
 // readConfig applies configuration from environment variables.

@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -17,15 +15,12 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
-	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
+	"github.com/teslamotors/vehicle-command/pkg/cli"
 	"github.com/teslamotors/vehicle-command/pkg/proxy"
 )
 
@@ -107,73 +102,12 @@ func TestParseConfig(t *testing.T) {
 	})
 }
 
-// proxyBinary is the command built by TestMain. The startup tests below run it as a separate
-// process because they assert on its exit status, which is not observable in-process. Building and
-// running it is skipped under -short, which leaves the in-process tests in this package.
-var proxyBinary string
-
-func TestMain(m *testing.M) {
-	// testing.Short is only readable once the test flags are parsed, which m.Run would do.
-	flag.Parse()
-	var buildDir string
-	if !testing.Short() {
-		dir, err := os.MkdirTemp("", "tesla-http-proxy-test")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to create build directory: %s\n", err)
-			os.Exit(1)
-		}
-		buildDir = dir
-		proxyBinary = filepath.Join(buildDir, "tesla-http-proxy")
-		if out, err := exec.Command(goCommand(), "build", "-o", proxyBinary, ".").CombinedOutput(); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to build tesla-http-proxy: %s\n%s", err, out)
-			_ = os.RemoveAll(buildDir)
-			os.Exit(1)
-		}
-	}
-	code := m.Run()
-	if buildDir != "" {
-		if err := os.RemoveAll(buildDir); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to remove build directory: %s\n", err)
-		}
-	}
-	os.Exit(code)
-}
-
-// goCommand returns the go command of the toolchain running the tests, falling back to a PATH
-// lookup.
-func goCommand() string {
-	binary := filepath.Join(runtime.GOROOT(), "bin", "go")
-	if _, err := os.Stat(binary); err != nil {
-		return "go"
-	}
-	return binary
-}
-
-// requireProxyBinary skips a process-level test when -short left the command unbuilt.
-func requireProxyBinary(t *testing.T) {
-	t.Helper()
-	if proxyBinary == "" {
-		t.Skip("Skipping process-level startup test because -short does not build the command")
-	}
-}
-
 // credentials are disposable key files generated for a single test.
 type credentials struct {
-	authKey string // Command-authentication private key (-key-file)
-	cert    string // TLS certificate chain (-cert)
-	tlsKey  string // TLS private key (-tls-key)
+	authKey string // Command-authentication private key
+	cert    string // TLS certificate chain
+	tlsKey  string // TLS private key
 	certPEM []byte
-}
-
-// args returns the command line for the proxy. An empty authKey omits -key-file. Tests that never
-// connect to the proxy pass port 0, so the OS assigns an unused port and the proxy cannot fail with
-// a bind error that hides the failure under test.
-func (c *credentials) args(port int) []string {
-	args := []string{"-cert", c.cert, "-tls-key", c.tlsKey, "-port", strconv.Itoa(port)}
-	if c.authKey != "" {
-		args = append(args, "-key-file", c.authKey)
-	}
-	return args
 }
 
 // newCredentials generates a command-authentication key plus an independent self-signed TLS
@@ -213,6 +147,32 @@ func newCredentials(t *testing.T, curve elliptic.Curve) credentials {
 	return c
 }
 
+// config returns credential settings that load the generated command-authentication key. The
+// session cache is disabled and no keyring name is set, so the developer's cache file and system
+// keyring are never consulted.
+func (c *credentials) config(t *testing.T) *cli.Config {
+	t.Helper()
+	config, err := cli.NewConfig(cli.FlagPrivateKey)
+	if err != nil {
+		t.Fatalf("Failed to create credential configuration: %s", err)
+	}
+	config.KeyFilename = c.authKey
+	config.DisableCache = true
+	return config
+}
+
+// proxyConfig returns proxy settings for a server on an ephemeral loopback port. Tests build these
+// directly rather than registering and parsing the global command-line flags.
+func (c *credentials) proxyConfig() *HTTProxyConfig {
+	return &HTTProxyConfig{
+		certFilename: c.cert,
+		keyFilename:  c.tlsKey,
+		host:         "127.0.0.1",
+		port:         0,
+		timeout:      proxy.DefaultTimeout,
+	}
+}
+
 func generateKey(t *testing.T, curve elliptic.Curve) *ecdsa.PrivateKey {
 	t.Helper()
 	skey, err := ecdsa.GenerateKey(curve, rand.Reader)
@@ -243,153 +203,14 @@ func listenLoopback(t *testing.T) net.Listener {
 	return listener
 }
 
-// occupiedPort returns a loopback port that stays bound for the duration of the test. Both
-// loopback addresses are bound because "localhost" may resolve to either one.
+// occupiedPort returns a loopback port that stays bound for the duration of the test.
 func occupiedPort(t *testing.T) int {
 	t.Helper()
 	listener := listenLoopback(t)
 	t.Cleanup(func() {
 		_ = listener.Close()
 	})
-	port := listener.Addr().(*net.TCPAddr).Port
-	if listener6, err := net.Listen("tcp", fmt.Sprintf("[::1]:%d", port)); err == nil {
-		t.Cleanup(func() {
-			_ = listener6.Close()
-		})
-	}
-	return port
-}
-
-// freePort returns a loopback port that is available when the function returns. Only the tests
-// that connect to the proxy need this; failure cases pass port 0 and let the OS choose.
-func freePort(t *testing.T) int {
-	t.Helper()
-	listener := listenLoopback(t)
-	port := listener.Addr().(*net.TCPAddr).Port
-	if err := listener.Close(); err != nil {
-		t.Fatalf("Failed to release loopback port: %s", err)
-	}
-	return port
-}
-
-// proxyEnv isolates the proxy from the developer's home directory, session cache, and TESLA_*
-// settings, including TESLA_VERBOSE.
-func proxyEnv(t *testing.T) []string {
-	t.Helper()
-	return []string{"HOME=" + t.TempDir(), "PATH=" + os.Getenv("PATH")}
-}
-
-// runProxy runs the proxy to completion and returns its exit status and output.
-func runProxy(t *testing.T, args ...string) (exitCode int, stdout, stderr string) {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, proxyBinary, args...)
-	cmd.Env = proxyEnv(t)
-	var outBuf, errBuf bytes.Buffer
-	cmd.Stdout = &outBuf
-	cmd.Stderr = &errBuf
-	err := cmd.Run()
-	if ctx.Err() != nil {
-		t.Fatalf("Proxy did not exit; stderr: %s", errBuf.String())
-	}
-	var exitErr *exec.ExitError
-	if err != nil && !errors.As(err, &exitErr) {
-		t.Fatalf("Failed to run proxy: %s", err)
-	}
-	return cmd.ProcessState.ExitCode(), outBuf.String(), errBuf.String()
-}
-
-// TestStartupFailuresReportErrors covers https://github.com/teslamotors/vehicle-command/issues/521:
-// startup failures must exit non-zero and explain themselves on stderr without -verbose.
-func TestStartupFailuresReportErrors(t *testing.T) {
-	requireProxyBinary(t)
-	for _, test := range []struct {
-		name string
-		// setup optionally invalidates c and returns the command line to run.
-		setup func(t *testing.T, c *credentials) []string
-		// want is a substring that must appear on stderr.
-		want string
-	}{
-		{
-			name: "missing TLS certificate",
-			setup: func(_ *testing.T, c *credentials) []string {
-				c.cert = filepath.Join(filepath.Dir(c.cert), "missing-cert.pem")
-				return c.args(0)
-			},
-			want: "missing-cert.pem",
-		},
-		{
-			name: "missing TLS key",
-			setup: func(_ *testing.T, c *credentials) []string {
-				c.tlsKey = filepath.Join(filepath.Dir(c.tlsKey), "missing-key.pem")
-				return c.args(0)
-			},
-			want: "missing-key.pem",
-		},
-		{
-			name: "unreadable TLS certificate",
-			setup: func(t *testing.T, c *credentials) []string {
-				makeUnreadable(t, c.cert)
-				return c.args(0)
-			},
-			want: "permission denied",
-		},
-		{
-			name: "unreadable TLS key",
-			setup: func(t *testing.T, c *credentials) []string {
-				makeUnreadable(t, c.tlsKey)
-				return c.args(0)
-			},
-			want: "permission denied",
-		},
-		{
-			// The key stays valid, so the certificate is what the proxy rejects. Only the
-			// error report is asserted: the parse error comes from crypto/tls and names
-			// neither the file nor a stable reason.
-			name: "malformed TLS certificate",
-			setup: func(t *testing.T, c *credentials) []string {
-				if err := os.WriteFile(c.cert, []byte("this is not a certificate\n"), 0600); err != nil {
-					t.Fatalf("Failed to write certificate: %s", err)
-				}
-				return c.args(0)
-			},
-			want: "Error:",
-		},
-		{
-			name: "port already in use",
-			setup: func(t *testing.T, c *credentials) []string {
-				return c.args(occupiedPort(t))
-			},
-			want: "address already in use",
-		},
-		{
-			name: "port already in use with verbose logging",
-			setup: func(t *testing.T, c *credentials) []string {
-				return append(c.args(occupiedPort(t)), "-verbose")
-			},
-			want: "address already in use",
-		},
-		{
-			// Already handled correctly before the fix; asserted to prevent a regression.
-			name: "missing command-authentication key",
-			setup: func(_ *testing.T, c *credentials) []string {
-				c.authKey = ""
-				return c.args(0)
-			},
-			want: "private key",
-		},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			c := newCredentials(t, elliptic.P256())
-			exitCode, stdout, stderr := runProxy(t, test.setup(t, &c)...)
-			assertEquals(t, 1, exitCode, "exit status")
-			assertEquals(t, "", stdout, "stdout")
-			if !strings.Contains(stderr, test.want) {
-				t.Errorf("stderr does not contain %q: %s", test.want, stderr)
-			}
-		})
-	}
+	return listener.Addr().(*net.TCPAddr).Port
 }
 
 // makeUnreadable removes all permissions from filename.
@@ -403,35 +224,165 @@ func makeUnreadable(t *testing.T, filename string) {
 	}
 }
 
-// TestStartupRejectsRecycledAuthenticationKey checks that reusing the command-authentication key
-// as the TLS key is still refused, now with a non-zero exit status and without echoing the key.
-func TestStartupRejectsRecycledAuthenticationKey(t *testing.T) {
-	requireProxyBinary(t)
+// TestRunReportsStartupFailures covers https://github.com/teslamotors/vehicle-command/issues/521:
+// a proxy that cannot start must report the reason rather than return nothing for main to discard.
+// Each case runs on an ephemeral port unless it is testing the bind itself, so that an unrelated
+// bind error cannot stand in for the failure under test.
+func TestRunReportsStartupFailures(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		// setup invalidates the configuration in the way the case is named after, and returns a
+		// substring that the resulting error must contain.
+		setup func(t *testing.T, config *cli.Config, httpConfig *HTTProxyConfig) string
+		// check makes any additional assertion about the kind of error returned.
+		check func(t *testing.T, err error, httpConfig *HTTProxyConfig)
+	}{
+		{
+			name: "missing TLS certificate",
+			setup: func(_ *testing.T, _ *cli.Config, httpConfig *HTTProxyConfig) string {
+				httpConfig.certFilename = filepath.Join(filepath.Dir(httpConfig.certFilename), "missing-cert.pem")
+				return "missing-cert.pem"
+			},
+		},
+		{
+			name: "missing TLS key",
+			setup: func(_ *testing.T, _ *cli.Config, httpConfig *HTTProxyConfig) string {
+				httpConfig.keyFilename = filepath.Join(filepath.Dir(httpConfig.keyFilename), "missing-key.pem")
+				return "missing-key.pem"
+			},
+		},
+		{
+			name: "unreadable TLS certificate",
+			setup: func(t *testing.T, _ *cli.Config, httpConfig *HTTProxyConfig) string {
+				makeUnreadable(t, httpConfig.certFilename)
+				return httpConfig.certFilename
+			},
+			check: func(t *testing.T, err error, httpConfig *HTTProxyConfig) {
+				assertPermissionError(t, err, httpConfig.certFilename)
+			},
+		},
+		{
+			name: "unreadable TLS key",
+			setup: func(t *testing.T, _ *cli.Config, httpConfig *HTTProxyConfig) string {
+				makeUnreadable(t, httpConfig.keyFilename)
+				return httpConfig.keyFilename
+			},
+			check: func(t *testing.T, err error, httpConfig *HTTProxyConfig) {
+				assertPermissionError(t, err, httpConfig.keyFilename)
+			},
+		},
+		{
+			// Only the certificate is replaced, so the valid key cannot satisfy the assertion.
+			// crypto/tls reports which input it could not parse but not its pathname, so the
+			// distinct reason is asserted instead of a filename.
+			name: "malformed TLS certificate",
+			setup: func(t *testing.T, _ *cli.Config, httpConfig *HTTProxyConfig) string {
+				writeGarbage(t, httpConfig.certFilename)
+				return "PEM data in certificate input"
+			},
+		},
+		{
+			name: "malformed TLS key",
+			setup: func(t *testing.T, _ *cli.Config, httpConfig *HTTProxyConfig) string {
+				writeGarbage(t, httpConfig.keyFilename)
+				return "PEM data in key input"
+			},
+		},
+		{
+			// Already handled correctly before the fix; asserted to prevent a regression.
+			name: "missing command-authentication key",
+			setup: func(_ *testing.T, config *cli.Config, _ *HTTProxyConfig) string {
+				config.KeyFilename = ""
+				return "command-authentication private key"
+			},
+		},
+		{
+			name: "port already in use",
+			setup: func(t *testing.T, _ *cli.Config, httpConfig *HTTProxyConfig) string {
+				httpConfig.port = occupiedPort(t)
+				return fmt.Sprintf("%s:%d", httpConfig.host, httpConfig.port)
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := newCredentials(t, elliptic.P256())
+			config := c.config(t)
+			httpConfig := c.proxyConfig()
+			want := test.setup(t, config, httpConfig)
+
+			err := run(config, httpConfig)
+			if err == nil {
+				t.Fatal("run returned no error")
+			}
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error does not contain %q: %s", want, err)
+			}
+			if test.check != nil {
+				test.check(t, err, httpConfig)
+			}
+		})
+	}
+}
+
+// assertPermissionError checks that err identifies filename as the file it could not read, which
+// tells an unreadable TLS key apart from an unreadable certificate.
+func assertPermissionError(t *testing.T, err error, filename string) {
+	t.Helper()
+	if !errors.Is(err, os.ErrPermission) {
+		t.Errorf("error is not a permission error: %s", err)
+	}
+	var pathError *os.PathError
+	if !errors.As(err, &pathError) {
+		t.Fatalf("error does not identify a file: %s", err)
+	}
+	assertEquals(t, filename, pathError.Path, "unreadable file")
+}
+
+func writeGarbage(t *testing.T, filename string) {
+	t.Helper()
+	if err := os.WriteFile(filename, []byte("this is not PEM data\n"), 0600); err != nil {
+		t.Fatalf("Failed to write %s: %s", filename, err)
+	}
+}
+
+// TestNewProxyServerRejectsRecycledCommandKey checks that a TLS key which is a copy of the
+// command-authentication key is still refused, with instructions and without echoing the key. The
+// copy has its own pathname, so the rejection can only come from comparing public keys.
+func TestNewProxyServerRejectsRecycledCommandKey(t *testing.T) {
 	c := newCredentials(t, elliptic.P256())
 	keyPEM, err := os.ReadFile(c.authKey)
 	if err != nil {
 		t.Fatalf("Failed to read key: %s", err)
 	}
-	c.tlsKey = c.authKey
+	recycled := filepath.Join(filepath.Dir(c.authKey), "recycled-tls-key.pem")
+	if err := os.WriteFile(recycled, keyPEM, 0600); err != nil {
+		t.Fatalf("Failed to write key: %s", err)
+	}
 
-	exitCode, stdout, stderr := runProxy(t, c.args(0)...)
-	assertEquals(t, 1, exitCode, "exit status")
-	assertEquals(t, "", stdout, "stdout")
-	if !strings.Contains(stderr, "unsafe to use the same private key") {
-		t.Errorf("stderr does not explain the rejection: %s", stderr)
+	httpConfig := c.proxyConfig()
+	httpConfig.keyFilename = recycled
+	_, err = newProxyServer(c.config(t), httpConfig)
+	if !errors.Is(err, errSharedKey) {
+		t.Fatalf("Expected a shared key error, got %v", err)
+	}
+	for _, want := range []string{
+		"It is unsafe to use the same private key for TLS and command authentication.",
+		"Generate a new TLS key for this server.",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error does not contain %q: %s", want, err)
+		}
 	}
 	// The key body is the second line of the PEM file.
 	keyBody := strings.Split(strings.TrimSpace(string(keyPEM)), "\n")[1]
-	if strings.Contains(stdout+stderr, keyBody) {
-		t.Error("Output contains private key material")
+	if strings.Contains(err.Error(), keyBody) {
+		t.Error("error contains private key material")
 	}
 }
 
-// TestStartupServesTLS checks that a valid configuration still serves a verified HTTPS request and
-// reports no error while doing so. The proxy installs no signal handler, so the test terminates it
-// by cancelling its context rather than exercising a shutdown path.
-func TestStartupServesTLS(t *testing.T) {
-	requireProxyBinary(t)
+// TestServeTLS checks that a valid configuration serves a verified HTTPS request and reports no
+// error when the server is shut down.
+func TestServeTLS(t *testing.T) {
 	for _, test := range []struct {
 		name  string
 		curve elliptic.Curve
@@ -441,65 +392,46 @@ func TestStartupServesTLS(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := newCredentials(t, test.curve)
-			port := freePort(t)
-
-			ctx, cancel := context.WithCancel(context.Background())
-			cmd := exec.CommandContext(ctx, proxyBinary, c.args(port)...)
-			cmd.Env = proxyEnv(t)
-			var outBuf, errBuf bytes.Buffer
-			cmd.Stdout = &outBuf
-			cmd.Stderr = &errBuf
-			if err := cmd.Start(); err != nil {
-				t.Fatalf("Failed to start proxy: %s", err)
+			server, err := newProxyServer(c.config(t), c.proxyConfig())
+			if err != nil {
+				t.Fatalf("Failed to create server: %s", err)
 			}
-			// Output buffers are only safe to read after Wait returns.
-			var once sync.Once
-			wait := func() {
-				once.Do(func() {
-					_ = cmd.Wait()
-				})
-			}
+			// The listener is bound before the request is sent, so the test does not need to
+			// poll for the server to come up or reserve a port in advance.
+			listener := listenLoopback(t)
 			t.Cleanup(func() {
-				cancel()
-				wait()
+				_ = server.Close()
+				_ = listener.Close()
 			})
+			served := make(chan error, 1)
+			go func() {
+				served <- serve(server, listener, c.cert, c.tlsKey)
+			}()
 
 			pool := x509.NewCertPool()
 			if !pool.AppendCertsFromPEM(c.certPEM) {
 				t.Fatal("Failed to load test certificate")
 			}
 			client := &http.Client{
-				Timeout: time.Second,
+				Timeout: 10 * time.Second,
 				Transport: &http.Transport{
 					TLSClientConfig: &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12},
 				},
 			}
-			healthURL := fmt.Sprintf("https://localhost:%d/health", port)
-
-			var status int
-			var lastErr error
-			deadline := time.Now().Add(30 * time.Second)
-			for time.Now().Before(deadline) {
-				response, err := client.Get(healthURL)
-				if err != nil {
-					lastErr = err
-					time.Sleep(50 * time.Millisecond)
-					continue
-				}
-				status = response.StatusCode
-				_ = response.Body.Close()
-				break
+			response, err := client.Get(fmt.Sprintf("https://%s/health", listener.Addr()))
+			if err != nil {
+				t.Fatalf("Failed to query the proxy: %s", err)
 			}
-			if status == 0 {
-				t.Fatalf("Proxy never served %s: %s", healthURL, lastErr)
+			assertEquals(t, http.StatusOK, response.StatusCode, "status code")
+			if err := response.Body.Close(); err != nil {
+				t.Errorf("Failed to close response body: %s", err)
 			}
-			assertEquals(t, http.StatusOK, status, "status code")
 
-			cancel()
-			wait()
-			assertEquals(t, "", outBuf.String(), "stdout")
-			if strings.Contains(errBuf.String(), "Error") {
-				t.Errorf("Proxy reported an error during normal operation: %s", errBuf.String())
+			if err := server.Close(); err != nil {
+				t.Errorf("Failed to close server: %s", err)
+			}
+			if err := <-served; err != nil {
+				t.Errorf("Server stopped with an error: %s", err)
 			}
 		})
 	}
