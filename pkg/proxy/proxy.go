@@ -289,7 +289,9 @@ func (p *Proxy) forwardRequest(acct *account.Account, w http.ResponseWriter, req
 		result, err := p.client.Do(proxyReq)
 
 		if err != nil {
-			if urlErr, ok := err.(*url.Error); ok && urlErr.Timeout() {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				writeJSONError(w, http.StatusGatewayTimeout, err)
+			} else if urlErr, ok := err.(*url.Error); ok && urlErr.Timeout() {
 				writeJSONError(w, http.StatusGatewayTimeout, urlErr)
 			} else {
 				writeJSONError(w, http.StatusBadGateway, err)

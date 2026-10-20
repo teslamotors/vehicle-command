@@ -3,8 +3,11 @@ package proxy
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 	"time"
 )
@@ -77,7 +80,11 @@ func TestForwardRequestCancellationBoundaries(t *testing.T) {
 		})
 		req := httptest.NewRequest(http.MethodGet, "/api/1/vehicles", nil).WithContext(ctx)
 		req.Header.Set("Authorization", authHeader())
-		p.ServeHTTP(httptest.NewRecorder(), req)
+		rec := httptest.NewRecorder()
+		p.ServeHTTP(rec, req)
+		if rec.Code != http.StatusGatewayTimeout {
+			t.Fatalf("status=%d body=%s, want deadline mapped to 504", rec.Code, rec.Body.String())
+		}
 	})
 	t.Run("normal_success", func(t *testing.T) {
 		p := newTestProxy(t)
@@ -97,4 +104,35 @@ func TestForwardRequestCancellationBoundaries(t *testing.T) {
 			t.Fatalf("attempts=%d status=%d body=%s", attempts, rec.Code, rec.Body.String())
 		}
 	})
+}
+
+func TestForwardRequestWrappedCancellationStatus(t *testing.T) {
+	for _, wrapped := range []bool{false, true} {
+		t.Run(fmt.Sprintf("extra_wrapper=%t", wrapped), func(t *testing.T) {
+			p := newTestProxy(t)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			attempts := 0
+			p.client = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				attempts++
+				cancel()
+				// http.Client.Do wraps a cancelled context in *url.Error.
+				err := error(&url.Error{Op: req.Method, URL: req.URL.String(), Err: req.Context().Err()})
+				if wrapped {
+					err = fmt.Errorf("transport wrapper: %w", err)
+				}
+				return nil, err
+			})
+			req := httptest.NewRequest(http.MethodGet, "/api/1/vehicles", nil).WithContext(ctx)
+			req.Header.Set("Authorization", authHeader())
+			rec := httptest.NewRecorder()
+			p.ServeHTTP(rec, req)
+			if attempts != 1 || rec.Code != http.StatusGatewayTimeout {
+				t.Fatalf("attempts=%d status=%d body=%s, want one attempt and 504", attempts, rec.Code, rec.Body.String())
+			}
+			if !strings.Contains(decodeResponse(t, rec.Body.Bytes()).Error, context.Canceled.Error()) {
+				t.Fatalf("response does not preserve cancellation: %s", rec.Body.String())
+			}
+		})
+	}
 }

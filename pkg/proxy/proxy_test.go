@@ -663,6 +663,9 @@ func TestForwardRequestPropagatesRequestCancellation(t *testing.T) {
 	if err := <-upstreamErr; !errors.Is(err, context.Canceled) {
 		t.Fatalf("upstream context error = %v, want context.Canceled", err)
 	}
+	if rec.Code != http.StatusGatewayTimeout {
+		t.Fatalf("status=%d body=%s, want cancellation mapped to 504", rec.Code, rec.Body.String())
+	}
 }
 
 func TestServeHTTPUnsupportedVINForwards(t *testing.T) {
