@@ -3,11 +3,13 @@ package authentication
 import (
 	"bytes"
 	"crypto/rand"
+	"errors"
 	"testing"
 	"time"
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/carserver"
 	"github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/signatures"
 	universal "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/universalmessage"
 )
@@ -41,6 +43,175 @@ func runVerifyTest(t *testing.T, verifier *Verifier, message *universal.Routable
 	}
 	if expectSessionInfo != gotSessionInfo {
 		t.Errorf("expectSessionInfo=%v, but gotSessionInfo=%v", expectSessionInfo, gotSessionInfo)
+	}
+}
+
+func expectDetachedDecodingError(t *testing.T, prefix []byte, expected error) {
+	t.Helper()
+	verifier, signer := getGCMVerifierAndSigner(t)
+	verifier.domain = universal.Domain_DOMAIN_INFOTAINMENT
+
+	message := &universal.RoutableMessage{
+		ToDestination: &universal.Destination{
+			SubDestination: &universal.Destination_Domain{Domain: universal.Domain_DOMAIN_INFOTAINMENT},
+		},
+	}
+	if err := signer.addDetachedAuthentication(message, prefix, []byte("secret"), time.Minute); err != nil {
+		t.Fatalf("Error signing message: %s", err)
+	}
+	if _, err := verifier.Verify(message); !errors.Is(err, expected) {
+		t.Fatalf("Expected detached decryption error but got %s", err)
+	}
+}
+
+func TestInvalidDetachedEncryptionPrefixes(t *testing.T) {
+	// "2: { 46: 5}"
+	invalidWireType := []byte{0x12, 0x03, 0xf0, 0x02, 0x05}
+
+	// 2: { 46: { 1: "secret" 2: "extra" }}
+	multipleFields := []byte{0x12, 0x10, 0xf2, 0x02, 0x0d, 0x08, 0x73, 0x65, 0x63, 0x72, 0x65, 0x74,
+		0x10, 0x65, 0x78, 0x74, 0x72, 0x61}
+
+	// 2: { 46: { 1: "secret" }}
+	extraBytes := []byte{0x12, 0x0a, 0xf2, 0x02, 0x07, 0x08, 0x73, 0x65, 0x63, 0x72, 0x65, 0x74}
+
+	extraBytes = append(extraBytes, 0x00, 0x01, 0x02)
+	tests := map[string][]byte{
+		"empty":             {},
+		"invalid protobuf":  {0xFF, 0xFF, 0xFF},
+		"invalid wire type": invalidWireType,
+		"multiple fields":   multipleFields,
+		"extra bytes":       extraBytes,
+	}
+	for name, payload := range tests {
+		t.Run(name, func(t *testing.T) {
+			expectDetachedDecodingError(t, payload, ErrInvalidDetachedPrefix)
+		})
+	}
+}
+
+func TestDetachPrefixTooLong(t *testing.T) {
+	// 2: { 46: { 1: "secret" }}
+	validCommand := []byte{0x12, 0x0a, 0xf2, 0x02, 0x07, 0x08, 0x73, 0x65, 0x63, 0x72, 0x65, 0x74}
+	verifier, signer := getGCMVerifierAndSigner(t)
+	verifier.domain = universal.Domain_DOMAIN_INFOTAINMENT
+
+	message := &universal.RoutableMessage{
+		ToDestination: &universal.Destination{
+			SubDestination: &universal.Destination_Domain{Domain: universal.Domain_DOMAIN_INFOTAINMENT},
+		},
+		Payload: &universal.RoutableMessage_ProtobufMessageAsBytes{
+			ProtobufMessageAsBytes: validCommand,
+		},
+	}
+
+	if err := signer.EncryptDetach(message, time.Minute); err != nil {
+		t.Fatalf("Error signing message: %s", err)
+	}
+
+	message.GetSignatureData().GetAES_GCM_DetachedData().Prefix = bytes.Repeat([]byte{0xFF}, 300)
+
+	if _, err := verifier.Verify(message); !errors.Is(err, ErrMetadataFieldTooLong) {
+		t.Fatalf("Expected detached decryption error but got %s", err)
+	}
+}
+
+func TestDetachedEncryption(t *testing.T) {
+	verifier, signer := getGCMVerifierAndSigner(t)
+	verifier.domain = universal.Domain_DOMAIN_INFOTAINMENT
+	// 2: { 46: { 1: "secret" }}
+	command := []byte{0x12, 0x0a, 0xf2, 0x02, 0x07, 0x08, 0x73, 0x65, 0x63, 0x72, 0x65, 0x74}
+	// "2: { 46: {}}"
+	plaintextPrefix := []byte{0x12, 0x03, 0xf2, 0x02, 0x00}
+
+	message := &universal.RoutableMessage{
+		ToDestination: &universal.Destination{
+			SubDestination: &universal.Destination_Domain{Domain: universal.Domain_DOMAIN_INFOTAINMENT},
+		},
+		Payload: &universal.RoutableMessage_ProtobufMessageAsBytes{
+			ProtobufMessageAsBytes: command,
+		},
+	}
+	if err := signer.EncryptDetach(message, time.Second); err != nil {
+		t.Fatalf("Error signing message: %s", err)
+	}
+	encoded, err := proto.Marshal(message)
+	if err != nil {
+		t.Fatalf("Error re-encoding message: %s", err)
+	}
+	if bytes.Contains(encoded, []byte("secret")) {
+		t.Errorf("Message was not encrypted: %x", encoded)
+	}
+	if !bytes.Equal(message.GetSignatureData().GetAES_GCM_DetachedData().GetPrefix(), plaintextPrefix) {
+		t.Errorf("Message prefix was modified: %x", message.GetSignatureData().GetAES_GCM_DetachedData())
+	}
+	plaintext, err := verifier.Verify(message)
+	if err != nil {
+		t.Fatalf("Error verifying message: %s", err)
+	}
+	if !bytes.Equal(plaintext, command) {
+		t.Errorf("Didn't recover original plaintext: %x", plaintext)
+	}
+
+	message.GetSignatureData().GetAES_GCM_DetachedData().Counter = 1
+	runVerifyTest(t, verifier, message, errCodeInvalidToken, true)
+
+	message.GetSignatureData().GetAES_GCM_DetachedData().Counter = 10
+	message.GetSignatureData().GetAES_GCM_DetachedData().Tag[0] ^= 1
+	runVerifyTest(t, verifier, message, errCodeInvalidSignature, true)
+}
+
+func TestDetachedNonceLength(t *testing.T) {
+	verifier, signer := getGCMVerifierAndSigner(t)
+	verifier.domain = universal.Domain_DOMAIN_INFOTAINMENT
+	message := &universal.RoutableMessage{
+		ToDestination: &universal.Destination{
+			SubDestination: &universal.Destination_Domain{Domain: universal.Domain_DOMAIN_INFOTAINMENT},
+		},
+		Payload: &universal.RoutableMessage_ProtobufMessageAsBytes{
+			ProtobufMessageAsBytes: []byte{0x12, 0x0a, 0xf2, 0x02, 0x07, 0x08, 0x73, 0x65, 0x63, 0x72, 0x65, 0x74},
+		},
+	}
+	if err := signer.EncryptDetach(message, time.Minute); err != nil {
+		t.Fatalf("Error signing message: %s", err)
+	}
+	sigData := message.GetSignatureData().GetAES_GCM_DetachedData()
+	for _, nonce := range [][]byte{append(sigData.Nonce, 3), {3}, nil} {
+		sigData.Nonce = nonce
+		runVerifyTest(t, verifier, message, universal.MessageFault_E_MESSAGEFAULT_ERROR_IV_INCORRECT_LENGTH, true)
+	}
+}
+
+func TestEncryptDetachRejectsInvalidCommands(t *testing.T) {
+	_, signer := getGCMVerifierAndSigner(t)
+	tests := map[string]struct {
+		domain  universal.Domain
+		payload []byte
+	}{
+		"missing payload":    {universal.Domain_DOMAIN_INFOTAINMENT, nil},
+		"unsupported domain": {universal.Domain_DOMAIN_BROADCAST, []byte{0x12, 0x00}},
+		"varint command":     {universal.Domain_DOMAIN_VEHICLE_SECURITY, []byte{0x10, 0x01}},
+		"too shallow":        {universal.Domain_DOMAIN_INFOTAINMENT, []byte{0x12, 0x00}},
+		"trailing data":      {universal.Domain_DOMAIN_VEHICLE_SECURITY, []byte{0x0a, 0x00, 0x10, 0x01}},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			message := &universal.RoutableMessage{
+				ToDestination: &universal.Destination{
+					SubDestination: &universal.Destination_Domain{Domain: test.domain},
+				},
+			}
+			if test.payload != nil {
+				message.Payload = &universal.RoutableMessage_ProtobufMessageAsBytes{ProtobufMessageAsBytes: test.payload}
+			}
+			original := proto.Clone(message)
+			if err := signer.EncryptDetach(message, time.Minute); err == nil {
+				t.Fatal("Expected error")
+			}
+			if !proto.Equal(original, message) {
+				t.Errorf("Message was modified on error: %v", message)
+			}
+		})
 	}
 }
 
@@ -524,7 +695,7 @@ func TestGCMWindowRecent(t *testing.T) {
 }
 
 func TestHMAC(t *testing.T) {
-	verifier, signer := getGCMVerifierAndSigner(t)
+	verifier, signer := getHMACVerifierAndSigner(t)
 	message := getTestMessage()
 
 	if err := signer.AuthorizeHMAC(message, time.Minute); err != nil {
@@ -542,7 +713,7 @@ func TestHMAC(t *testing.T) {
 }
 
 func TestHMACTampered(t *testing.T) {
-	verifier, signer := getGCMVerifierAndSigner(t)
+	verifier, signer := getHMACVerifierAndSigner(t)
 	message := getTestMessage()
 
 	if err := signer.AuthorizeHMAC(message, time.Minute); err != nil {
@@ -559,6 +730,67 @@ func TestHMACTampered(t *testing.T) {
 
 	tag[0] ^= 1
 	runVerifyTest(t, verifier, message, errCodeOk, false)
+}
+
+func TestDetachedEncryptionUprev(t *testing.T) {
+	verifier, signer := getVerifierAndSigner(t, DefaultVerifierFlags)
+	verifier.domain = universal.Domain_DOMAIN_INFOTAINMENT
+	message := getTestMessage()
+	message.ToDestination = &universal.Destination{
+		SubDestination: &universal.Destination_Domain{Domain: universal.Domain_DOMAIN_INFOTAINMENT},
+	}
+	action := carserver.Action{
+		ActionMsg: &carserver.Action_VehicleAction{
+			VehicleAction: &carserver.VehicleAction{
+				VehicleActionMsg: &carserver.VehicleAction_VehicleControlSetValetModeAction{
+					VehicleControlSetValetModeAction: &carserver.VehicleControlSetValetModeAction{
+						Password: "1234",
+					},
+				},
+			},
+		},
+	}
+	plaintext, err := proto.Marshal(&action)
+	if err != nil {
+		t.Fatalf("Error creating command: %s", err)
+	}
+	message.Payload = &universal.RoutableMessage_ProtobufMessageAsBytes{
+		ProtobufMessageAsBytes: plaintext,
+	}
+	// Expected behavior: the signer should use the verifier's session info, see that the verifier
+	// supports detached AES-GCM, and automatically upgrade to that.
+	if err := signer.AuthorizeHMAC(message, time.Minute); err != nil {
+		t.Fatalf("Error signing message: %s", err)
+	}
+	if message.GetSignatureData().GetAES_GCM_DetachedData() == nil {
+		t.Fatalf("Message not signed with detached GCM")
+	}
+
+	// The prefix should be a plaintext protobuf that indicates a Set Valet Mode action, but with
+	// the message contents removed.
+	if err := proto.Unmarshal(message.GetSignatureData().GetAES_GCM_DetachedData().GetPrefix(), &action); err != nil {
+		t.Fatalf("Error decoding message: %s", err)
+	}
+	details := action.GetVehicleAction().GetVehicleControlSetValetModeAction()
+	if details == nil {
+		t.Fatalf("Wrong action type: %x", message.GetProtobufMessageAsBytes())
+	}
+	if details.GetPassword() != "" {
+		t.Fatal("Failed to redact command parameters from plaintext data")
+	}
+
+	plaintext, err = verifier.Verify(message)
+	if err != nil {
+		t.Fatalf("Error verifying message: %s", err)
+	}
+
+	if err := proto.Unmarshal(plaintext, &action); err != nil {
+		t.Fatalf("Error decoding message: %s", err)
+	}
+
+	if action.GetVehicleAction().GetVehicleControlSetValetModeAction().GetPassword() != "1234" {
+		t.Fatal("Failed to recover original command parameters")
+	}
 }
 
 func TestNoSignatureData(t *testing.T) {

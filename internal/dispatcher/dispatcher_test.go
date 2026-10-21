@@ -77,9 +77,13 @@ func testCommand() *universal.RoutableMessage {
 		ToDestination: &universal.Destination{
 			SubDestination: &universal.Destination_Domain{Domain: testDomain},
 		},
-		Payload: &universal.RoutableMessage_ProtobufMessageAsBytes{ProtobufMessageAsBytes: []byte("hello")},
+		Payload: &universal.RoutableMessage_ProtobufMessageAsBytes{ProtobufMessageAsBytes: testCommandPayload},
 	}
 }
+
+// testCommandPayload is a well-formed Infotainment command envelope, which allows
+// AuthMethodHMAC to upgrade to detached encryption: 2: { 46: { 1: "hello" }}
+var testCommandPayload = []byte{0x12, 0x0a, 0xf2, 0x02, 0x07, 0x0a, 0x05, 'h', 'e', 'l', 'l', 'o'}
 
 type dummyConnector struct {
 	inbox       []*universal.RoutableMessage
@@ -323,6 +327,40 @@ func getTestSetup(t *testing.T) (*Dispatcher, *dummyConnector) {
 		t.Fatalf("Couldn't start session: %s", err)
 	}
 	return dispatcher, conn
+}
+
+func TestHMACUpgradesToDetached(t *testing.T) {
+	dispatcher, conn := getTestSetup(t)
+	defer conn.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), quiescentDelay)
+	defer cancel()
+
+	if _, err := dispatcher.Send(ctx, testCommand(), connector.AuthMethodHMAC); err != nil {
+		t.Fatalf("Error sending command: %s", err)
+	}
+
+	for {
+		conn.lock.Lock()
+		var sigData *signatures.SignatureData
+		for _, message := range conn.inbox {
+			if message.GetSignatureData() != nil {
+				sigData = message.GetSignatureData()
+			}
+		}
+		conn.lock.Unlock()
+		if sigData != nil {
+			if sigData.GetAES_GCM_DetachedData() == nil {
+				t.Fatalf("Expected detached signature data but got %T", sigData.GetSigType())
+			}
+			return
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal("Command never reached connector")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
 }
 
 func TestStartSession(t *testing.T) {
