@@ -17,6 +17,7 @@ enum Tag
     TAG_FLAGS           = 7;
     TAG_REQUEST_HASH    = 8;
     TAG_FAULT           = 9;
+    TAG_COMMAND_PREFIX  = 10;
     TAG_END             = 255;
 }
 
@@ -28,6 +29,7 @@ enum SignatureType
     reserved 7;
     SIGNATURE_TYPE_HMAC_PERSONALIZED    = 8;
     SIGNATURE_TYPE_AES_GCM_RESPONSE     = 9;
+    SIGNATURE_TYPE_AES_GCM_DETACHED     = 10;
 }
 
 message KeyIdentity {
@@ -44,6 +46,14 @@ message AES_GCM_Personalized_Signature_Data {
     uint32  counter     = 3;
     fixed32 expires_at  = 4;
     bytes   tag         = 5;
+}
+
+message AES_GCM_Detached_Signature_Data {
+    bytes   nonce       = 1;
+    uint32  counter     = 2;
+    fixed32 expires_at  = 3;
+    bytes   tag         = 4;
+    bytes   prefix      = 5;
 }
 
 message AES_GCM_Response_Signature_Data {
@@ -71,6 +81,7 @@ message SignatureData {
         HMAC_Signature_Data                 session_info_tag          = 6;
         HMAC_Personalized_Signature_Data    HMAC_Personalized_data    = 8;
         AES_GCM_Response_Signature_Data     AES_GCM_Response_data     = 9;
+        AES_GCM_Detached_Signature_Data     AES_GCM_Detached_data     = 10;
     }
 }
 
@@ -83,6 +94,10 @@ enum Session_Info_Status {
     SESSION_INFO_STATUS_KEY_NOT_ON_WHITELIST = 1;
 }
 
+enum SessionInfoFlags {
+    SESSION_INFO_FLAG_SUPPORTS_DETACHED_ENCRYPTION = 0;
+}
+
 
 message SessionInfo {
     uint32  counter            = 1;
@@ -91,4 +106,5 @@ message SessionInfo {
     fixed32 clock_time         = 4;
     Session_Info_Status status = 5;
     uint32  handle             = 6;
+    uint32  flags              = 7;
 }
