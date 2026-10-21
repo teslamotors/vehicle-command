@@ -314,6 +314,9 @@ func (s *Signer) Decrypt(message *universal.RoutableMessage, id []byte) (uint32,
 	if gcmInfo == nil {
 		return 0, newError(errCodeBadParameter, "missing AES-GCM data")
 	}
+	if len(gcmInfo.GetNonce()) != nonceLength {
+		return 0, newError(universal.MessageFault_E_MESSAGEFAULT_ERROR_IV_INCORRECT_LENGTH, "invalid AES-GCM nonce length")
+	}
 	authenticatedData, err := s.responseMetadata(message, id, gcmInfo.Counter)
 	if err != nil {
 		return 0, nil
