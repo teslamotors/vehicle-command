@@ -14,6 +14,8 @@ import (
 	universal "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/universalmessage"
 )
 
+const nonceLength = 12
+
 // A Verifier checks the authenticity of commands sent by a Signer.
 type Verifier struct {
 	Peer
@@ -232,6 +234,10 @@ func (v *Verifier) verifyGCM(message *universal.RoutableMessage, gcmData *signat
 	meta := newMetadata()
 	if err := v.extractMetadata(meta, message, gcmData, signatures.SignatureType_SIGNATURE_TYPE_AES_GCM_PERSONALIZED); err != nil {
 		return nil, err
+	}
+
+	if len(gcmData.GetNonce()) != nonceLength {
+		return nil, v.signatureError(universal.MessageFault_E_MESSAGEFAULT_ERROR_IV_INCORRECT_LENGTH, message.GetUuid())
 	}
 
 	plaintext, err = v.session.Decrypt(

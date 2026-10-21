@@ -436,6 +436,23 @@ func TestGCMNoParameters(t *testing.T) {
 	runVerifyTest(t, verifier, message, errCodeBadParameter, false)
 }
 
+func TestGCMNonceLength(t *testing.T) {
+	verifier, signer := getGCMVerifierAndSigner(t)
+	message := getTestMessage()
+	if err := signer.Encrypt(message, time.Minute); err != nil {
+		t.Fatalf("Error signing message: %s", err)
+	}
+	sigData := message.GetSignatureData().GetAES_GCM_PersonalizedData()
+	sigData.Nonce = append(sigData.Nonce, byte(3))
+	runVerifyTest(t, verifier, message, universal.MessageFault_E_MESSAGEFAULT_ERROR_IV_INCORRECT_LENGTH, true)
+
+	sigData.Nonce = []byte{3}
+	runVerifyTest(t, verifier, message, universal.MessageFault_E_MESSAGEFAULT_ERROR_IV_INCORRECT_LENGTH, true)
+
+	sigData.Nonce = nil
+	runVerifyTest(t, verifier, message, universal.MessageFault_E_MESSAGEFAULT_ERROR_IV_INCORRECT_LENGTH, true)
+}
+
 func TestGCMWindow(t *testing.T) {
 	var messages [windowSize]*universal.RoutableMessage
 	duration := (maxSecondsWithoutCounter - 2) * time.Second
