@@ -1126,6 +1126,39 @@ var commands = map[string]*Command{
 			return car.ParentalControlsClearPIN(ctx)
 		},
 	},
+	"pin-to-drive": {
+		help:             "Control PIN to Drive. Once a PIN is set, the vehicle keeps it until cleared and ignores any new PIN provided with 'on'.",
+		requiresAuth:     true,
+		requiresFleetAPI: true,
+		args: []Argument{
+			{name: "ACTION", help: "'on', 'off', or 'clear' (disables PIN to Drive and clears the stored PIN)"},
+		},
+		optional: []Argument{
+			{name: "PIN", help: "Four-digit PIN. Required for 'on'."},
+		},
+		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, args map[string]string) error {
+			pin, havePIN := args["PIN"]
+			switch strings.ToLower(args["ACTION"]) {
+			case "on":
+				if !havePIN {
+					return fmt.Errorf("'on' requires a PIN")
+				}
+				return car.SetPINToDrive(ctx, true, pin)
+			case "off":
+				if havePIN {
+					return fmt.Errorf("'off' does not accept a PIN")
+				}
+				return car.SetPINToDrive(ctx, false, "")
+			case "clear":
+				if havePIN {
+					return fmt.Errorf("'clear' does not accept a PIN")
+				}
+				return car.ClearPINToDrive(ctx)
+			default:
+				return fmt.Errorf("action must be 'on', 'off', or 'clear'")
+			}
+		},
+	},
 	"charging-schedule-add": {
 		help:             "Schedule charge for DAYS START_TIME-END_TIME at LATITUDE LONGITUDE. The END_TIME may be on the following day.",
 		requiresAuth:     true,
