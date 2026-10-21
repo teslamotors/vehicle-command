@@ -533,13 +533,14 @@ The client serializes the following metadata values into a string `M`:
 
 | Value | Tag | Description |
 | ----- | --- | ----------- |
-| Signature type | `Signatures.TAG_SIGNATURE_TYPE` | Either `Signatures.SIGNATURE_TYPE_HMAC_PERSONALIZED` or `Signatures.SIGNATURE_TYPE_AES_GCM_PERSONALIZED`. See below. |
+| Signature type | `Signatures.TAG_SIGNATURE_TYPE` | `Signatures.SIGNATURE_TYPE_HMAC_PERSONALIZED`, `Signatures.SIGNATURE_TYPE_AES_GCM_PERSONALIZED`, or `Signatures.SIGNATURE_TYPE_AES_GCM_DETACHED`. See below. |
 | Domain         | `Signatures.TAG_DOMAIN`         | Typically `UniversalMessage.DOMAIN_VEHICLE_SECURITY` or `UniversalMessage.DOMAIN_INFOTAINMENT` |
 | VIN            | `Signatures.TAG_PERSONALIZATION`| 17-character vehicle identification number |
 | Epoch          | `Signatures.TAG_EPOCH`          | Copied from `session_info.epoch`           |
 | Expiration time| `Signatures.TAG_EXPIRES_AT`     | Time in seconds according to domain's clock |
 | Counter        | `Signatures.TAG_COUNTER`        | Monotonic counter, initially `session_info.counter` |
 | Flags          | `Signatures.TAG_FLAGS`          | Request flag bit mask. Only included if non-zero. |
+| Command prefix | `Signatures.TAG_COMMAND_PREFIX` | Plaintext command prefix. Only included for [detached encryption](#detached-aes-gcm-encryption). |
 
 Setting the expiration time requires the client to track the difference between
 the domain's clock and the local clock. Note that each domain has its own clock.
@@ -550,29 +551,15 @@ arrival, while VCSEC requires that messages arrive in counter order.
 
 ### Authentication methods
 
-Vehicles support two authentication methods: HMAC-SHA256 and AES-GCM. Messages
-sent with HMAC-SHA256 authentication are sent in plaintext. This allows the
-Fleet API backend to (1) reject commands based on OAuth scopes and (2) drop
-deprecated messages sent by VCSEC that would require a more complex client
-state machine to disambiguate. Commands sent with AES-GCM are encrypted; Fleet
-API blocks these commands because it cannot enforce OAuth scopes.
+Vehicles support three authentication methods: AES-GCM, detached AES-GCM, and
+HMAC-SHA256. AES-GCM messages are encrypted, and this method should be used
+over BLE. Detached AES-GCM messages have the command type as plaintext but
+encrypt the command parameters, allowing Fleet API to enforce the OAuth scopes
+granted by the vehicle's owner. HMAC-SHA256 messages are authenticated
+plaintext, and should only be used with Fleet API when the vehicle or domain
+does not support detached AES-GCM.
 
-The official Golang package uses AES-GCM over BLE and HMAC-SHA256 over Fleet
-API.
-
-### HMAC-SHA256 authentication
-
-To add HMAC-SHA256 authentication:
-
- - Derive an HMAC-SHA256 key `K' = HMAC-SHA256(K, "authenticated command")`.
-   The "authenticated command" is a string literal.
- - Construct a RoutableMessage as described [above](#Message-encoding).
- - Set the `RoutableMessage.payload.protobuf_message_as_bytes` to `P`.
- - Set the `RoutableMessage.signature_data.signer_identity.public_key` to
-   `ENCODE_PUBLIC(C)` (see [Notation](#Notation)).
- - Compute the HMAC tag `tag = HMAC-SHA256(K', M || P)`.
- - Populate `RoutableMessage.signature_data.HMAC_PersonalizedData` with the
-   metadata values and authentication `tag`.
+The official Golang SDK uses the recommended method automatically.
 
 ### AES-GCM encryption
 
@@ -696,6 +683,56 @@ mismatch.
 
 ---
 
+### Detached AES-GCM encryption
+
+Detached encryption splits the command protobuf into a plaintext prefix `P`
+that identifies the command and an encrypted payload that contains the
+command's parameters.
+
+If a domain supports detached encryption, it sets the `1 <<
+Signatures.SESSION_INFO_FLAG_SUPPORTS_DETACHED_ENCRYPTION` bit in the
+`session_info.flags` field of its handshake response. Currently, only
+`UniversalMessage.DOMAIN_INFOTAINMENT` supports detached encryption.
+
+The payload is the contents of the innermost field, and the prefix is `P` with
+the innermost field's contents removed. For example, the "Turn HVAC on" command
+above, `P = 120452020801`, has payload `0801` and prefix `12025200`.
+
+To encrypt `P` using detached encryption:
+
+ - Serialize the metadata `M` as [above](#metadata), using
+   `Signatures.SIGNATURE_TYPE_AES_GCM_DETACHED` as the signature type and
+   including the prefix as the `Signatures.TAG_COMMAND_PREFIX` value.
+ - Encrypt the payload (not `P`) using the same AES-GCM parameters described in
+   [AES-GCM encryption](#aes-gcm-encryption).
+ - Construct a RoutableMessage as described [above](#Message-encoding).
+ - Set the `RoutableMessage.payload.protobuf_message_as_bytes` to the
+   ciphertext.
+ - Set the `RoutableMessage.signature_data.signer_identity.public_key` to
+   `ENCODE_PUBLIC(C)` (see [Notation](#Notation)).
+ - Populate `RoutableMessage.signature_data.AES_GCM_Detached_data` with the
+   nonce, counter, expiration time, authentication `tag`, and prefix.
+
+After decrypting the payload, the vehicle reconstructs `P` by inserting the
+payload into the innermost field of the prefix.
+
+### HMAC-SHA256 authentication
+
+To add HMAC-SHA256 authentication:
+
+ - Derive an HMAC-SHA256 key `K' = HMAC-SHA256(K, "authenticated command")`.
+   The "authenticated command" is a string literal.
+ - Construct a RoutableMessage as described [above](#Message-encoding).
+ - Set the `RoutableMessage.payload.protobuf_message_as_bytes` to `P`.
+ - Set the `RoutableMessage.signature_data.signer_identity.public_key` to
+   `ENCODE_PUBLIC(C)` (see [Notation](#Notation)).
+ - Compute the HMAC tag `tag = HMAC-SHA256(K', M || P)`.
+ - Populate `RoutableMessage.signature_data.HMAC_PersonalizedData` with the
+   metadata values and authentication `tag`.
+
+
+---
+
 ### Caching session state
 
 If a client is not running continuously, it should cache session state to disk,
@@ -761,13 +798,16 @@ plaintext.
 
 The client must compute the "request hash" of each request it sends. This value
 will be used when decrypting the response. The request hash is a single byte
-that encodes the authentication method used by the request (either
-`Signatures.SIGNATURE_TYPE_HMAC_PERSONALIZED` or
-`Signatures.SIGNATURE_TYPE_AES_GCM_PERSONALIZED`) followed by the request's
+that encodes the authentication method used by the request
+(`Signatures.SIGNATURE_TYPE_HMAC_PERSONALIZED`,
+`Signatures.SIGNATURE_TYPE_AES_GCM_PERSONALIZED`, or
+`Signatures.SIGNATURE_TYPE_AES_GCM_DETACHED`) followed by the request's
 authentication tag.
 
  * If the request uses AES-GCM encryption, then the tag is the request's
    `signature_data.AES_GCM_Personalized_Signature_Data.tag` field.
+ * If the request uses detached encryption, then the tag is the request's
+   `signature_data.AES_GCM_Detached_data.tag` field.
  * If the request uses HMAC-SHA256 authentication, then the tag is the
    request's `signature_data.HMAC_PersonalizedData.tag` field.
 
