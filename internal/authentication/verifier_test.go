@@ -866,3 +866,23 @@ func TestSignerDecryptNonceLength(t *testing.T) {
 		}
 	}
 }
+
+func TestSignerDecryptMetadataError(t *testing.T) {
+	verifier, signer := getGCMVerifierAndSigner(t)
+	message := getTestMessage()
+	message.FromDestination = &universal.Destination{
+		SubDestination: &universal.Destination_Domain{Domain: testVerifierDomain},
+	}
+	id := []byte{1, 2, 3}
+	if err := verifier.Encrypt(message, id, 4); err != nil {
+		t.Fatalf("Error encrypting message: %s", err)
+	}
+	ciphertext := append([]byte{}, message.GetProtobufMessageAsBytes()...)
+	signer.verifierName = bytes.Repeat([]byte{'x'}, 256)
+	if _, err := signer.Decrypt(message, id); !errors.Is(err, ErrMetadataFieldTooLong) {
+		t.Errorf("Expected ErrMetadataFieldTooLong but got %v", err)
+	}
+	if !bytes.Equal(ciphertext, message.GetProtobufMessageAsBytes()) {
+		t.Errorf("Payload modified after decryption failure")
+	}
+}

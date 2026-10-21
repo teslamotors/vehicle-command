@@ -319,7 +319,7 @@ func (s *Signer) Decrypt(message *universal.RoutableMessage, id []byte) (uint32,
 	}
 	authenticatedData, err := s.responseMetadata(message, id, gcmInfo.Counter)
 	if err != nil {
-		return 0, nil
+		return 0, err
 	}
 	plaintext, err := s.session.Decrypt(
 		gcmInfo.Nonce,
