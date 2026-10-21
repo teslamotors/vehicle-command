@@ -184,9 +184,6 @@ func (s *Signer) Encrypt(message *universal.RoutableMessage, expiresIn time.Dura
 // EncryptDetach keeps the high-level command as authenticated plaintext (e.g., "set pin") but
 // encrypts the payload (e.g., "1234").
 //
-// This method is used by third-party apps to allow Tesla to enforce OAuth scopes on commands
-// without exposing unnecessary plaintext data to Tesla's servers.
-//
 // BLE communications should instead use [Signer.Encrypt].
 func (s *Signer) EncryptDetach(message *universal.RoutableMessage, expiresIn time.Duration) error {
 	payload := message.GetProtobufMessageAsBytes()
