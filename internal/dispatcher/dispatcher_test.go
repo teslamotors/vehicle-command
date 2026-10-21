@@ -900,7 +900,7 @@ func TestNoValidHandshakeResponse(t *testing.T) {
 	callbackCount := 0
 
 	conn.callback = func(_ *dummyConnector, message *universal.RoutableMessage) ([]byte, bool) {
-		callbackCount++ // caller holds d.lock
+		callbackCount++ // caller holds conn.lock
 		reply := initReply(message)
 		reply.Payload = &universal.RoutableMessage_SessionInfo{}
 		reply.SubSigData = &universal.RoutableMessage_SignatureData{
@@ -912,7 +912,7 @@ func TestNoValidHandshakeResponse(t *testing.T) {
 				},
 			},
 		}
-		if callbackCount == maxCallbacks {
+		if callbackCount >= maxCallbacks {
 			reply.SignedMessageStatus = &universal.MessageStatus{
 				SignedMessageFault: universal.MessageFault_E_MESSAGEFAULT_ERROR_UNKNOWN_KEY_ID,
 			}
