@@ -842,3 +842,27 @@ func TestVerifierEncryption(t *testing.T) {
 		t.Fatalf("Decryption failed to recover original plaintext")
 	}
 }
+
+func TestSignerDecryptNonceLength(t *testing.T) {
+	verifier, signer := getGCMVerifierAndSigner(t)
+	message := getTestMessage()
+	message.FromDestination = &universal.Destination{
+		SubDestination: &universal.Destination_Domain{Domain: testVerifierDomain},
+	}
+	id := []byte{1, 2, 3}
+	if err := verifier.Encrypt(message, id, 4); err != nil {
+		t.Fatalf("Error encrypting message: %s", err)
+	}
+	sigData := message.GetSignatureData().GetAES_GCM_ResponseData()
+	for _, nonce := range [][]byte{append(sigData.Nonce, 3), {3}, nil} {
+		sigData.Nonce = nonce
+		ciphertext := append([]byte{}, message.GetProtobufMessageAsBytes()...)
+		_, err := signer.Decrypt(message, id)
+		if nativeErr, ok := err.(*Error); !ok || nativeErr.Code != universal.MessageFault_E_MESSAGEFAULT_ERROR_IV_INCORRECT_LENGTH {
+			t.Errorf("Expected IV_INCORRECT_LENGTH but got %v", err)
+		}
+		if !bytes.Equal(ciphertext, message.GetProtobufMessageAsBytes()) {
+			t.Errorf("Payload modified after decryption failure")
+		}
+	}
+}
