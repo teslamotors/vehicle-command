@@ -6,6 +6,7 @@ import (
 
 	"github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/signatures"
 	universal "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/universalmessage"
+	"google.golang.org/protobuf/encoding/protowire"
 )
 
 const (
@@ -35,7 +36,7 @@ func getVerifierAndSignerKeys(t *testing.T) (ECDHPrivateKey, ECDHPrivateKey) {
 	return verifierPrivateKey, signerPrivateKey
 }
 
-func getGCMVerifierAndSigner(t *testing.T) (*Verifier, *Signer) {
+func getVerifierAndSigner(t *testing.T, flags uint32) (*Verifier, *Signer) {
 	t.Helper()
 	verifierPrivateKey, signerPrivateKey := getVerifierAndSignerKeys(t)
 	challenge := []byte{0, 1, 2, 3, 4, 5, 6, 7}
@@ -45,6 +46,7 @@ func getGCMVerifierAndSigner(t *testing.T) (*Verifier, *Signer) {
 	if err != nil {
 		t.Fatalf("Couldn't initialize Verifier: %s", err)
 	}
+	verifier.Flags = flags
 	verifierInfo, tag, err := verifier.SignedSessionInfo(challenge)
 	if err != nil {
 		t.Fatalf("Couldn't fetch verifier session info: %s", err)
@@ -54,6 +56,18 @@ func getGCMVerifierAndSigner(t *testing.T) (*Verifier, *Signer) {
 		t.Fatalf("Couldn't generate signer: %s", err)
 	}
 	return verifier, signer
+}
+
+func getGCMVerifierAndSigner(t *testing.T) (*Verifier, *Signer) {
+	return getVerifierAndSigner(t, DefaultVerifierFlags)
+}
+
+// getHMACVerifierAndSigner returns a Verifier that does not support detached encryption and will
+// therefore not cause the Signer to automatically upgrade to using that mode when asked to
+// authenticate using HMAC.
+func getHMACVerifierAndSigner(t *testing.T) (*Verifier, *Signer) {
+	flags := DefaultVerifierFlags & ^uint32(1<<signatures.SessionInfoFlags_SESSION_INFO_FLAG_SUPPORTS_DETACHED_ENCRYPTION)
+	return getVerifierAndSigner(t, flags)
 }
 
 func getTestMessage() *universal.RoutableMessage {
@@ -128,5 +142,16 @@ func TestRequestID(t *testing.T) {
 	if !bytes.Equal(id[1:], tag) {
 		t.Errorf("Expected: %02x", tag)
 		t.Errorf("Observed: %02x", id[1:])
+	}
+}
+
+func TestMarshalNestedMessages(t *testing.T) {
+	fieldNumbers := []protowire.Number{1, 2, 3000}
+	nestedMessages := marshalNestedMessage(fieldNumbers, []byte("hello"))
+	// echo '1: { 2: { 3000: {"hello"}}}'  | protoscope -s | xxd -i -c50
+	expected := []byte{0x0a, 0x0b, 0x12, 0x09, 0xc2, 0xbb, 0x01, 0x05, 0x68, 0x65, 0x6c, 0x6c, 0x6f}
+	if !bytes.Equal(nestedMessages, expected) {
+		t.Errorf("Expected: %02x", expected)
+		t.Errorf("Observed: %02x", nestedMessages)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/signatures"
@@ -22,7 +23,10 @@ type Verifier struct {
 	lock   sync.Mutex
 	window uint64
 	handle uint32
+	Flags  uint32
 }
+
+const DefaultVerifierFlags = 1 << signatures.SessionInfoFlags_SESSION_INFO_FLAG_SUPPORTS_DETACHED_ENCRYPTION
 
 // NewVerifier returns a Verifier.
 // Set domain to universal.Domain_DOMAIN_BROADCAST if the Verifier shouldn't enforce domain
@@ -39,6 +43,7 @@ func NewVerifier(private ECDHPrivateKey, id []byte, domain universal.Domain, sig
 			session:      session,
 		},
 		window: 0,
+		Flags:  DefaultVerifierFlags,
 	}
 
 	if len(id) > 255 {
@@ -90,6 +95,7 @@ func (v *Verifier) sessionInfo() (*signatures.SessionInfo, error) {
 		Epoch:     v.epoch[:],
 		ClockTime: v.timestamp(),
 		Handle:    v.handle,
+		Flags:     v.Flags,
 	}
 	return info, nil
 }
@@ -208,6 +214,9 @@ func (v *Verifier) Verify(message *universal.RoutableMessage) (plaintext []byte,
 	case *signatures.SignatureData_HMAC_PersonalizedData:
 		counter = sigData.HMAC_PersonalizedData.GetCounter()
 		plaintext, err = v.verifyHMAC(message, sigData.HMAC_PersonalizedData)
+	case *signatures.SignatureData_AES_GCM_DetachedData:
+		counter = sigData.AES_GCM_DetachedData.GetCounter()
+		plaintext, err = v.verifyDetached(message, sigData.AES_GCM_DetachedData)
 	default:
 		return nil, newError(errCodeBadParameter, "unrecognized authentication method")
 	}
@@ -267,14 +276,68 @@ func (v *Verifier) verifyHMAC(message *universal.RoutableMessage, hmacData *sign
 	return message.GetProtobufMessageAsBytes(), nil
 }
 
+var ErrInvalidDetachedPrefix = newError(errCodeBadParameter, "invalid detached command prefix")
+
+func (v *Verifier) verifyDetached(message *universal.RoutableMessage, gcmData *signatures.AES_GCM_Detached_Signature_Data) (plaintext []byte, err error) {
+	if err = v.verifySessionInfo(message, gcmData); err != nil {
+		return nil, err
+	}
+
+	meta := newMetadata()
+	if err := v.extractMetadata(meta, message, gcmData, signatures.SignatureType_SIGNATURE_TYPE_AES_GCM_DETACHED); err != nil {
+		return nil, err
+	}
+	if err := meta.Add(signatures.Tag_TAG_COMMAND_PREFIX, gcmData.GetPrefix()); err != nil {
+		return nil, err
+	}
+
+	envelope := gcmData.GetPrefix()
+	if len(envelope) == 0 {
+		return nil, fmt.Errorf("%w: empty", ErrInvalidDetachedPrefix)
+	}
+
+	// Prefix must be a protobuf message with a sequence of nested BYTES fields, terminating with an
+	// empty BYTES field. This implementation assumes the plaintext has this structure, with the
+	// final field being replaced with the decrypted payload.
+	var fieldNumbers []protowire.Number
+	for len(envelope) > 0 {
+		fieldNumber, wireType, n := protowire.ConsumeTag(envelope)
+		if n < 0 {
+			return nil, fmt.Errorf("%w: invalid protobuf", ErrInvalidDetachedPrefix)
+		}
+		if wireType != protowire.BytesType {
+			return nil, fmt.Errorf("%w: invalid wire type %d", ErrInvalidDetachedPrefix, wireType)
+		}
+		fieldNumbers = append(fieldNumbers, fieldNumber)
+		envelope = envelope[n:]
+		inner, n := protowire.ConsumeBytes(envelope)
+		if n != len(envelope) {
+			return nil, fmt.Errorf("%w: multiple fields", ErrInvalidDetachedPrefix)
+		}
+		envelope = inner
+	}
+
+	if len(gcmData.GetNonce()) != nonceLength {
+		return nil, v.signatureError(universal.MessageFault_E_MESSAGEFAULT_ERROR_IV_INCORRECT_LENGTH, message.GetUuid())
+	}
+
+	plaintext, err = v.session.Decrypt(
+		gcmData.GetNonce(), message.GetProtobufMessageAsBytes(), meta.Checksum(nil), gcmData.GetTag())
+
+	if err != nil {
+		return nil, v.signatureError(universal.MessageFault_E_MESSAGEFAULT_ERROR_INVALID_SIGNATURE, message.GetUuid())
+	}
+
+	return marshalNestedMessage(fieldNumbers, plaintext), nil
+}
+
 func (v *Verifier) verifySessionInfo(message *universal.RoutableMessage, info sessionInfo) error {
 	if domain := message.GetToDestination().GetDomain(); domain != v.domain && v.domain != universal.Domain_DOMAIN_BROADCAST {
 		return newError(errCodeInvalidDomain, "wrong domain")
 	}
 
-	epoch := info.GetEpoch()
-	if epoch != nil {
-		if !bytes.Equal(epoch[:], v.epoch[:]) {
+	if e, ok := info.(epochInfo); ok {
+		if epoch := e.GetEpoch(); epoch != nil && !bytes.Equal(epoch, v.epoch[:]) {
 			return v.signatureError(universal.MessageFault_E_MESSAGEFAULT_ERROR_INCORRECT_EPOCH, message.GetUuid())
 		}
 	}

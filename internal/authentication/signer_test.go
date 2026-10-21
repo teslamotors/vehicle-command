@@ -285,6 +285,31 @@ func TestExportImport(t *testing.T) {
 	runVerifyTest(t, verifier, message, errCodeOk, false)
 }
 
+func TestExportImportPreservesDetachedSupport(t *testing.T) {
+	for _, supportsDetached := range []bool{true, false} {
+		flags := uint32(0)
+		if supportsDetached {
+			flags = DefaultVerifierFlags
+		}
+		verifier, signer := getVerifierAndSigner(t, flags)
+		_, skey := getVerifierAndSignerKeys(t)
+		if signer.SupportsDetached != supportsDetached {
+			t.Fatalf("Expected SupportsDetached=%v from session info", supportsDetached)
+		}
+		cache, err := signer.ExportSessionInfo()
+		if err != nil {
+			t.Fatal(err)
+		}
+		signer, err = ImportSessionInfo(skey, verifier.verifierName, cache, time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if signer.SupportsDetached != supportsDetached {
+			t.Errorf("Expected SupportsDetached=%v after import", supportsDetached)
+		}
+	}
+}
+
 func TestImportWrongTime(t *testing.T) {
 	verifier, signer := getGCMVerifierAndSigner(t)
 	_, skey := getVerifierAndSignerKeys(t)

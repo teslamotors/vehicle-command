@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"time"
 
+	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/signatures"
@@ -18,6 +19,7 @@ type Signer struct {
 	Peer
 	verifierPublicBytes []byte
 	setTime             uint32 // Transmission time (according to Verifier clock) of the last transmitted session info known to the Signer.
+	SupportsDetached    bool   // Whether the Verifier supports detached signatures.
 }
 
 // NewSigner creates a Signer that sends authenticated messages to the Verifier named verifierName.
@@ -78,6 +80,7 @@ func ImportSessionInfo(private ECDHPrivateKey, verifierName, encodedInfo []byte,
 		return nil, err
 	}
 	signer.timeZero = generatedAt.Add(-time.Duration(info.ClockTime) * time.Second)
+	signer.SupportsDetached = info.GetFlags()&(1<<signatures.SessionInfoFlags_SESSION_INFO_FLAG_SUPPORTS_DETACHED_ENCRYPTION) != 0
 	return signer, nil
 }
 
@@ -89,6 +92,9 @@ func (s *Signer) ExportSessionInfo() ([]byte, error) {
 		PublicKey: s.verifierPublicBytes[:],
 		Epoch:     s.epoch[:],
 		ClockTime: s.timestamp(),
+	}
+	if s.SupportsDetached {
+		info.Flags |= 1 << signatures.SessionInfoFlags_SESSION_INFO_FLAG_SUPPORTS_DETACHED_ENCRYPTION
 	}
 	return proto.Marshal(&info)
 }
@@ -175,16 +181,106 @@ func (s *Signer) Encrypt(message *universal.RoutableMessage, expiresIn time.Dura
 	return s.encryptWithCounter(message, expiresIn, s.counter)
 }
 
+// EncryptDetach keeps the high-level command as authenticated plaintext (e.g., "set pin") but
+// encrypts the payload (e.g., "1234").
+//
+// This method is used by third-party apps to allow Tesla to enforce OAuth scopes on commands
+// without exposing unnecessary plaintext data to Tesla's servers.
+//
+// BLE communications should instead use [Signer.Encrypt].
+func (s *Signer) EncryptDetach(message *universal.RoutableMessage, expiresIn time.Duration) error {
+	payload := message.GetProtobufMessageAsBytes()
+	if payload == nil {
+		return newError(errCodeBadParameter, "missing protobuf message")
+	}
+	depth := 0
+	switch message.GetToDestination().GetDomain() {
+	case universal.Domain_DOMAIN_INFOTAINMENT:
+		depth = 2 // Infotainment: carserver.Action -> <service> -> <command>
+	case universal.Domain_DOMAIN_VEHICLE_SECURITY:
+		depth = 1 // VCSEC: vcsec.UnsignedMessage -> <command>
+	default:
+		return newError(errCodeBadParameter, "unsupported domain for EncryptDetach")
+	}
+	var fieldNumbers []protowire.Number
+	for i := 0; i < depth; i++ {
+		fieldNumber, wireType, n := protowire.ConsumeTag(payload)
+		if n < 0 {
+			return newError(errCodeDecoding, "invalid protobuf")
+		}
+		if wireType != protowire.BytesType {
+			return newError(errCodeDecoding, "invalid protobuf command type")
+		}
+		fieldNumbers = append(fieldNumbers, fieldNumber)
+		subCommand, subCommandLength := protowire.ConsumeBytes(payload[n:])
+		if subCommandLength < 0 {
+			return newError(errCodeDecoding, "invalid subcommand")
+		}
+		if subCommandLength+n != len(payload) {
+			return newError(errCodeDecoding, "command includes data outside of innermost envelope")
+		}
+		payload = subCommand
+	}
+
+	// Separate out the cryptography from the semantic checks above so that unit tests can easily do
+	// the former on semantically invalid payloads.
+	return s.addDetachedAuthentication(message, marshalNestedMessage(fieldNumbers, nil), payload, expiresIn)
+}
+
+func (s *Signer) addDetachedAuthentication(message *universal.RoutableMessage, prefix, payload []byte, expiresIn time.Duration) error {
+	s.counter++
+	gcmData := signatures.AES_GCM_Detached_Signature_Data{
+		Counter:   s.counter,
+		ExpiresAt: uint32(time.Now().Add(expiresIn).Sub(s.timeZero) / time.Second),
+		Prefix:    append([]byte{}, prefix...),
+	}
+
+	meta := newMetadata()
+	if err := s.extractMetadata(meta, message, &gcmData, signatures.SignatureType_SIGNATURE_TYPE_AES_GCM_DETACHED); err != nil {
+		return err
+	}
+	if err := meta.Add(signatures.Tag_TAG_COMMAND_PREFIX, gcmData.Prefix); err != nil {
+		return err
+	}
+
+	var ciphertext []byte
+	var err error
+	gcmData.Nonce, ciphertext, gcmData.Tag, err = s.session.Encrypt(payload, meta.Checksum(nil))
+	if err != nil {
+		return err
+	}
+	message.Payload = &universal.RoutableMessage_ProtobufMessageAsBytes{
+		ProtobufMessageAsBytes: ciphertext,
+	}
+	message.SubSigData = &universal.RoutableMessage_SignatureData{
+		SignatureData: &signatures.SignatureData{
+			SignerIdentity: &signatures.KeyIdentity{
+				IdentityType: &signatures.KeyIdentity_PublicKey{
+					PublicKey: s.session.LocalPublicBytes(),
+				},
+			},
+			SigType: &signatures.SignatureData_AES_GCM_DetachedData{
+				AES_GCM_DetachedData: &gcmData,
+			},
+		},
+	}
+	return nil
+}
+
 // AuthorizeHMAC adds an authentication tag to message.
 //
-// This allows the recipient to verify the message has not been tampered with,
-// but the payload is not encrypted. Unencrypted (but authenticated) messages are required by the
-// HTTP proxy. The proxy needs to inspect commands in order to enforce OAuth scopes and determine
-// when a sequence of replies terminates. If a client is not using the HTTP proxy, it should use
+// This allows the recipient to verify the message has not been tampered with. The HTTP proxy needs
+// to inspect commands in order to enforce OAuth scopes and determine when a sequence of replies
+// terminates, so the high-level command must remain plaintext. If the [Verifier] supports it, the
+// Signer automatically upgrades to [Signer.EncryptDetach], which encrypts command parameters while
+// leaving the command type in plaintext. If a client is not using the HTTP proxy, it should use
 // Encrypt instead of AuthorizeHMAC.
 //
 // Sensitive data, such as live camera streams, is encrypted on the application layer.
 func (s *Signer) AuthorizeHMAC(message *universal.RoutableMessage, expiresIn time.Duration) error {
+	if s.SupportsDetached {
+		return s.EncryptDetach(message, expiresIn)
+	}
 	s.counter++
 	hmacData := signatures.HMAC_Personalized_Signature_Data{
 		Counter:   s.counter,
