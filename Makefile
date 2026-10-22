@@ -9,13 +9,11 @@ endif
 PROTO_DIR=./pkg/protocol/protobuf
 PROTO_FILES=$(wildcard $(PROTO_DIR)/*.proto)
 
-# Pinned protoc toolchain. Update both versions here AND in Dockerfile.protoc
-# when bumping; expect a diff in the regenerated *.pb.go files.
-# PROTOC_VERSION uses the upstream release tag (e.g. "21.9"); the matching
-# runtime version reported by `protoc --version` is "3.21.9".
-PROTOC_VERSION=21.9
-PROTOC_GEN_GO_VERSION=1.28.1
-PROTOC_IMAGE=vehicle-command-protoc:$(PROTOC_VERSION)-$(PROTOC_GEN_GO_VERSION)
+# Pinned protoc toolchain. The protoc and protoc-gen-go versions (and the
+# protoc archive checksums) are pinned in Dockerfile.protoc, which is the
+# single source of truth. Expect a diff in the regenerated *.pb.go files
+# when bumping them.
+PROTOC_IMAGE=vehicle-command-protoc
 PROTOC_DOCKERFILE=Dockerfile.protoc
 
 all: build
@@ -47,11 +45,10 @@ doc-images:
 proto-gen: $(PROTO_FILES)
 	protoc --proto_path $(PROTO_DIR) --go_out $(PROTO_DIR) --go_opt=module=github.com/teslamotors/vehicle-command/pkg/protocol/protobuf ${PROTO_FILES}
 
-# Build the pinned protoc toolchain image. No-op if it already exists.
+# Build the pinned protoc toolchain image. Cached layers make this fast
+# when Dockerfile.protoc has not changed.
 proto-builder:
 	docker build \
-	    --build-arg PROTOC_VERSION=$(PROTOC_VERSION) \
-	    --build-arg PROTOC_GEN_GO_VERSION=$(PROTOC_GEN_GO_VERSION) \
 	    -f $(PROTOC_DOCKERFILE) \
 	    -t $(PROTOC_IMAGE) \
 	    .

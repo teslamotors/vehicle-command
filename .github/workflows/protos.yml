@@ -15,6 +15,9 @@ on:
       - 'Makefile'
       - '.github/workflows/protos.yml'
 
+permissions:
+  contents: read
+
 jobs:
   check:
     name: Verify generated protos are up to date
