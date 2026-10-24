@@ -21,6 +21,9 @@ import (
 // MaxLatency is the default maximum latency permitted when updating the vehicle clock estimate.
 var MaxLatency = 10 * time.Second
 
+// wakeupPollInterval is how long Wakeup waits between wake_up requests.
+var wakeupPollInterval = 10 * time.Second
+
 func ReadWithContext(ctx context.Context, r io.Reader, p []byte) ([]byte, error) {
 	bytesRead := 0
 	for {
@@ -233,14 +236,15 @@ func (c *Connection) Wakeup(ctx context.Context) error {
 			}
 		}
 
-		if !protocol.Temporary(err) {
+		// A nil err means the vehicle answered but isn't online yet, so keep polling.
+		if err != nil && !protocol.Temporary(err) {
 			return err
 		}
 
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(10 * time.Second):
+		case <-time.After(wakeupPollInterval):
 			continue
 		}
 	}
