@@ -68,6 +68,7 @@ type Account struct {
 	authHeader string
 	Host       string
 	Subject    string
+	Scopes     []string
 	client     http.Client
 }
 
@@ -76,6 +77,7 @@ type oauthPayload struct {
 	Audiences []string `json:"aud"`
 	OUCode    string   `json:"ou_code"`
 	Subject   string   `json:"sub"`
+	Scopes    []string `json:"scp"`
 }
 
 var domainRegEx = regexp.MustCompile(`^[A-Za-z0-9-.]+$`) // We're mostly interested in stopping paths; the http package handles the rest.
@@ -114,9 +116,7 @@ func (p *oauthPayload) domain() string {
 	return domain
 }
 
-// New returns an [Account] that can be used to fetch a [vehicle.Vehicle].
-// Optional userAgent can be passed in - otherwise it will be generated from code
-func New(oauthToken, userAgent string) (*Account, error) {
+func decodeOAuthPayload(oauthToken string) (*oauthPayload, error) {
 	parts := strings.Split(oauthToken, ".")
 	if len(parts) != 3 {
 		return nil, fmt.Errorf("client provided malformed OAuth token")
@@ -129,6 +129,16 @@ func New(oauthToken, userAgent string) (*Account, error) {
 	if err := json.Unmarshal(payloadJSON, &payload); err != nil {
 		return nil, fmt.Errorf("client provided malformed OAuth token: %s", err)
 	}
+	return &payload, nil
+}
+
+// New returns an [Account] that can be used to fetch a [vehicle.Vehicle].
+// Optional userAgent can be passed in - otherwise it will be generated from code
+func New(oauthToken, userAgent string) (*Account, error) {
+	payload, err := decodeOAuthPayload(oauthToken)
+	if err != nil {
+		return nil, err
+	}
 
 	domain := payload.domain()
 	if domain == "" {
@@ -139,6 +149,7 @@ func New(oauthToken, userAgent string) (*Account, error) {
 		authHeader: "Bearer " + strings.TrimSpace(oauthToken),
 		Host:       domain,
 		Subject:    payload.Subject,
+		Scopes:     payload.Scopes,
 	}, nil
 }
 
