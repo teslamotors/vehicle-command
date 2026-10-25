@@ -26,10 +26,13 @@ const (
 const (
 	EnvTLSCert = "TESLA_HTTP_PROXY_TLS_CERT"
 	EnvTLSKey  = "TESLA_HTTP_PROXY_TLS_KEY"
-	EnvHost    = "TESLA_HTTP_PROXY_HOST"
-	EnvPort    = "TESLA_HTTP_PROXY_PORT"
-	EnvTimeout = "TESLA_HTTP_PROXY_TIMEOUT"
-	EnvVerbose = "TESLA_VERBOSE"
+	// EnvInsecureHTTP enables plaintext HTTP for deployments where a trusted reverse proxy
+	// terminates TLS before forwarding requests to this process.
+	EnvInsecureHTTP = "TESLA_HTTP_PROXY_INSECURE_HTTP"
+	EnvHost         = "TESLA_HTTP_PROXY_HOST"
+	EnvPort         = "TESLA_HTTP_PROXY_PORT"
+	EnvTimeout      = "TESLA_HTTP_PROXY_TIMEOUT"
+	EnvVerbose      = "TESLA_VERBOSE"
 )
 
 const nonLocalhostWarning = `
@@ -41,12 +44,16 @@ const sharedKeyWarning = `It is unsafe to use the same private key for TLS and c
 
 Generate a new TLS key for this server.`
 
+const insecureHTTPWarning = `WARNING: TLS is disabled. The proxy is serving plaintext HTTP.
+Only use this mode behind a trusted TLS-terminating reverse proxy, and do not expose this listener directly to an untrusted network.`
+
 // errSharedKey is returned when the TLS key is a copy of the command-authentication key.
 var errSharedKey = errors.New(sharedKeyWarning)
 
 type HTTProxyConfig struct {
 	keyFilename  string
 	certFilename string
+	insecureHTTP bool
 	verbose      bool
 	host         string
 	port         int
@@ -60,6 +67,7 @@ var (
 func init() {
 	flag.StringVar(&httpConfig.certFilename, "cert", "", "TLS certificate chain `file` with concatenated server, intermediate CA, and root CA certificates")
 	flag.StringVar(&httpConfig.keyFilename, "tls-key", "", "Server TLS private key `file`")
+	flag.BoolVar(&httpConfig.insecureHTTP, "insecure-http", false, "Serve plaintext HTTP; use only behind a trusted TLS-terminating reverse proxy")
 	flag.BoolVar(&httpConfig.verbose, "verbose", false, "Enable verbose logging")
 	flag.StringVar(&httpConfig.host, "host", "localhost", "Proxy server `hostname`")
 	flag.IntVar(&httpConfig.port, "port", defaultPort, "`Port` to listen on")
@@ -77,18 +85,31 @@ func Usage() {
 	flag.PrintDefaults()
 }
 
+// flagWasSet reports whether name was explicitly present on the command line. This matters for
+// boolean flags, whose false value otherwise cannot be distinguished from an omitted flag when
+// environment configuration is applied.
+func flagWasSet(name string) bool {
+	wasSet := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			wasSet = true
+		}
+	})
+	return wasSet
+}
+
 func main() {
 	// ******************************************************************************************
-	// WHY IS THERE NO OPTION FOR DISABLING TLS?
+	// WHY IS PLAIN HTTP AN EXPLICIT OPT-IN?
 	// ******************************************************************************************
 	// In the past, we have had problems with third-party applications that made it easy for DIY
-	// enthusiasts to inadvertently expose their vehicles to the public Internet. In order to
-	// protect users who do not understand the risks of disabling TLS, we decided to omit an
-	// --insecure flag or similar.
+	// enthusiasts to inadvertently expose their vehicles to the public Internet. Plain HTTP must
+	// therefore never be selected automatically, including when a Cloud Run environment variable
+	// is present. The conspicuously named -insecure-http option is only for expert users who have
+	// a trusted TLS-terminating reverse proxy in front of this process.
 	//
-	// Expert users who need to disable TLS can do so without forking this repository by using the
-	// pkg/proxy package, which is agnostic to TLS. This application is a very thin wrapper around
-	// that package.
+	// Users who cannot make that guarantee can instead use pkg/proxy to build an appropriately
+	// secured application around the proxy service.
 
 	config, err := cli.NewConfig(cli.FlagPrivateKey)
 	if err != nil {
@@ -99,7 +120,7 @@ func main() {
 	flag.Usage = Usage
 	config.RegisterCommandLineFlags()
 	flag.Parse()
-	if err := readFromEnvironment(); err != nil {
+	if err := httpConfig.readFromEnvironment(flagWasSet("insecure-http")); err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading environment: %s\n", err)
 		os.Exit(1)
 	}
@@ -112,6 +133,9 @@ func main() {
 	if httpConfig.host != "localhost" {
 		fmt.Fprintln(os.Stderr, nonLocalhostWarning)
 	}
+	if httpConfig.insecureHTTP {
+		fmt.Fprintln(os.Stderr, insecureHTTPWarning)
+	}
 
 	// Startup failures are reported here instead of through the logger, which is silent at the
 	// default log level.
@@ -121,12 +145,16 @@ func main() {
 	}
 }
 
-// commandKey loads the private key used to authenticate commands sent to vehicles, and verifies
-// that it is not also serving as the server's TLS key.
-func commandKey(config *cli.Config, tlsKeyFilename string) (protocol.ECDHPrivateKey, error) {
+// commandKey loads the private key used to authenticate commands sent to vehicles. When TLS is
+// enabled, it also verifies that the key is not serving as the server's TLS key.
+func commandKey(config *cli.Config, tlsKeyFilename string, verifyTLSKey bool) (protocol.ECDHPrivateKey, error) {
 	skey, err := config.PrivateKey()
 	if err != nil {
 		return nil, fmt.Errorf("could not load command-authentication private key: %w", err)
+	}
+
+	if !verifyTLSKey {
+		return skey, nil
 	}
 
 	if tlsPublicKey, err := protocol.LoadPublicKey(tlsKeyFilename); err == nil {
@@ -141,10 +169,11 @@ func commandKey(config *cli.Config, tlsKeyFilename string) (protocol.ECDHPrivate
 	return skey, nil
 }
 
-// newProxyServer creates the HTTPS server that fronts the proxy. Failures are returned instead of
-// terminating the process, so that callers report them consistently.
+// newProxyServer creates the HTTP server that fronts the proxy. TLS is configured when the
+// listener is started. Failures are returned instead of terminating the process, so that callers
+// report them consistently.
 func newProxyServer(config *cli.Config, httpConfig *HTTProxyConfig) (*http.Server, error) {
-	skey, err := commandKey(config, httpConfig.keyFilename)
+	skey, err := commandKey(config, httpConfig.keyFilename, !httpConfig.insecureHTTP)
 	if err != nil {
 		return nil, err
 	}
@@ -167,10 +196,17 @@ func newProxyServer(config *cli.Config, httpConfig *HTTProxyConfig) (*http.Serve
 	}, nil
 }
 
-// serve accepts TLS connections on listener until server stops. A deliberate shutdown is not an
+// serve accepts connections on listener until server stops. By default connections use TLS; plain
+// HTTP is available only with the explicit insecureHTTP option. A deliberate shutdown is not an
 // error.
-func serve(server *http.Server, listener net.Listener, certFilename, keyFilename string) error {
-	if err := server.ServeTLS(listener, certFilename, keyFilename); !errors.Is(err, http.ErrServerClosed) {
+func serve(server *http.Server, listener net.Listener, certFilename, keyFilename string, insecureHTTP bool) error {
+	var err error
+	if insecureHTTP {
+		err = server.Serve(listener)
+	} else {
+		err = server.ServeTLS(listener, certFilename, keyFilename)
+	}
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
 	return nil
@@ -187,22 +223,32 @@ func run(config *cli.Config, httpConfig *HTTProxyConfig) error {
 	if err != nil {
 		return err
 	}
-	// ServeTLS leaves the listener open if it cannot load the certificate or key.
+	// Serving can return before closing the listener, for example if TLS credentials cannot load.
 	defer func() { _ = listener.Close() }()
 
 	log.Info("Listening on %s", listener.Addr())
-	return serve(server, listener, httpConfig.certFilename, httpConfig.keyFilename)
+	return serve(server, listener, httpConfig.certFilename, httpConfig.keyFilename, httpConfig.insecureHTTP)
 }
 
-// readConfig applies configuration from environment variables.
-// Values are not overwritten.
-func readFromEnvironment() error {
+// readFromEnvironment applies configuration from environment variables. Values are not
+// overwritten. insecureHTTPFlagSet distinguishes an explicit false flag from an omitted one.
+func (httpConfig *HTTProxyConfig) readFromEnvironment(insecureHTTPFlagSet bool) error {
 	if httpConfig.certFilename == "" {
 		httpConfig.certFilename = os.Getenv(EnvTLSCert)
 	}
 
 	if httpConfig.keyFilename == "" {
 		httpConfig.keyFilename = os.Getenv(EnvTLSKey)
+	}
+
+	if !insecureHTTPFlagSet && !httpConfig.insecureHTTP {
+		if insecureHTTP, ok := os.LookupEnv(EnvInsecureHTTP); ok {
+			value, err := strconv.ParseBool(insecureHTTP)
+			if err != nil {
+				return fmt.Errorf("invalid insecure HTTP value: %s", insecureHTTP)
+			}
+			httpConfig.insecureHTTP = value
+		}
 	}
 
 	if httpConfig.host == "localhost" {

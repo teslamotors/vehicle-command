@@ -32,28 +32,63 @@ func assertEquals(t *testing.T, expected, actual interface{}, message string) {
 	}
 }
 
-func TestParseConfig(t *testing.T) {
-	origCert := os.Getenv(EnvTLSCert)
-	origKey := os.Getenv(EnvTLSKey)
-	origHost := os.Getenv(EnvHost)
-	origPort := os.Getenv(EnvPort)
-	origVerbose := os.Getenv(EnvVerbose)
-	origTimeout := os.Getenv(EnvTimeout)
-	origArgs := os.Args
-	os.Args = []string{"cmd"}
+// unsetEnvironment unsets names for the duration of t and restores both their values and whether
+// they were originally set. This keeps configuration tests independent of the caller's shell.
+func unsetEnvironment(t *testing.T, names ...string) {
+	t.Helper()
+	type originalValue struct {
+		value string
+		set   bool
+	}
+	original := make(map[string]originalValue, len(names))
+	for _, name := range names {
+		value, set := os.LookupEnv(name)
+		original[name] = originalValue{value: value, set: set}
+		if err := os.Unsetenv(name); err != nil {
+			t.Fatalf("Failed to unset %s: %s", name, err)
+		}
+	}
+	t.Cleanup(func() {
+		for _, name := range names {
+			value := original[name]
+			var err error
+			if value.set {
+				err = os.Setenv(name, value.value)
+			} else {
+				err = os.Unsetenv(name)
+			}
+			if err != nil {
+				t.Errorf("Failed to restore %s: %s", name, err)
+			}
+		}
+	})
+}
 
-	defer func() {
-		os.Setenv(EnvTLSCert, origCert)
-		os.Setenv(EnvTLSKey, origKey)
-		os.Setenv(EnvHost, origHost)
-		os.Setenv(EnvPort, origPort)
-		os.Setenv(EnvVerbose, origVerbose)
-		os.Setenv(EnvTimeout, origTimeout)
+func TestParseConfig(t *testing.T) {
+	origArgs := os.Args
+	origConfig := *httpConfig
+	os.Args = []string{"cmd"}
+	t.Cleanup(func() {
 		os.Args = origArgs
-	}()
+		*httpConfig = origConfig
+	})
+	unsetEnvironment(t,
+		EnvTLSCert,
+		EnvTLSKey,
+		EnvInsecureHTTP,
+		EnvHost,
+		EnvPort,
+		EnvVerbose,
+		EnvTimeout,
+	)
+	*httpConfig = HTTProxyConfig{
+		host:    "localhost",
+		port:    defaultPort,
+		timeout: proxy.DefaultTimeout,
+	}
 
 	t.Run("default values", func(t *testing.T) {
-		err := readFromEnvironment()
+		err := httpConfig.readFromEnvironment(false)
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
@@ -62,23 +97,26 @@ func TestParseConfig(t *testing.T) {
 		assertEquals(t, proxy.DefaultTimeout, httpConfig.timeout, "timeout")
 		assertEquals(t, "", httpConfig.certFilename, "certFilename")
 		assertEquals(t, "", httpConfig.keyFilename, "keyFilename")
+		assertEquals(t, false, httpConfig.insecureHTTP, "insecureHTTP")
 		assertEquals(t, false, httpConfig.verbose, "verbose")
 	})
 
 	t.Run("environment variables", func(t *testing.T) {
 		os.Setenv(EnvTLSCert, "/env/cert.pem")
 		os.Setenv(EnvTLSKey, "/env/key.pem")
+		os.Setenv(EnvInsecureHTTP, "true")
 		os.Setenv(EnvHost, "envhost")
 		os.Setenv(EnvPort, "8443")
 		os.Setenv(EnvVerbose, "true")
 		os.Setenv(EnvTimeout, "30s")
 
-		err := readFromEnvironment()
+		err := httpConfig.readFromEnvironment(false)
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
 		assertEquals(t, "/env/cert.pem", httpConfig.certFilename, "certFilename")
 		assertEquals(t, "/env/key.pem", httpConfig.keyFilename, "keyFilename")
+		assertEquals(t, true, httpConfig.insecureHTTP, "insecureHTTP")
 		assertEquals(t, "envhost", httpConfig.host, "host")
 		assertEquals(t, 8443, httpConfig.port, "port")
 		assertEquals(t, 30*time.Second, httpConfig.timeout, "timeout")
@@ -86,19 +124,73 @@ func TestParseConfig(t *testing.T) {
 	})
 
 	t.Run("flags override environment variables", func(t *testing.T) {
-		os.Args = []string{"cmd", "-cert", "/flag/cert.pem", "-tls-key", "/flag/key.pem", "-host", "flaghost", "-port", "9090", "-timeout", "60s"}
+		os.Setenv(EnvInsecureHTTP, "true")
+		os.Args = []string{"cmd", "-cert", "/flag/cert.pem", "-tls-key", "/flag/key.pem", "-insecure-http=false", "-host", "flaghost", "-port", "9090", "-timeout", "60s"}
 
 		flag.Parse()
-		err := readFromEnvironment()
+		if !flagWasSet("insecure-http") {
+			t.Fatal("insecure-http flag was not recorded as set")
+		}
+		err := httpConfig.readFromEnvironment(flagWasSet("insecure-http"))
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
 
 		assertEquals(t, "/flag/cert.pem", httpConfig.certFilename, "certFilename")
 		assertEquals(t, "/flag/key.pem", httpConfig.keyFilename, "keyFilename")
+		assertEquals(t, false, httpConfig.insecureHTTP, "insecureHTTP")
 		assertEquals(t, "flaghost", httpConfig.host, "host")
 		assertEquals(t, 9090, httpConfig.port, "port")
 		assertEquals(t, 60*time.Second, httpConfig.timeout, "timeout")
+	})
+}
+
+func TestReadFromEnvironmentInsecureHTTP(t *testing.T) {
+	newHTTPConfig := func() *HTTProxyConfig {
+		return &HTTProxyConfig{
+			certFilename: "cert.pem",
+			keyFilename:  "key.pem",
+			verbose:      true,
+			host:         "example.test",
+			port:         1,
+			timeout:      time.Hour,
+		}
+	}
+
+	t.Run("enabled", func(t *testing.T) {
+		t.Setenv(EnvInsecureHTTP, "true")
+		httpConfig := newHTTPConfig()
+		if err := httpConfig.readFromEnvironment(false); err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		assertEquals(t, true, httpConfig.insecureHTTP, "insecureHTTP")
+	})
+
+	t.Run("does not override flag", func(t *testing.T) {
+		t.Setenv(EnvInsecureHTTP, "false")
+		httpConfig := newHTTPConfig()
+		httpConfig.insecureHTTP = true
+		if err := httpConfig.readFromEnvironment(true); err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		assertEquals(t, true, httpConfig.insecureHTTP, "insecureHTTP")
+	})
+
+	t.Run("explicitly disabled flag overrides environment", func(t *testing.T) {
+		t.Setenv(EnvInsecureHTTP, "true")
+		httpConfig := newHTTPConfig()
+		if err := httpConfig.readFromEnvironment(true); err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		assertEquals(t, false, httpConfig.insecureHTTP, "insecureHTTP")
+	})
+
+	t.Run("invalid value", func(t *testing.T) {
+		t.Setenv(EnvInsecureHTTP, "not-a-bool")
+		err := newHTTPConfig().readFromEnvironment(false)
+		if err == nil || !strings.Contains(err.Error(), "invalid insecure HTTP value") {
+			t.Fatalf("Expected invalid insecure HTTP error, got %v", err)
+		}
 	})
 }
 
@@ -380,6 +472,23 @@ func TestNewProxyServerRejectsRecycledCommandKey(t *testing.T) {
 	}
 }
 
+// TestNewProxyServerPlainHTTPDoesNotInspectTLSKey verifies that plaintext mode leaves TLS
+// credentials entirely unused. In particular, it must not treat the command key as a TLS key.
+func TestNewProxyServerPlainHTTPDoesNotInspectTLSKey(t *testing.T) {
+	c := newCredentials(t, elliptic.P256())
+	httpConfig := c.proxyConfig()
+	httpConfig.insecureHTTP = true
+	httpConfig.keyFilename = c.authKey
+
+	server, err := newProxyServer(c.config(t), httpConfig)
+	if err != nil {
+		t.Fatalf("Failed to create plaintext server: %s", err)
+	}
+	if err := server.Close(); err != nil {
+		t.Errorf("Failed to close server: %s", err)
+	}
+}
+
 // TestServeTLS checks that a valid configuration serves a verified HTTPS request and reports no
 // error when the server is shut down.
 func TestServeTLS(t *testing.T) {
@@ -405,7 +514,7 @@ func TestServeTLS(t *testing.T) {
 			})
 			served := make(chan error, 1)
 			go func() {
-				served <- serve(server, listener, c.cert, c.tlsKey)
+				served <- serve(server, listener, c.cert, c.tlsKey, false)
 			}()
 
 			pool := x509.NewCertPool()
@@ -434,5 +543,46 @@ func TestServeTLS(t *testing.T) {
 				t.Errorf("Server stopped with an error: %s", err)
 			}
 		})
+	}
+}
+
+// TestServePlainHTTPWithoutTLS checks that an explicit insecureHTTP configuration can start and
+// serve a request without a certificate or TLS key. The default-mode startup-failure tests above
+// continue to cover the TLS-required behavior when this opt-in is absent.
+func TestServePlainHTTPWithoutTLS(t *testing.T) {
+	c := newCredentials(t, elliptic.P256())
+	httpConfig := c.proxyConfig()
+	httpConfig.certFilename = ""
+	httpConfig.keyFilename = ""
+	httpConfig.insecureHTTP = true
+	server, err := newProxyServer(c.config(t), httpConfig)
+	if err != nil {
+		t.Fatalf("Failed to create plaintext server: %s", err)
+	}
+	listener := listenLoopback(t)
+	t.Cleanup(func() {
+		_ = server.Close()
+		_ = listener.Close()
+	})
+	served := make(chan error, 1)
+	go func() {
+		served <- serve(server, listener, httpConfig.certFilename, httpConfig.keyFilename, httpConfig.insecureHTTP)
+	}()
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	response, err := client.Get(fmt.Sprintf("http://%s/health", listener.Addr()))
+	if err != nil {
+		t.Fatalf("Failed to query plaintext proxy: %s", err)
+	}
+	assertEquals(t, http.StatusOK, response.StatusCode, "status code")
+	if err := response.Body.Close(); err != nil {
+		t.Errorf("Failed to close response body: %s", err)
+	}
+
+	if err := server.Close(); err != nil {
+		t.Errorf("Failed to close server: %s", err)
+	}
+	if err := <-served; err != nil {
+		t.Errorf("Server stopped with an error: %s", err)
 	}
 }

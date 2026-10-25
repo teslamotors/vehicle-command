@@ -129,6 +129,8 @@ The following environment variables can used in lieu of command-line flags.
    when using `tesla-control`, which restarts on each invocation.
  * `TESLA_HTTP_PROXY_TLS_CERT` specifies a TLS certificate file for the HTTP proxy.
  * `TESLA_HTTP_PROXY_TLS_KEY` specifies a TLS key file for the HTTP proxy.
+ * `TESLA_HTTP_PROXY_INSECURE_HTTP` enables plaintext HTTP for the HTTP proxy when set to
+   `true`. Use it only behind a trusted TLS-terminating reverse proxy.
  * `TESLA_HTTP_PROXY_HOST` specifies the host for the HTTP proxy.
  * `TESLA_HTTP_PROXY_PORT` specifies the port for the HTTP proxy.
  * `TESLA_HTTP_PROXY_TIMEOUT` specifies the timeout for the HTTP proxy to use when
@@ -236,13 +238,16 @@ openssl req -x509 -nodes -newkey ec \
 
 This command creates an unencrypted private key, `config/tls-key.pem`.
 
-The proxy server requires TLS. We do not offer an option to disable TLS because
-this greatly increases the risk of non-experts creating insecure deployments.
-Expert users who need a non-TLS version can create one without forking the
-repository by using
-[pkg/proxy](https://pkg.go.dev/github.com/teslamotors/vehicle-command/pkg/proxy);
-the [proxy source code](cmd/tesla-http-proxy/main.go) may be a helpful starting
-point.
+The proxy server requires TLS by default. If the proxy runs only behind a
+trusted TLS-terminating reverse proxy, such as Google Cloud Run, an expert user
+may explicitly enable plaintext HTTP with `-insecure-http` or
+`TESLA_HTTP_PROXY_INSECURE_HTTP=true`. In this mode the proxy does not load the
+TLS certificate or key.
+
+**Warning:** Plaintext HTTP removes the proxy's TLS protection. Use this mode
+only when a trusted proxy terminates TLS and the listener cannot be reached
+directly from an untrusted network. The proxy never enables this mode
+automatically.
 
 ### Running the proxy server
 
@@ -250,6 +255,13 @@ The proxy server can be run using the following command:
 
 ```bash
 tesla-http-proxy -tls-key config/tls-key.pem -cert config/tls-cert.pem -key-file config/fleet-key.pem -port 4443
+```
+
+For example, a Cloud Run deployment can terminate TLS at the platform and pass
+the explicit opt-in while listening on the container port:
+
+```bash
+tesla-http-proxy -insecure-http -key-file config/fleet-key.pem -host 0.0.0.0 -port 8080
 ```
 
 It can also be run using Docker:
