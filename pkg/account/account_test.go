@@ -81,6 +81,20 @@ func TestDomainExtraction(t *testing.T) {
 	}
 }
 
+func TestNewAccountReadsScopes(t *testing.T) {
+	payload := &oauthPayload{
+		Audiences: []string{"https://fleet-api.prd.na.vn.cloud.tesla.com"},
+		Scopes:    []string{ScopeVehicleDeviceData, ScopeVehicleLocation},
+	}
+	acct, err := New(makeTestJWT(payload), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !HasScope(acct.Scopes, ScopeVehicleLocation) {
+		t.Fatalf("Scopes = %v, want vehicle_location", acct.Scopes)
+	}
+}
+
 // makeTestJWT creates a JWT string with the given payload.
 func makeTestJWT(payload *oauthPayload) string {
 	jwtBody, _ := json.Marshal(payload)
