@@ -1,10 +1,8 @@
 package cli
 
 import (
-	"crypto/elliptic"
 	"fmt"
 	"io"
-	"math/big"
 	"os"
 
 	"github.com/teslamotors/vehicle-command/internal/authentication"
@@ -152,25 +150,20 @@ func (c *Config) saveKeyToKeyring(key protocol.ECDHPrivateKey) error {
 		return err
 	}
 
-	if !validPrivateScalar(nativeKey.D) {
-		return fmt.Errorf("invalid private key")
+	// Bytes returns the scalar as 32 big-endian bytes, the format LoadKeyFromKeyring reads, and an error if
+	// the key is not a valid P-256 private key.
+	scalar, err := nativeKey.PrivateKey.Bytes()
+	if err != nil {
+		return fmt.Errorf("invalid private key: %s", err)
 	}
 
-	// FillBytes left-pads the scalar to 32 bytes, which is what LoadKeyFromKeyring expects.
 	if err := kr.Set(keyring.Item{
 		Key:  c.fullKeyName(),
-		Data: nativeKey.D.FillBytes(make([]byte, 32)),
+		Data: scalar,
 	}); err != nil {
 		return fmt.Errorf("failed to enroll key in keyring: %s", err)
 	}
 	return nil
-}
-
-// validPrivateScalar reports whether d is a P-256 private scalar: in [1, N). The earlier check
-// compared the scalar's minimal byte length with 32, which rejected every valid key whose first
-// byte happens to be zero, about one key in 256 (#520).
-func validPrivateScalar(d *big.Int) bool {
-	return d.Sign() > 0 && d.Cmp(elliptic.P256().Params().N) < 0
 }
 
 // DeletePrivateKey removes the private key from the system keyring.
