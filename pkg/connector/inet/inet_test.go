@@ -30,16 +30,38 @@ func TestSendAfterClose(t *testing.T) {
 	}
 }
 
-func newWakeupTestConnection(t *testing.T, states ...string) (*Connection, *int) {
+// wakeupServer is a fake Fleet API. wakeReplies are the HTTP status codes for successive wake_up
+// requests (200 replies report "asleep"), and pollStates are the states reported by successive
+// vehicle endpoint requests. The last entry of each repeats.
+type wakeupServer struct {
+	wakeReplies []int
+	pollStates  []string
+	wakes       int
+	polls       int
+}
+
+func pick[T any](values []T, i int) T {
+	return values[min(i, len(values)-1)]
+}
+
+func newWakeupTestConnection(t *testing.T, s *wakeupServer) *Connection {
 	t.Helper()
-	requests := 0
-	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		state := states[len(states)-1]
-		if requests < len(states) {
-			state = states[requests]
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/api/1/vehicles/VIN123/wake_up":
+			code := pick(s.wakeReplies, s.wakes)
+			s.wakes++
+			w.WriteHeader(code)
+			if code == http.StatusOK {
+				fmt.Fprint(w, `{"response": {"state": "asleep"}}`)
+			}
+		case r.Method == http.MethodGet && r.URL.Path == "/api/1/vehicles/VIN123":
+			fmt.Fprintf(w, `{"response": {"state": %q}}`, pick(s.pollStates, s.polls))
+			s.polls++
+		default:
+			t.Errorf("Unexpected request %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
 		}
-		requests++
-		fmt.Fprintf(w, `{"response": {"state": %q}}`, state)
 	}))
 	t.Cleanup(server.Close)
 	domain, _ := strings.CutPrefix(server.URL, "https://")
@@ -49,24 +71,41 @@ func newWakeupTestConnection(t *testing.T, states ...string) (*Connection, *int)
 	interval := wakeupPollInterval
 	wakeupPollInterval = time.Millisecond
 	t.Cleanup(func() { wakeupPollInterval = interval })
-	return conn, &requests
+	return conn
 }
 
-func TestWakeupPollsUntilOnline(t *testing.T) {
-	conn, requests := newWakeupTestConnection(t, "asleep", "asleep", "online")
+func TestWakeupPollsVehicleStateUntilOnline(t *testing.T) {
+	s := &wakeupServer{wakeReplies: []int{http.StatusOK}, pollStates: []string{"asleep", "asleep", "online"}}
+	conn := newWakeupTestConnection(t, s)
 	if err := conn.Wakeup(context.Background()); err != nil {
 		t.Fatalf("Wakeup failed: %s", err)
 	}
-	if *requests != 3 {
-		t.Errorf("Expected 3 wake_up requests but got %d", *requests)
+	if s.wakes != 1 || s.polls != 3 {
+		t.Errorf("Expected 1 wake_up and 3 state requests but got %d and %d", s.wakes, s.polls)
 	}
 }
 
-func TestWakeupStopsWhenContextExpires(t *testing.T) {
-	conn, _ := newWakeupTestConnection(t, "asleep")
+func TestWakeupResendsFailedWakeRequest(t *testing.T) {
+	s := &wakeupServer{wakeReplies: []int{http.StatusGatewayTimeout, http.StatusOK}, pollStates: []string{"online"}}
+	conn := newWakeupTestConnection(t, s)
+	if err := conn.Wakeup(context.Background()); err != nil {
+		t.Fatalf("Wakeup failed: %s", err)
+	}
+	if s.wakes != 2 || s.polls != 1 {
+		t.Errorf("Expected 2 wake_up and 1 state requests but got %d and %d", s.wakes, s.polls)
+	}
+}
+
+func TestWakeupPendingWhenContextExpires(t *testing.T) {
+	s := &wakeupServer{wakeReplies: []int{http.StatusOK}, pollStates: []string{"asleep"}}
+	conn := newWakeupTestConnection(t, s)
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
-	if err := conn.Wakeup(ctx); !errors.Is(err, context.DeadlineExceeded) {
-		t.Errorf("Expected context.DeadlineExceeded but got %v", err)
+	err := conn.Wakeup(ctx)
+	if !errors.Is(err, ErrWakeupPending) || !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("Expected ErrWakeupPending and context.DeadlineExceeded but got %v", err)
+	}
+	if s.wakes != 1 {
+		t.Errorf("Expected 1 wake_up request but got %d", s.wakes)
 	}
 }

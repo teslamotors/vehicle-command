@@ -21,8 +21,8 @@ import (
 // MaxLatency is the default maximum latency permitted when updating the vehicle clock estimate.
 var MaxLatency = 10 * time.Second
 
-// wakeupPollInterval is how long Wakeup waits between wake_up requests.
-var wakeupPollInterval = 10 * time.Second
+// wakeupPollInterval is how long Wakeup waits between checks of the vehicle's state.
+var wakeupPollInterval = time.Second
 
 func ReadWithContext(ctx context.Context, r io.Reader, p []byte) ([]byte, error) {
 	bytesRead := 0
@@ -45,6 +45,10 @@ func ReadWithContext(ctx context.Context, r io.Reader, p []byte) ([]byte, error)
 }
 
 var ErrVehicleNotAwake = protocol.NewError("vehicle unavailable: vehicle is offline or asleep", false, false)
+
+// ErrWakeupPending means the vehicle was sent a wake up request but had not come online before the
+// context expired. The vehicle may still wake up.
+var ErrWakeupPending = protocol.NewError("vehicle was sent a wake up request but is not online yet", true, true)
 
 /*
 The regular expression below extracts domains from HTTP bodies:
@@ -94,7 +98,11 @@ func SendFleetAPICommand(ctx context.Context, client *http.Client, userAgent, au
 		}
 	}
 	log.Debug("Sending request to %s: %s", url, body)
-	request, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	return sendFleetAPIRequest(ctx, client, "POST", userAgent, authHeader, url, body)
+}
+
+func sendFleetAPIRequest(ctx context.Context, client *http.Client, method, userAgent, authHeader, url string, body []byte) ([]byte, error) {
+	request, err := http.NewRequestWithContext(ctx, method, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, &protocol.CommandError{Err: err, PossibleSuccess: false, PossibleTemporary: true}
 	}
@@ -147,17 +155,29 @@ func ValidTeslaDomainSuffix(domain string) bool {
 func (c *Connection) SendFleetAPICommand(ctx context.Context, endpoint string, command interface{}) ([]byte, error) {
 	url := fmt.Sprintf("https://%s/%s", c.serverURL, endpoint)
 	rsp, err := SendFleetAPICommand(ctx, c.client, c.UserAgent, c.authHeader, url, command)
-	if err != nil {
-		var httpErr *HTTPError
-		if errors.As(err, &httpErr) && httpErr.Code == http.StatusMisdirectedRequest {
-			matches := baseDomainRE.FindStringSubmatch(httpErr.Message)
-			if len(matches) == 2 && ValidTeslaDomainSuffix(matches[1]) {
-				log.Debug("Received HTTP Status 421. Updating server URL.")
-				c.serverURL = matches[1]
-			}
+	c.updateServerURL(err)
+	return rsp, err
+}
+
+// getFleetAPI sends a GET request to a Fleet API REST endpoint.
+func (c *Connection) getFleetAPI(ctx context.Context, endpoint string) ([]byte, error) {
+	url := fmt.Sprintf("https://%s/%s", c.serverURL, endpoint)
+	log.Debug("Requesting %s", url)
+	rsp, err := sendFleetAPIRequest(ctx, c.client, "GET", c.UserAgent, c.authHeader, url, nil)
+	c.updateServerURL(err)
+	return rsp, err
+}
+
+// updateServerURL switches to the base URL named in an HTTP 421 response.
+func (c *Connection) updateServerURL(err error) {
+	var httpErr *HTTPError
+	if errors.As(err, &httpErr) && httpErr.Code == http.StatusMisdirectedRequest {
+		matches := baseDomainRE.FindStringSubmatch(httpErr.Message)
+		if len(matches) == 2 && ValidTeslaDomainSuffix(matches[1]) {
+			log.Debug("Received HTTP Status 421. Updating server URL.")
+			c.serverURL = matches[1]
 		}
 	}
-	return rsp, err
 }
 
 // Connection implements the connector.Connector interface by POSTing commands to a server.
@@ -215,37 +235,59 @@ func (c *Connection) VIN() string {
 	return c.vin
 }
 
-func (c *Connection) Wakeup(ctx context.Context) error {
-	type wakeResponse struct {
-		State string `json:"state"`
+// isOnline parses the vehicle state from a wake_up or vehicle endpoint response.
+func isOnline(respJSON []byte, err error) (bool, error) {
+	if err != nil {
+		return false, err
 	}
 	var response struct {
-		WakeResponse wakeResponse `json:"response"`
+		Vehicle struct {
+			State string `json:"state"`
+		} `json:"response"`
 	}
+	if err := json.Unmarshal(respJSON, &response); err != nil {
+		return false, err
+	}
+	return response.Vehicle.State == "online", nil
+}
 
+// Wakeup sends the vehicle a wake up request and waits for it to come online. If the context
+// expires after the request was sent, the returned error wraps both ErrWakeupPending and the
+// context error.
+func (c *Connection) Wakeup(ctx context.Context) error {
+	c.lock.Lock()
+	c.lastPoke = time.Now()
+	c.lock.Unlock()
+
+	// Wake ups are billed, so send one and then poll the (unbilled) vehicle endpoint for its state.
+	// The wake_up request is only resent if it failed.
+	sent := false
 	for {
-		c.lock.Lock()
-		c.lastPoke = time.Now()
-		c.lock.Unlock()
-		endpoint := fmt.Sprintf("api/1/vehicles/%s/wake_up", c.vin)
-		respJSON, err := c.SendFleetAPICommand(ctx, endpoint, nil)
-		if err == nil {
-			err = json.Unmarshal(respJSON, &response)
-			if err == nil && response.WakeResponse.State == "online" {
-				return nil
+		var online bool
+		var err error
+		if !sent {
+			online, err = isOnline(c.SendFleetAPICommand(ctx, fmt.Sprintf("api/1/vehicles/%s/wake_up", c.vin), nil))
+			sent = err == nil
+		} else {
+			online, err = isOnline(c.getFleetAPI(ctx, fmt.Sprintf("api/1/vehicles/%s", c.vin)))
+			if errors.Is(err, ErrVehicleNotAwake) {
+				err = nil
 			}
 		}
-
-		// A nil err means the vehicle answered but isn't online yet, so keep polling.
+		if online {
+			return nil
+		}
 		if err != nil && !protocol.Temporary(err) {
 			return err
 		}
 
 		select {
 		case <-ctx.Done():
+			if sent {
+				return fmt.Errorf("%w: %w", ErrWakeupPending, ctx.Err())
+			}
 			return ctx.Err()
 		case <-time.After(wakeupPollInterval):
-			continue
 		}
 	}
 }
