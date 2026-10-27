@@ -132,6 +132,22 @@ func MinutesAfterMidnight(hoursAndMinutes string) (int32, error) {
 	return int32(60*hours + minutes), nil
 }
 
+// GetCelsius parses a temperature such as 22, 22C or 72F and returns it in Celsius. A temperature
+// without a unit is in Celsius.
+func GetCelsius(tempStr string) (float32, error) {
+	var degrees float32
+	var unit string
+	if n, err := fmt.Sscanf(tempStr, "%f%s", &degrees, &unit); err != nil && !(n == 1 && errors.Is(err, io.EOF)) {
+		return 0, fmt.Errorf("failed to parse temperature: format as 22, 22C or 72F")
+	}
+	if unit == "F" || unit == "f" {
+		degrees = (degrees - 32.0) * 5.0 / 9.0
+	} else if unit != "" && unit != "C" && unit != "c" {
+		return 0, fmt.Errorf("temperature units must be C or F")
+	}
+	return degrees, nil
+}
+
 // configureAndVerifyFlags verifies that c contains all the information required to execute a command.
 func configureFlags(c *cli.Config, commandName string, forceBLE bool) error {
 	info, ok := commands[commandName]
@@ -340,15 +356,9 @@ var commands = map[string]*Command{
 			{name: "TEMP", help: "Desired temperature (e.g., 70f or 21c; defaults to Celsius)"},
 		},
 		handler: func(ctx context.Context, _ *account.Account, car *vehicle.Vehicle, args map[string]string) error {
-			var degrees float32
-			var unit string
-			if _, err := fmt.Sscanf(args["TEMP"], "%f%s", &degrees, &unit); err != nil {
-				return fmt.Errorf("failed to parse temperature: format as 22C or 72F")
-			}
-			if unit == "F" || unit == "f" {
-				degrees = (degrees - 32.0) * 5.0 / 9.0
-			} else if unit != "C" && unit != "c" {
-				return fmt.Errorf("temperature units must be C or F")
+			degrees, err := GetCelsius(args["TEMP"])
+			if err != nil {
+				return err
 			}
 			return car.ChangeClimateTemp(ctx, degrees, degrees)
 		},
