@@ -1,6 +1,6 @@
 module github.com/teslamotors/vehicle-command
 
-go 1.23
+go 1.25
 
 require (
 	github.com/99designs/keyring v1.2.2
