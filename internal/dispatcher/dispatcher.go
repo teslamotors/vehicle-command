@@ -28,15 +28,20 @@ type Dispatcher struct {
 	latencyLock sync.Mutex
 	maxLatency  time.Duration
 
-	doneLock  sync.Mutex
-	terminate chan struct{}
-	done      chan bool
+	doneLock sync.Mutex
+	listener *listener
 
 	sessionLock sync.Mutex
 	sessions    map[universal.Domain]*session
 
 	handlerLock sync.Mutex
 	handlers    map[receiverKey]*receiver
+}
+
+type listener struct {
+	terminate chan struct{}
+	ready     chan struct{}
+	done      chan struct{}
 }
 
 // New creates a Dispatcher from a Connector.
@@ -48,7 +53,6 @@ func New(conn connector.Connector, privateKey authentication.ECDHPrivateKey) (*D
 		sessions:   make(map[universal.Domain]*session),
 		handlers:   make(map[receiverKey]*receiver),
 		privateKey: privateKey,
-		done:       make(chan bool),
 	}
 	if _, err := rand.Read(dispatcher.address); err != nil {
 		return nil, err
@@ -315,51 +319,95 @@ func (d *Dispatcher) process(message *universal.RoutableMessage) {
 }
 
 // Start runs d's Listen method in a new goroutine. Returns an error if d does
-// not signal it's ready before ctx expires.
+// not signal it's ready before ctx expires. A failed startup stops and waits
+// for its listener before returning.
 func (d *Dispatcher) Start(ctx context.Context) error {
-	ready := make(chan struct{})
-	go d.listen(ready)
-	select {
-	case <-ready:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
+	d.doneLock.Lock()
+	if err := ctx.Err(); err != nil {
+		d.doneLock.Unlock()
+		return err
 	}
+	if d.listener != nil {
+		select {
+		case <-d.listener.done:
+			d.listener = nil
+		default:
+		}
+	}
+	run := d.listener
+	owner := run == nil
+	if owner {
+		run = &listener{
+			terminate: make(chan struct{}),
+			ready:     make(chan struct{}),
+			done:      make(chan struct{}),
+		}
+		d.listener = run
+		go d.listen(run)
+	}
+	d.doneLock.Unlock()
+
+	var err error
+	select {
+	case <-run.ready:
+		select {
+		case <-run.done:
+			err = protocol.ErrNotConnected
+		default:
+		}
+	case <-run.done:
+		err = protocol.ErrNotConnected
+	case <-ctx.Done():
+	}
+	if ctx.Err() != nil {
+		err = ctx.Err()
+	}
+	if err != nil && owner {
+		d.stopListener(run)
+	}
+	return err
 }
 
 // Listen for incoming commands and dispatch them to registered receivers.
-func (d *Dispatcher) listen(ready chan<- struct{}) {
+func (d *Dispatcher) listen(run *listener) {
 	log.Info("Starting dispatcher service...")
-	d.doneLock.Lock()
-	if d.terminate == nil {
-		d.terminate = make(chan struct{})
-	} else {
-		d.doneLock.Unlock()
+	defer close(run.done)
+	process := func(messageBytes []byte) {
+		message := new(universal.RoutableMessage)
+		if err := proto.Unmarshal(messageBytes, message); err != nil {
+			log.Warning("Dropping unparseable message: %s", err)
+			return
+		}
+		d.process(message)
+	}
+	inbox := d.conn.Receive()
+	if inbox == nil {
 		return
 	}
-	terminate := d.terminate
-	d.doneLock.Unlock()
-	listening := make(chan struct{}, 2)
-	listening <- struct{}{}
-	defer func() {
-		d.done <- true
-	}()
+	select {
+	case <-run.terminate:
+		return
+	default:
+	}
+	// Detect an already exhausted connector before signaling readiness.
+	select {
+	case messageBytes, open := <-inbox:
+		if !open {
+			return
+		}
+		process(messageBytes)
+	default:
+	}
+	close(run.ready)
 	for {
 		select {
-		case messageBytes, open := <-d.conn.Receive():
+		case messageBytes, open := <-inbox:
 			if !open {
 				return
 			}
-			message := new(universal.RoutableMessage)
-			if err := proto.Unmarshal(messageBytes, message); err != nil {
-				log.Warning("Dropping unparseable message: %s", err)
-				continue
-			}
-			d.process(message)
-		case <-terminate:
+			process(messageBytes)
+		case <-run.terminate:
 			return
-		case <-listening:
-			close(ready)
 		}
 	}
 }
@@ -367,18 +415,32 @@ func (d *Dispatcher) listen(ready chan<- struct{}) {
 // Stop signals any goroutine running Listen to exit.
 func (d *Dispatcher) Stop() {
 	d.doneLock.Lock()
+	run := d.listener
+	d.doneLock.Unlock()
+	d.stopListener(run)
+}
+
+func (d *Dispatcher) stopListener(run *listener) {
+	d.doneLock.Lock()
 	defer d.doneLock.Unlock()
-	if d.terminate != nil {
-		close(d.terminate)
-		d.terminate = nil
-		<-d.done
+	if run != nil && d.listener == run {
+		close(run.terminate)
+		<-run.done
+		d.listener = nil
 	}
 }
 
 // Send a message to a vehicle.
 func (d *Dispatcher) Send(ctx context.Context, message *universal.RoutableMessage, auth connector.AuthMethod) (protocol.Receiver, error) {
 	d.doneLock.Lock()
-	listening := d.terminate != nil
+	listening := false
+	if d.listener != nil {
+		select {
+		case <-d.listener.done:
+		default:
+			listening = true
+		}
+	}
 	d.doneLock.Unlock()
 	if !listening {
 		return nil, protocol.ErrNotConnected
