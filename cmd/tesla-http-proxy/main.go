@@ -47,6 +47,9 @@ Generate a new TLS key for this server.`
 const insecureHTTPWarning = `WARNING: TLS is disabled. The proxy is serving plaintext HTTP.
 Only use this mode behind a trusted TLS-terminating reverse proxy, and do not expose this listener directly to an untrusted network.`
 
+var errInsecureHTTPNonLocalhost = errors.New(`-insecure-http is only allowed when the proxy listens on localhost or 127.0.0.1.
+Non-localhost plaintext HTTP is intentionally unsupported in tesla-http-proxy; use pkg/proxy to build a custom deployment.`)
+
 // errSharedKey is returned when the TLS key is a copy of the command-authentication key.
 var errSharedKey = errors.New(sharedKeyWarning)
 
@@ -98,6 +101,11 @@ func flagWasSet(name string) bool {
 	return wasSet
 }
 
+func isLocalListenHost(host string) bool {
+	return host == "localhost" || host == "127.0.0.1"
+}
+
+
 func main() {
 	// ******************************************************************************************
 	// WHY IS PLAIN HTTP AN EXPLICIT OPT-IN?
@@ -135,6 +143,10 @@ func main() {
 	}
 	if httpConfig.insecureHTTP {
 		fmt.Fprintln(os.Stderr, insecureHTTPWarning)
+		if !isLocalListenHost(httpConfig.host) {
+			fmt.Fprintf(os.Stderr, "Error: %s\n", errInsecureHTTPNonLocalhost)
+			os.Exit(1)
+		}
 	}
 
 	// Startup failures are reported here instead of through the logger, which is silent at the

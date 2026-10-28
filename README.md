@@ -257,11 +257,14 @@ The proxy server can be run using the following command:
 tesla-http-proxy -tls-key config/tls-key.pem -cert config/tls-cert.pem -key-file config/fleet-key.pem -port 4443
 ```
 
-For example, a Cloud Run deployment can terminate TLS at the platform and pass
-the explicit opt-in while listening on the container port:
+Plaintext HTTP is limited to `localhost` / `127.0.0.1` so the listener cannot
+be exposed on other interfaces. For a platform that terminates TLS and needs a
+non-localhost bind address, build on
+[pkg/proxy](https://pkg.go.dev/github.com/teslamotors/vehicle-command/pkg/proxy)
+instead of using this flag.
 
 ```bash
-tesla-http-proxy -insecure-http -key-file config/fleet-key.pem -host 0.0.0.0 -port 8080
+tesla-http-proxy -insecure-http -key-file config/fleet-key.pem -host localhost -port 8080
 ```
 
 It can also be run using Docker:

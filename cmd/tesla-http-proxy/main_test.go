@@ -586,3 +586,12 @@ func TestServePlainHTTPWithoutTLS(t *testing.T) {
 		t.Errorf("Server stopped with an error: %s", err)
 	}
 }
+
+func TestIsLocalListenHost(t *testing.T) {
+	if !isLocalListenHost("localhost") || !isLocalListenHost("127.0.0.1") {
+		t.Fatal("localhost and 127.0.0.1 must be allowed")
+	}
+	if isLocalListenHost("0.0.0.0") || isLocalListenHost("example.com") {
+		t.Fatal("non-local hosts must be rejected for insecure HTTP")
+	}
+}
