@@ -489,6 +489,58 @@ func TestNewProxyServerPlainHTTPDoesNotInspectTLSKey(t *testing.T) {
 	}
 }
 
+func TestNewProxyServerRejectsNonLocalPlainHTTPBeforeLoadingCredentials(t *testing.T) {
+	config, err := cli.NewConfig(cli.FlagPrivateKey)
+	if err != nil {
+		t.Fatalf("Failed to create credential configuration: %s", err)
+	}
+	config.KeyFilename = filepath.Join(t.TempDir(), "missing-command-key.pem")
+	config.DisableCache = true
+
+	_, err = newProxyServer(config, &HTTProxyConfig{
+		host:         "0.0.0.0",
+		port:         0,
+		insecureHTTP: true,
+	})
+	if !errors.Is(err, errInsecureHTTPNonLocalhost) {
+		t.Fatalf("Expected non-local plaintext error before credential loading, got %v", err)
+	}
+}
+
+func TestNewProxyServerPinsPlainHTTPLocalhostToIPv4Loopback(t *testing.T) {
+	c := newCredentials(t, elliptic.P256())
+	httpConfig := c.proxyConfig()
+	httpConfig.host = "localhost"
+	httpConfig.insecureHTTP = true
+
+	server, err := newProxyServer(c.config(t), httpConfig)
+	if err != nil {
+		t.Fatalf("Failed to create plaintext server: %s", err)
+	}
+	t.Cleanup(func() { _ = server.Close() })
+
+	assertEquals(t, "127.0.0.1:0", server.Addr, "plaintext listener address")
+}
+
+func TestRunRejectsNonLocalPlainHTTPBeforeBinding(t *testing.T) {
+	c := newCredentials(t, elliptic.P256())
+	httpConfig := c.proxyConfig()
+	httpConfig.host = "0.0.0.0"
+	httpConfig.insecureHTTP = true
+
+	listenerCalled := false
+	err := runWithListen(c.config(t), httpConfig, func(_ string, _ string) (net.Listener, error) {
+		listenerCalled = true
+		return nil, errors.New("listener must not be called")
+	})
+	if !errors.Is(err, errInsecureHTTPNonLocalhost) {
+		t.Fatalf("Expected non-local plaintext error before binding, got %v", err)
+	}
+	if listenerCalled {
+		t.Fatal("Plaintext listener was called for a non-local host")
+	}
+}
+
 // TestServeTLS checks that a valid configuration serves a verified HTTPS request and reports no
 // error when the server is shut down.
 func TestServeTLS(t *testing.T) {
@@ -591,7 +643,9 @@ func TestIsLocalListenHost(t *testing.T) {
 	if !isLocalListenHost("localhost") || !isLocalListenHost("127.0.0.1") {
 		t.Fatal("localhost and 127.0.0.1 must be allowed")
 	}
-	if isLocalListenHost("0.0.0.0") || isLocalListenHost("example.com") {
-		t.Fatal("non-local hosts must be rejected for insecure HTTP")
+	for _, host := range []string{"0.0.0.0", "::1", "[::1]", "example.com"} {
+		if isLocalListenHost(host) {
+			t.Fatalf("Non-local host %q must be rejected for insecure HTTP", host)
+		}
 	}
 }

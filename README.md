@@ -130,7 +130,8 @@ The following environment variables can used in lieu of command-line flags.
  * `TESLA_HTTP_PROXY_TLS_CERT` specifies a TLS certificate file for the HTTP proxy.
  * `TESLA_HTTP_PROXY_TLS_KEY` specifies a TLS key file for the HTTP proxy.
  * `TESLA_HTTP_PROXY_INSECURE_HTTP` enables plaintext HTTP for the HTTP proxy when set to
-   `true`. Use it only behind a trusted TLS-terminating reverse proxy.
+   `true`. It is limited to a loopback listener for use with a trusted local TLS-terminating
+   reverse proxy.
  * `TESLA_HTTP_PROXY_HOST` specifies the host for the HTTP proxy.
  * `TESLA_HTTP_PROXY_PORT` specifies the port for the HTTP proxy.
  * `TESLA_HTTP_PROXY_TIMEOUT` specifies the timeout for the HTTP proxy to use when
@@ -238,16 +239,14 @@ openssl req -x509 -nodes -newkey ec \
 
 This command creates an unencrypted private key, `config/tls-key.pem`.
 
-The proxy server requires TLS by default. If the proxy runs only behind a
-trusted TLS-terminating reverse proxy, such as Google Cloud Run, an expert user
-may explicitly enable plaintext HTTP with `-insecure-http` or
-`TESLA_HTTP_PROXY_INSECURE_HTTP=true`. In this mode the proxy does not load the
-TLS certificate or key.
+The proxy server requires TLS by default. An expert user may explicitly enable
+plaintext HTTP with `-insecure-http` or `TESLA_HTTP_PROXY_INSECURE_HTTP=true`
+only when a trusted local reverse proxy terminates TLS. In this mode the proxy
+does not load the TLS certificate or key.
 
-**Warning:** Plaintext HTTP removes the proxy's TLS protection. Use this mode
-only when a trusted proxy terminates TLS and the listener cannot be reached
-directly from an untrusted network. The proxy never enables this mode
-automatically.
+**Warning:** Plaintext HTTP removes the proxy's TLS protection. This option
+pins the listener to `127.0.0.1`, so it is only suitable when a trusted local
+proxy terminates TLS. The proxy never enables this mode automatically.
 
 ### Running the proxy server
 

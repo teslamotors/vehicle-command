@@ -48,7 +48,7 @@ const insecureHTTPWarning = `WARNING: TLS is disabled. The proxy is serving plai
 Only use this mode behind a trusted TLS-terminating reverse proxy, and do not expose this listener directly to an untrusted network.`
 
 var errInsecureHTTPNonLocalhost = errors.New(`-insecure-http is only allowed when the proxy listens on localhost or 127.0.0.1.
-Non-localhost plaintext HTTP is intentionally unsupported in tesla-http-proxy; use pkg/proxy to build a custom deployment.`)
+non-localhost plaintext HTTP is intentionally unsupported in tesla-http-proxy; use pkg/proxy to build a custom deployment`)
 
 // errSharedKey is returned when the TLS key is a copy of the command-authentication key.
 var errSharedKey = errors.New(sharedKeyWarning)
@@ -105,6 +105,17 @@ func isLocalListenHost(host string) bool {
 	return host == "localhost" || host == "127.0.0.1"
 }
 
+func (httpConfig *HTTProxyConfig) listenAddress() (string, error) {
+	if httpConfig.insecureHTTP {
+		if !isLocalListenHost(httpConfig.host) {
+			return "", errInsecureHTTPNonLocalhost
+		}
+		// Do not resolve localhost at startup: plaintext mode must bind to a literal loopback
+		// address even if the local hostname resolver is configured unexpectedly.
+		return fmt.Sprintf("127.0.0.1:%d", httpConfig.port), nil
+	}
+	return fmt.Sprintf("%s:%d", httpConfig.host, httpConfig.port), nil
+}
 
 func main() {
 	// ******************************************************************************************
@@ -138,15 +149,11 @@ func main() {
 		log.SetLevel(log.LevelDebug)
 	}
 
-	if httpConfig.host != "localhost" {
+	if !isLocalListenHost(httpConfig.host) {
 		fmt.Fprintln(os.Stderr, nonLocalhostWarning)
 	}
 	if httpConfig.insecureHTTP {
 		fmt.Fprintln(os.Stderr, insecureHTTPWarning)
-		if !isLocalListenHost(httpConfig.host) {
-			fmt.Fprintf(os.Stderr, "Error: %s\n", errInsecureHTTPNonLocalhost)
-			os.Exit(1)
-		}
 	}
 
 	// Startup failures are reported here instead of through the logger, which is silent at the
@@ -185,6 +192,11 @@ func commandKey(config *cli.Config, tlsKeyFilename string, verifyTLSKey bool) (p
 // listener is started. Failures are returned instead of terminating the process, so that callers
 // report them consistently.
 func newProxyServer(config *cli.Config, httpConfig *HTTProxyConfig) (*http.Server, error) {
+	address, err := httpConfig.listenAddress()
+	if err != nil {
+		return nil, err
+	}
+
 	skey, err := commandKey(config, httpConfig.keyFilename, !httpConfig.insecureHTTP)
 	if err != nil {
 		return nil, err
@@ -203,7 +215,7 @@ func newProxyServer(config *cli.Config, httpConfig *HTTProxyConfig) (*http.Serve
 	// authorized, invoke p.ServeHTTP. Finally, replace p below with an object of your newly
 	// created type.
 	return &http.Server{
-		Addr:    fmt.Sprintf("%s:%d", httpConfig.host, httpConfig.port),
+		Addr:    address,
 		Handler: p,
 	}, nil
 }
@@ -226,12 +238,18 @@ func serve(server *http.Server, listener net.Listener, certFilename, keyFilename
 
 // run starts the proxy and blocks until it stops serving, returning the reason it stopped.
 func run(config *cli.Config, httpConfig *HTTProxyConfig) error {
+	return runWithListen(config, httpConfig, net.Listen)
+}
+
+// runWithListen starts the proxy using listen. Keeping listener construction injectable lets
+// startup tests assert that unsafe configurations are rejected before a socket is opened.
+func runWithListen(config *cli.Config, httpConfig *HTTProxyConfig, listen func(network, address string) (net.Listener, error)) error {
 	server, err := newProxyServer(config, httpConfig)
 	if err != nil {
 		return err
 	}
 
-	listener, err := net.Listen("tcp", server.Addr)
+	listener, err := listen("tcp", server.Addr)
 	if err != nil {
 		return err
 	}
