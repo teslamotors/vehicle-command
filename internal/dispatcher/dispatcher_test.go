@@ -974,6 +974,139 @@ func TestRetryNonresponsive(t *testing.T) {
 	}
 }
 
+// rotateDomainKey replaces the vehicle-side key for a domain, simulating a
+// vehicle whose key changed (for example after a service visit). Session info
+// the connector produces afterwards no longer verifies against a session that
+// was established with the old key.
+func (d *dummyConnector) rotateDomainKey(t *testing.T, domain universal.Domain) {
+	t.Helper()
+	key, err := authentication.NewECDHPrivateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("Couldn't create private key: %s", err)
+	}
+	d.keyLock.Lock()
+	d.keys[domain] = key
+	d.keyLock.Unlock()
+}
+
+// TestStaleSessionFailsFast reproduces the scenario in
+// https://github.com/teslamotors/vehicle-command/issues/393: an established
+// session whose keys no longer match the vehicle's (the vehicle re-keyed) can
+// no longer verify the session info the vehicle returns to resync. Before this
+// change the verification failure was only logged, the session stayed "ready",
+// and the client retried until the context deadline ("context deadline
+// exceeded"). It should instead surface the underlying verification error and
+// stop retrying.
+func TestStaleSessionFailsFast(t *testing.T) {
+	dispatcher, conn := getTestSetup(t)
+	defer conn.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*quiescentDelay)
+	defer cancel()
+
+	// Send a command to obtain a receiver whose metadata we can reuse for the
+	// vehicle's (unverifiable) resync response.
+	rsp, err := dispatcher.Send(ctx, testCommand(), connector.AuthMethodHMAC)
+	if err != nil {
+		t.Fatalf("Error sending command: %s", err)
+	}
+	defer rsp.Close()
+
+	// The vehicle re-keys, then proactively returns session info (correctly
+	// signed with the new key) alongside an INVALID_SIGNATURE fault, asking the
+	// client to resync. The client's session still holds the old key, so the
+	// session-info HMAC cannot be verified.
+	conn.rotateDomainKey(t, testDomain)
+	resync := conn.SessionInfoReply(rsp, dispatcher.privateKey.PublicBytes())
+	resync.SignedMessageStatus = &universal.MessageStatus{
+		SignedMessageFault: universal.MessageFault_E_MESSAGEFAULT_ERROR_INVALID_SIGNATURE,
+	}
+	conn.EnqueueReply(t, encodeRoutableMessage(t, resync))
+
+	// Wait for the dispatcher to process the resync attempt.
+	time.Sleep(quiescentDelay)
+
+	dispatcher.sessionLock.Lock()
+	s := dispatcher.sessions[testDomain]
+	dispatcher.sessionLock.Unlock()
+	if s == nil || s.verificationError() == nil {
+		t.Fatalf("Expected session to record a verification failure")
+	}
+
+	// A subsequent authenticated command must fail terminally with the
+	// verification error rather than spinning until the deadline.
+	sendCtx, sendCancel := context.WithTimeout(context.Background(), 5*quiescentDelay)
+	defer sendCancel()
+	start := time.Now()
+	_, err = dispatcher.Send(sendCtx, testCommand(), connector.AuthMethodHMAC)
+	if err == nil {
+		t.Fatal("Expected an error but command succeeded")
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("Command hit the context deadline instead of surfacing the verification error: %s", err)
+	}
+	if protocol.ShouldRetry(err) {
+		t.Errorf("Verification failure should be terminal, but ShouldRetry returned true for %s", err)
+	}
+	if elapsed := time.Since(start); elapsed > 4*quiescentDelay {
+		t.Errorf("Command took %s to fail; expected it to fail fast", elapsed)
+	}
+}
+
+// TestStartSessionRecoversFromStaleSession verifies that once a session can no
+// longer verify the vehicle's session info, StartSession discards it and
+// performs a fresh handshake, allowing recovery without restarting the process
+// or deleting the on-disk session cache.
+func TestStartSessionRecoversFromStaleSession(t *testing.T) {
+	dispatcher, conn := getTestSetup(t)
+	defer conn.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*quiescentDelay)
+	defer cancel()
+
+	dispatcher.sessionLock.Lock()
+	stale := dispatcher.sessions[testDomain]
+	dispatcher.sessionLock.Unlock()
+	if stale == nil {
+		t.Fatal("Expected an established session")
+	}
+
+	// Mark the established session as unable to verify the vehicle's session
+	// info, as would happen after a failed resync.
+	stale.lock.Lock()
+	stale.verificationErr = errors.New("session info hmac invalid")
+	stale.lock.Unlock()
+
+	// StartSession must not reuse the faulted session; it should discard it and
+	// re-handshake successfully.
+	if err := dispatcher.StartSession(ctx, testDomain); err != nil {
+		t.Fatalf("Expected StartSession to recover, got: %s", err)
+	}
+
+	dispatcher.sessionLock.Lock()
+	fresh := dispatcher.sessions[testDomain]
+	dispatcher.sessionLock.Unlock()
+	if fresh == stale {
+		t.Error("Expected StartSession to replace the faulted session")
+	}
+	if fresh == nil || fresh.verificationError() != nil {
+		t.Errorf("Recovered session still carries a verification fault")
+	}
+
+	// The recovered session must be usable for authenticated commands.
+	rsp, err := dispatcher.Send(ctx, testCommand(), connector.AuthMethodHMAC)
+	if err != nil {
+		t.Fatalf("Error sending command after recovery: %s", err)
+	}
+	conn.EnqueueReply(t, encodeRoutableMessage(t, replyWithPayload(rsp, []byte("recovered"))))
+	select {
+	case message := <-rsp.Recv():
+		checkFault(t, message, universal.MessageFault_E_MESSAGEFAULT_ERROR_NONE)
+	case <-ctx.Done():
+		t.Errorf("Timed out waiting for response after recovery")
+	}
+}
+
 func TestCache(t *testing.T) {
 	conn := newDummyConnector(t)
 	key, err := authentication.NewECDHPrivateKey(rand.Reader)

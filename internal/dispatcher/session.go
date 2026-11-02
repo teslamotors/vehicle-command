@@ -33,6 +33,13 @@ type session struct {
 	private     authentication.ECDHPrivateKey
 	ready       bool
 	readySignal chan struct{}
+	// verificationErr records the most recent failure to verify session info
+	// received from the vehicle (for example, an invalid session-info HMAC
+	// because the vehicle's key changed after a service visit). It is cleared
+	// whenever session info verifies successfully. A non-nil value on an
+	// otherwise-ready session means the session can no longer authenticate the
+	// vehicle and must be re-established with a fresh handshake.
+	verificationErr error
 }
 
 // newSession creates a new session object that can authorize commands going to
@@ -71,6 +78,17 @@ func (s *session) authorize(ctx context.Context, command *universal.RoutableMess
 			// Prevent a race condition where the goroutine may unblock but the
 			// session becomes invalid before it authorizes the command.
 			s.lock.Lock()
+			if s.verificationErr != nil {
+				// The vehicle's session info can no longer be verified with this
+				// session's keys (for example, the vehicle's key changed). The
+				// session will never recover on its own, so fail terminally with
+				// the underlying error instead of retrying until the context
+				// deadline. StartSession discards the session and performs a
+				// fresh handshake on its next call.
+				err = s.verificationErr
+				s.lock.Unlock()
+				return err
+			}
 			if s.ctx != nil && s.ready {
 				switch method {
 				case connector.AuthMethodNone:
@@ -121,16 +139,34 @@ func (s *session) processHello(challenge, info, tag []byte) error {
 	var err error
 	if s.ctx == nil {
 		s.ctx, err = authentication.NewAuthenticatedSigner(s.private, s.vin, challenge, info, tag)
-		if err != nil {
-			return err
-		}
 	} else {
 		err = s.ctx.UpdateSignedSessionInfo(challenge, info, tag)
 	}
 
-	if err == nil && !s.ready {
+	if err != nil {
+		// Record the failure so that a session that can no longer verify the
+		// vehicle's session info fails commands terminally instead of retrying
+		// forever, and so StartSession can discard and re-establish it.
+		s.verificationErr = err
+		return err
+	}
+	// Session info verified successfully, so any previously recorded fault
+	// (such as a transient bad frame) is stale and must be cleared. This also
+	// preserves the intended recovery path in which the vehicle proactively
+	// includes fresh, correctly-signed session info to resync a desync.
+	s.verificationErr = nil
+
+	if !s.ready {
 		s.ready = true
 		close(s.readySignal) // Notifies blocked goroutines that we're ready to authorize commands
 	}
-	return err
+	return nil
+}
+
+// verificationError returns the most recent session-info verification failure,
+// or nil if the last verification succeeded. Callers must not hold s.lock.
+func (s *session) verificationError() error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	return s.verificationErr
 }
