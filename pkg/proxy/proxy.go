@@ -183,6 +183,10 @@ func httpStatusCode(err error) int {
 	case errors.Is(err, inet.ErrVehicleNotAwake):
 		// Fleet API returns 408 when the vehicle is offline or asleep.
 		return http.StatusRequestTimeout
+	case errors.Is(err, inet.ErrWakeupPending):
+		// The wake up request was sent, but the vehicle did not come online
+		// before the deadline.
+		return http.StatusRequestTimeout
 	case errors.Is(err, protocol.ErrKeyNotPaired):
 		// Not 401: the OAuth token was accepted, but the vehicle-side key
 		// pairing precondition failed.

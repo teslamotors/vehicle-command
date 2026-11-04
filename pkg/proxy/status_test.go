@@ -21,6 +21,7 @@ func TestHTTPStatusCode(t *testing.T) {
 	}{
 		{"vehicle asleep", inet.ErrVehicleNotAwake, http.StatusRequestTimeout},
 		{"vehicle asleep wrapped", fmt.Errorf("connect: %w", inet.ErrVehicleNotAwake), http.StatusRequestTimeout},
+		{"wake up pending", fmt.Errorf("%w: %w", inet.ErrWakeupPending, context.DeadlineExceeded), http.StatusRequestTimeout},
 		{"key not paired", protocol.ErrKeyNotPaired, http.StatusPreconditionFailed},
 		{"key not paired wrapped", fmt.Errorf("handshake: %w", protocol.ErrKeyNotPaired), http.StatusPreconditionFailed},
 		{"generic error", errors.New("boom"), http.StatusInternalServerError},
