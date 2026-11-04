@@ -150,14 +150,16 @@ func (c *Config) saveKeyToKeyring(key protocol.ECDHPrivateKey) error {
 		return err
 	}
 
-	scalar := make([]byte, 32)
-	if (nativeKey.D.BitLen()+7)/8 != len(scalar) {
-		return fmt.Errorf("invalid private key")
+	// Bytes returns the scalar as 32 big-endian bytes, the format LoadKeyFromKeyring reads, and an error if
+	// the key is not a valid P-256 private key.
+	scalar, err := nativeKey.PrivateKey.Bytes()
+	if err != nil {
+		return fmt.Errorf("invalid private key: %s", err)
 	}
 
 	if err := kr.Set(keyring.Item{
 		Key:  c.fullKeyName(),
-		Data: nativeKey.D.FillBytes(scalar),
+		Data: scalar,
 	}); err != nil {
 		return fmt.Errorf("failed to enroll key in keyring: %s", err)
 	}
