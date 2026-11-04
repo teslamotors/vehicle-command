@@ -617,6 +617,57 @@ func TestForwardRequestRetryContextTimeout(t *testing.T) {
 	}
 }
 
+func TestForwardRequestPropagatesRequestCancellation(t *testing.T) {
+	p := newTestProxy(t)
+	started := make(chan struct{})
+	release := make(chan struct{})
+	upstreamErr := make(chan error, 1)
+	p.client = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		close(started)
+		select {
+		case <-req.Context().Done():
+		case <-release:
+		}
+		err := req.Context().Err()
+		upstreamErr <- err
+		if err != nil {
+			return nil, err
+		}
+		return jsonResponse(http.StatusOK, `{}`, nil), nil
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/1/vehicles", nil).WithContext(ctx)
+	req.Header.Set("Authorization", authHeader())
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		p.ServeHTTP(rec, req)
+	}()
+
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("upstream request did not start")
+	}
+	cancel()
+	close(release)
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("proxy did not return after cancellation")
+	}
+
+	if err := <-upstreamErr; !errors.Is(err, context.Canceled) {
+		t.Fatalf("upstream context error = %v, want context.Canceled", err)
+	}
+	if rec.Code != http.StatusGatewayTimeout {
+		t.Fatalf("status=%d body=%s, want cancellation mapped to 504", rec.Code, rec.Body.String())
+	}
+}
+
 func TestServeHTTPUnsupportedVINForwards(t *testing.T) {
 	p := newTestProxy(t)
 	p.markUnsupportedVIN(testVIN)
