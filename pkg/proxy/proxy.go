@@ -471,7 +471,7 @@ func (p *Proxy) handleFleetTelemetryConfig(acct *account.Account, w http.Respons
 }
 
 func (p *Proxy) handleVehicleCommand(acct *account.Account, w http.ResponseWriter, req *http.Request, command, vin string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), p.Timeout)
+	ctx, cancel := context.WithTimeout(req.Context(), p.Timeout)
 	defer cancel()
 
 	// Serialize commands sent to a specific VIN to avoid some complexities associated with sharing
@@ -481,9 +481,18 @@ func (p *Proxy) handleVehicleCommand(acct *account.Account, w http.ResponseWrite
 		return err
 	}
 	defer p.unlockVIN(vin)
+	if err := ctx.Err(); err != nil {
+		writeJSONError(w, http.StatusServiceUnavailable, err)
+		return err
+	}
 
 	car, commandToExecuteFunc, err := p.loadVehicleAndCommandFromRequest(ctx, acct, w, req, command, vin)
 	if err != nil {
+		return err
+	}
+	defer car.Disconnect()
+	if err := ctx.Err(); err != nil {
+		writeJSONError(w, httpStatusCode(err), err)
 		return err
 	}
 
@@ -491,10 +500,17 @@ func (p *Proxy) handleVehicleCommand(acct *account.Account, w http.ResponseWrite
 		writeJSONError(w, httpStatusCode(err), err)
 		return err
 	}
-	defer car.Disconnect()
+	if err := ctx.Err(); err != nil {
+		writeJSONError(w, httpStatusCode(err), err)
+		return err
+	}
 
 	if err := car.StartSession(ctx); errors.Is(err, protocol.ErrProtocolNotSupported) {
 		p.markUnsupportedVIN(vin)
+		if err := ctx.Err(); err != nil {
+			writeJSONError(w, httpStatusCode(err), err)
+			return err
+		}
 		p.forwardRequest(acct, w, req)
 		return err
 	} else if err != nil {
@@ -504,6 +520,10 @@ func (p *Proxy) handleVehicleCommand(acct *account.Account, w http.ResponseWrite
 	defer func() {
 		_ = car.UpdateCachedSessions(p.sessions)
 	}()
+	if err := ctx.Err(); err != nil {
+		writeJSONError(w, httpStatusCode(err), err)
+		return err
+	}
 
 	if err = car.Execute(commandToExecuteFunc); err == ErrCommandUseRESTAPI {
 		return err
