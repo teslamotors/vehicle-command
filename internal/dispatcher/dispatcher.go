@@ -131,13 +131,17 @@ func (d *Dispatcher) tryStartSession(ctx context.Context, s *session, domain uni
 func (d *Dispatcher) StartSessions(ctx context.Context, domains []universal.Domain) error {
 	aggregateContext, cancel := context.WithCancel(ctx)
 	defer cancel()
-	results := make(chan error)
 	if domains == nil {
 		domains = []universal.Domain{
 			universal.Domain_DOMAIN_VEHICLE_SECURITY,
 			universal.Domain_DOMAIN_INFOTAINMENT,
 		}
 	}
+	// The channel is buffered so that every worker can report its result even
+	// if StartSessions returns early after receiving the first
+	// non-cancellation error; otherwise the remaining workers would block
+	// forever sending to a channel with no receiver left.
+	results := make(chan error, len(domains))
 	for _, domain := range domains {
 		go func(dom universal.Domain) {
 			results <- d.StartSession(aggregateContext, dom)
