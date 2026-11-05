@@ -154,12 +154,16 @@ func ExtractCommandAction(ctx context.Context, command string, params RequestPar
 			return v.SetClimateKeeperMode(ctx, vehicle.ClimateKeeperMode(mode), override)
 		}, nil
 	case "set_cop_temp":
-		level, err := params.getNumber("cop_temp", true)
+		copTemp, err := params.getNumber("cop_temp", true)
+		if err != nil {
+			return nil, err
+		}
+		level, err := copTempLevel(copTemp)
 		if err != nil {
 			return nil, err
 		}
 		return func(v *vehicle.Vehicle) error {
-			return v.SetCabinOverheatProtectionTemperature(ctx, vehicle.Level(level))
+			return v.SetCabinOverheatProtectionTemperature(ctx, level)
 		}, nil
 	case "set_preconditioning_max":
 		on, err := params.getBool("on", true)
@@ -728,4 +732,19 @@ func missingParamError(key string) error {
 
 func invalidParamError(key string) error {
 	return &protocol.NominalError{Details: fmt.Errorf("invalid %s param", key)}
+}
+
+// copTempLevel converts a Fleet API cop_temp value (0 = Low, 1 = Medium,
+// 2 = High) to the corresponding vehicle.Level.
+func copTempLevel(copTemp float64) (vehicle.Level, error) {
+	switch copTemp {
+	case 0:
+		return vehicle.LevelLow, nil
+	case 1:
+		return vehicle.LevelMed, nil
+	case 2:
+		return vehicle.LevelHigh, nil
+	default:
+		return 0, invalidParamError("cop_temp")
+	}
 }
