@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"math"
 	"strconv"
 	"testing"
 )
@@ -59,6 +60,33 @@ func TestGetDays(t *testing.T) {
 			t.Errorf("day string '%s' gave unexpected err = %s", test.str, err)
 		} else if mask != test.mask {
 			t.Errorf("day string '%s' gave mask %s instead of %s", test.str, strconv.FormatInt(int64(mask), 2), strconv.FormatInt(int64(test.mask), 2))
+		}
+	}
+}
+
+func TestGetCelsius(t *testing.T) {
+	type params struct {
+		str     string
+		celsius float32
+		isErr   bool
+	}
+	testCases := []params{
+		{str: "22", celsius: 22},
+		{str: "21.5", celsius: 21.5},
+		{str: "22C", celsius: 22},
+		{str: "22c", celsius: 22},
+		{str: "72F", celsius: 22.2222},
+		{str: "50f", celsius: 10},
+		{str: "22K", isErr: true},
+		{str: "", isErr: true},
+		{str: "warm", isErr: true},
+	}
+	for _, test := range testCases {
+		celsius, err := GetCelsius(test.str)
+		if (err != nil) != test.isErr {
+			t.Errorf("temperature '%s' gave unexpected err = %s", test.str, err)
+		} else if math.Abs(float64(celsius-test.celsius)) > 1e-4 {
+			t.Errorf("temperature '%s' gave %f instead of %f", test.str, celsius, test.celsius)
 		}
 	}
 }
