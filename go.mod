@@ -2,6 +2,9 @@ module github.com/teslamotors/vehicle-command
 
 go 1.25
 
+// Listen without Multipath TCP until patched Linux kernels are common (CVE-2026-98432, go.dev/issue/82717).
+godebug multipathtcp=0
+
 require (
 	github.com/99designs/keyring v1.2.2
 	github.com/cronokirby/saferith v0.33.0
