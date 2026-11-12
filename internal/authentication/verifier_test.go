@@ -886,3 +886,128 @@ func TestSignerDecryptMetadataError(t *testing.T) {
 		t.Errorf("Payload modified after decryption failure")
 	}
 }
+
+func vehicleActionMessage(t *testing.T, action *carserver.VehicleAction) *universal.RoutableMessage {
+	t.Helper()
+	plaintext, err := proto.Marshal(&carserver.Action{
+		ActionMsg: &carserver.Action_VehicleAction{VehicleAction: action},
+	})
+	if err != nil {
+		t.Fatalf("Error creating command: %s", err)
+	}
+	return &universal.RoutableMessage{
+		ToDestination: &universal.Destination{
+			SubDestination: &universal.Destination_Domain{Domain: universal.Domain_DOMAIN_INFOTAINMENT},
+		},
+		Payload: &universal.RoutableMessage_ProtobufMessageAsBytes{ProtobufMessageAsBytes: plaintext},
+	}
+}
+
+// Detached encryption would hide the operation of commands whose only parameter is an empty option
+// that selects it, such as charge start and stop, so AuthorizeHMAC keeps the HMAC tag for them.
+func TestAuthorizeHMACKeepsOperationInPlaintext(t *testing.T) {
+	startStop := func(action *carserver.ChargingStartStopAction) *carserver.VehicleAction {
+		return &carserver.VehicleAction{
+			VehicleActionMsg: &carserver.VehicleAction_ChargingStartStopAction{ChargingStartStopAction: action},
+		}
+	}
+	tests := map[string]struct {
+		action   *carserver.VehicleAction
+		detached bool
+	}{
+		"charge start": {startStop(&carserver.ChargingStartStopAction{
+			ChargingAction: &carserver.ChargingStartStopAction_Start{Start: &carserver.Void{}},
+		}), false},
+		"charge stop": {startStop(&carserver.ChargingStartStopAction{
+			ChargingAction: &carserver.ChargingStartStopAction_Stop{Stop: &carserver.Void{}},
+		}), false},
+		"charge start max range": {startStop(&carserver.ChargingStartStopAction{
+			ChargingAction: &carserver.ChargingStartStopAction_StartMaxRange{StartMaxRange: &carserver.Void{}},
+		}), false},
+		"vent windows": {&carserver.VehicleAction{
+			VehicleActionMsg: &carserver.VehicleAction_VehicleControlWindowAction{
+				VehicleControlWindowAction: &carserver.VehicleControlWindowAction{
+					Action: &carserver.VehicleControlWindowAction_Vent{Vent: &carserver.Void{}},
+				},
+			},
+		}, false},
+		"set charging amps": {&carserver.VehicleAction{
+			VehicleActionMsg: &carserver.VehicleAction_SetChargingAmpsAction{
+				SetChargingAmpsAction: &carserver.SetChargingAmpsAction{ChargingAmps: 16},
+			},
+		}, true},
+		"open charge port (no parameters)": {&carserver.VehicleAction{
+			VehicleActionMsg: &carserver.VehicleAction_ChargePortDoorOpen{ChargePortDoorOpen: &carserver.ChargePortDoorOpen{}},
+		}, true},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			verifier, signer := getVerifierAndSigner(t, DefaultVerifierFlags)
+			verifier.domain = universal.Domain_DOMAIN_INFOTAINMENT
+			message := vehicleActionMessage(t, test.action)
+			original := append([]byte{}, message.GetProtobufMessageAsBytes()...)
+
+			if err := signer.AuthorizeHMAC(message, time.Minute); err != nil {
+				t.Fatalf("Error signing message: %s", err)
+			}
+			if got := message.GetSignatureData().GetAES_GCM_DetachedData() != nil; got != test.detached {
+				t.Fatalf("detached=%v, want %v", got, test.detached)
+			}
+			if !test.detached {
+				if message.GetSignatureData().GetHMAC_PersonalizedData() == nil {
+					t.Fatal("Message not signed with HMAC")
+				}
+				if !bytes.Equal(message.GetProtobufMessageAsBytes(), original) {
+					t.Errorf("HMAC-signed command was modified: %x", message.GetProtobufMessageAsBytes())
+				}
+			}
+			plaintext, err := verifier.Verify(message)
+			if err != nil {
+				t.Fatalf("Error verifying message: %s", err)
+			}
+			if !bytes.Equal(plaintext, original) {
+				t.Errorf("Recovered %x instead of %x", plaintext, original)
+			}
+		})
+	}
+}
+
+func TestDetachedPayloadIsOperation(t *testing.T) {
+	tests := map[string]struct {
+		domain  universal.Domain
+		payload []byte
+		want    bool
+	}{
+		// 2: { 6: { 5: {} }}, charge stop
+		"one empty option": {universal.Domain_DOMAIN_INFOTAINMENT, []byte{0x12, 0x04, 0x32, 0x02, 0x2a, 0x00}, true},
+		// 2: { 6: { 2: {}, 5: {} }}
+		"several empty options": {universal.Domain_DOMAIN_INFOTAINMENT, []byte{0x12, 0x06, 0x32, 0x04, 0x12, 0x00, 0x2a, 0x00}, true},
+		// 2: { 6: {} }
+		"no parameters": {universal.Domain_DOMAIN_INFOTAINMENT, []byte{0x12, 0x02, 0x32, 0x00}, false},
+		// 2: { 91: { 1: 16 }}, set charging amps
+		"varint parameter": {universal.Domain_DOMAIN_INFOTAINMENT, []byte{0x12, 0x05, 0xda, 0x05, 0x02, 0x08, 0x10}, false},
+		// 2: { 46: { 1: "secret" }}
+		"string parameter": {universal.Domain_DOMAIN_INFOTAINMENT, []byte{0x12, 0x0a, 0xf2, 0x02, 0x07, 0x08, 0x73, 0x65, 0x63, 0x72, 0x65, 0x74}, false},
+		// 2: { 6: { 5: {}, 1: 1 }}
+		"empty option beside a parameter": {universal.Domain_DOMAIN_INFOTAINMENT, []byte{0x12, 0x06, 0x32, 0x04, 0x2a, 0x00, 0x08, 0x01}, false},
+		// 2: { 6: { 5: { 1: 1 } }}
+		"non-empty option": {universal.Domain_DOMAIN_INFOTAINMENT, []byte{0x12, 0x06, 0x32, 0x04, 0x2a, 0x02, 0x08, 0x01}, false},
+		// 2: { 6: { 5: <truncated> }}
+		"truncated option":   {universal.Domain_DOMAIN_INFOTAINMENT, []byte{0x12, 0x04, 0x32, 0x02, 0x2a, 0x05}, false},
+		"invalid command":    {universal.Domain_DOMAIN_INFOTAINMENT, []byte{0x12, 0x00}, false},
+		"unsupported domain": {universal.Domain_DOMAIN_BROADCAST, []byte{0x12, 0x04, 0x32, 0x02, 0x2a, 0x00}, false},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			message := &universal.RoutableMessage{
+				ToDestination: &universal.Destination{
+					SubDestination: &universal.Destination_Domain{Domain: test.domain},
+				},
+				Payload: &universal.RoutableMessage_ProtobufMessageAsBytes{ProtobufMessageAsBytes: test.payload},
+			}
+			if got := detachedPayloadIsOperation(message); got != test.want {
+				t.Errorf("detachedPayloadIsOperation(%x) = %v, want %v", test.payload, got, test.want)
+			}
+		})
+	}
+}

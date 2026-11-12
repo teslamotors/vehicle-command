@@ -186,9 +186,21 @@ func (s *Signer) Encrypt(message *universal.RoutableMessage, expiresIn time.Dura
 //
 // BLE communications should instead use [Signer.Encrypt].
 func (s *Signer) EncryptDetach(message *universal.RoutableMessage, expiresIn time.Duration) error {
+	fieldNumbers, payload, err := splitDetachedCommand(message)
+	if err != nil {
+		return err
+	}
+	// Separate out the cryptography from the semantic checks in splitDetachedCommand so that unit
+	// tests can easily do the former on semantically invalid payloads.
+	return s.addDetachedAuthentication(message, marshalNestedMessage(fieldNumbers, nil), payload, expiresIn)
+}
+
+// splitDetachedCommand returns the field numbers that EncryptDetach keeps in plaintext and the
+// payload that it encrypts.
+func splitDetachedCommand(message *universal.RoutableMessage) ([]protowire.Number, []byte, error) {
 	payload := message.GetProtobufMessageAsBytes()
 	if payload == nil {
-		return newError(errCodeBadParameter, "missing protobuf message")
+		return nil, nil, newError(errCodeBadParameter, "missing protobuf message")
 	}
 	depth := 0
 	switch message.GetToDestination().GetDomain() {
@@ -197,31 +209,50 @@ func (s *Signer) EncryptDetach(message *universal.RoutableMessage, expiresIn tim
 	case universal.Domain_DOMAIN_VEHICLE_SECURITY:
 		depth = 1 // VCSEC: vcsec.UnsignedMessage -> <command>
 	default:
-		return newError(errCodeBadParameter, "unsupported domain for EncryptDetach")
+		return nil, nil, newError(errCodeBadParameter, "unsupported domain for EncryptDetach")
 	}
 	var fieldNumbers []protowire.Number
 	for i := 0; i < depth; i++ {
 		fieldNumber, wireType, n := protowire.ConsumeTag(payload)
 		if n < 0 {
-			return newError(errCodeDecoding, "invalid protobuf")
+			return nil, nil, newError(errCodeDecoding, "invalid protobuf")
 		}
 		if wireType != protowire.BytesType {
-			return newError(errCodeDecoding, "invalid protobuf command type")
+			return nil, nil, newError(errCodeDecoding, "invalid protobuf command type")
 		}
 		fieldNumbers = append(fieldNumbers, fieldNumber)
 		subCommand, subCommandLength := protowire.ConsumeBytes(payload[n:])
 		if subCommandLength < 0 {
-			return newError(errCodeDecoding, "invalid subcommand")
+			return nil, nil, newError(errCodeDecoding, "invalid subcommand")
 		}
 		if subCommandLength+n != len(payload) {
-			return newError(errCodeDecoding, "command includes data outside of innermost envelope")
+			return nil, nil, newError(errCodeDecoding, "command includes data outside of innermost envelope")
 		}
 		payload = subCommand
 	}
+	return fieldNumbers, payload, nil
+}
 
-	// Separate out the cryptography from the semantic checks above so that unit tests can easily do
-	// the former on semantically invalid payloads.
-	return s.addDetachedAuthentication(message, marshalNestedMessage(fieldNumbers, nil), payload, expiresIn)
+// detachedPayloadIsOperation reports whether EncryptDetach would encrypt only empty messages, such
+// as the Void option of ChargingStartStopAction that selects start or stop. Such a payload has no
+// parameters to protect, but encrypting it hides the operation from Fleet API.
+func detachedPayloadIsOperation(message *universal.RoutableMessage) bool {
+	_, payload, err := splitDetachedCommand(message)
+	if err != nil || len(payload) == 0 {
+		return false
+	}
+	for len(payload) > 0 {
+		_, wireType, n := protowire.ConsumeTag(payload)
+		if n < 0 || wireType != protowire.BytesType {
+			return false
+		}
+		value, m := protowire.ConsumeBytes(payload[n:])
+		if m < 0 || len(value) != 0 {
+			return false
+		}
+		payload = payload[n+m:]
+	}
+	return true
 }
 
 func (s *Signer) addDetachedAuthentication(message *universal.RoutableMessage, prefix, payload []byte, expiresIn time.Duration) error {
@@ -270,12 +301,14 @@ func (s *Signer) addDetachedAuthentication(message *universal.RoutableMessage, p
 // to inspect commands in order to enforce OAuth scopes and determine when a sequence of replies
 // terminates, so the high-level command must remain plaintext. If the [Verifier] supports it, the
 // Signer automatically upgrades to [Signer.EncryptDetach], which encrypts command parameters while
-// leaving the command type in plaintext. If a client is not using the HTTP proxy, it should use
-// Encrypt instead of AuthorizeHMAC.
+// leaving the command type in plaintext. Commands whose parameters are only an empty option that
+// selects the operation, such as charge start and charge stop, keep the HMAC tag, since detached
+// encryption would hide the operation and protect no data. If a client is not using the HTTP proxy,
+// it should use Encrypt instead of AuthorizeHMAC.
 //
 // Sensitive data, such as live camera streams, is encrypted on the application layer.
 func (s *Signer) AuthorizeHMAC(message *universal.RoutableMessage, expiresIn time.Duration) error {
-	if s.SupportsDetached {
+	if s.SupportsDetached && !detachedPayloadIsOperation(message) {
 		return s.EncryptDetach(message, expiresIn)
 	}
 	s.counter++
