@@ -557,7 +557,10 @@ over BLE. Detached AES-GCM messages have the command type as plaintext but
 encrypt the command parameters, allowing Fleet API to enforce the OAuth scopes
 granted by the vehicle's owner. HMAC-SHA256 messages are authenticated
 plaintext, and should only be used with Fleet API when the vehicle or domain
-does not support detached AES-GCM.
+does not support detached AES-GCM, or when the detached payload would consist
+only of empty messages. For example, `ChargingStartStopAction` selects start or
+stop with an empty `Void` option, so detached encryption would hide the
+operation from Fleet API without protecting any data.
 
 The official Golang SDK uses the recommended method automatically.
 
