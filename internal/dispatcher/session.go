@@ -85,11 +85,8 @@ func (s *session) authorize(ctx context.Context, command *universal.RoutableMess
 				attempted = true
 			}
 			s.lock.Unlock()
-			if err != nil {
-				// Retry until caller cancels context
-				err = nil
-			} else if attempted {
-				return nil
+			if attempted {
+				return err
 			}
 		case <-ctx.Done():
 			return ctx.Err()
