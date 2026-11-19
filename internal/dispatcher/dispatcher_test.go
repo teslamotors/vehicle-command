@@ -17,6 +17,7 @@ import (
 	"github.com/teslamotors/vehicle-command/internal/authentication"
 	"github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/signatures"
 	universal "github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/universalmessage"
+	"github.com/teslamotors/vehicle-command/pkg/protocol/protobuf/vcsec"
 )
 
 var errOutboxFull = errors.New("dispatcher: outbox full")
@@ -360,6 +361,77 @@ func TestHMACUpgradesToDetached(t *testing.T) {
 			t.Fatal("Command never reached connector")
 		case <-time.After(10 * time.Millisecond):
 		}
+	}
+}
+
+func TestHMACVehicleSecurityRKEAction(t *testing.T) {
+	dispatcher, conn := getTestSetup(t)
+	defer conn.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), quiescentDelay)
+	defer cancel()
+
+	if err := dispatcher.StartSession(ctx, universal.Domain_DOMAIN_VEHICLE_SECURITY); err != nil {
+		t.Fatalf("Couldn't start session: %s", err)
+	}
+	payload, err := proto.Marshal(&vcsec.UnsignedMessage{
+		SubMessage: &vcsec.UnsignedMessage_RKEAction{RKEAction: vcsec.RKEAction_E_RKE_ACTION_LOCK},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	command := &universal.RoutableMessage{
+		ToDestination: &universal.Destination{
+			SubDestination: &universal.Destination_Domain{Domain: universal.Domain_DOMAIN_VEHICLE_SECURITY},
+		},
+		Payload: &universal.RoutableMessage_ProtobufMessageAsBytes{ProtobufMessageAsBytes: payload},
+	}
+	if _, err := dispatcher.Send(ctx, command, connector.AuthMethodHMAC); err != nil {
+		t.Fatalf("Error sending command: %s", err)
+	}
+
+	for {
+		conn.lock.Lock()
+		var sigData *signatures.SignatureData
+		for _, message := range conn.inbox {
+			if message.GetToDestination().GetDomain() == universal.Domain_DOMAIN_VEHICLE_SECURITY && message.GetSignatureData() != nil {
+				sigData = message.GetSignatureData()
+			}
+		}
+		conn.lock.Unlock()
+		if sigData != nil {
+			if sigData.GetHMAC_PersonalizedData() == nil {
+				t.Fatalf("Expected HMAC signature data but got %T", sigData.GetSigType())
+			}
+			return
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal("Command never reached connector")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+}
+
+func TestAuthorizeErrorReturnedImmediately(t *testing.T) {
+	dispatcher, conn := getTestSetup(t)
+	defer conn.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), quiescentDelay)
+	defer cancel()
+
+	command := testCommand()
+	command.Payload = &universal.RoutableMessage_ProtobufMessageAsBytes{ProtobufMessageAsBytes: []byte{0x10, 0x01}}
+	_, err := dispatcher.Send(ctx, command, connector.AuthMethodHMAC)
+	if err == nil {
+		t.Fatal("Expected error")
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Expected signing error, got %s", err)
+	}
+	var authErr *authentication.Error
+	if !errors.As(err, &authErr) {
+		t.Errorf("Expected authentication.Error, got %T: %s", err, err)
 	}
 }
 
