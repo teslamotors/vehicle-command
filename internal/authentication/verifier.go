@@ -43,7 +43,9 @@ func NewVerifier(private ECDHPrivateKey, id []byte, domain universal.Domain, sig
 			session:      session,
 		},
 		window: 0,
-		Flags:  DefaultVerifierFlags,
+	}
+	if domain == universal.Domain_DOMAIN_INFOTAINMENT {
+		verifier.Flags = DefaultVerifierFlags
 	}
 
 	if len(id) > 255 {
