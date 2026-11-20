@@ -75,6 +75,19 @@ func (d *Dispatcher) StartSession(ctx context.Context, domain universal.Domain) 
 	var sessionReady bool
 	d.sessionLock.Lock()
 	s, ok := d.sessions[domain]
+	if ok && s != nil {
+		if verr := s.verificationError(); verr != nil {
+			// A previously established session can no longer verify the
+			// vehicle's session info (for example, the vehicle's key changed
+			// after a service visit). Reusing it would make every command
+			// retry until the context deadline, so discard it and re-handshake
+			// instead. This is equivalent to reconnecting with an empty session
+			// cache and lets clients recover without a manual restart.
+			log.Warning("Discarding unrecoverable session for %s and re-establishing it: %s", domain, verr)
+			delete(d.sessions, domain)
+			s, ok = nil, false
+		}
+	}
 	if !ok {
 		d.sessions[domain], err = newSession(d.privateKey, d.conn.VIN())
 		s = d.sessions[domain]
