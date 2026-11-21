@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ecdh"
 	"errors"
+	"fmt"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -209,8 +210,27 @@ func (v *Vehicle) trySend(ctx context.Context, domain universal.Domain, payload 
 	case response := <-recv.Recv():
 		return response.GetProtobufMessageAsBytes(), protocol.GetError(response)
 	case <-ctx.Done():
-		return nil, &protocol.CommandError{Err: ctx.Err(), PossibleSuccess: true, PossibleTemporary: true}
+		return nil, timeoutError(ctx, recv)
 	}
+}
+
+// unauthenticatedFaultReporter is implemented by receivers that keep the fault code of responses
+// that failed authentication.
+type unauthenticatedFaultReporter interface {
+	UnauthenticatedFault() universal.MessageFault_E
+}
+
+// timeoutError returns the error for a request whose context expired before a valid response
+// arrived. If the vehicle replied with a fault that failed authentication, the error names that
+// fault. The fault is unverified, so the error is still a timeout.
+func timeoutError(ctx context.Context, recv protocol.Receiver) error {
+	err := ctx.Err()
+	if r, ok := recv.(unauthenticatedFaultReporter); ok {
+		if fault := r.UnauthenticatedFault(); fault != universal.MessageFault_E_MESSAGEFAULT_ERROR_NONE {
+			err = fmt.Errorf("%w; the vehicle replied with %s, but the reply failed authentication", err, fault)
+		}
+	}
+	return &protocol.CommandError{Err: err, PossibleSuccess: true, PossibleTemporary: true}
 }
 
 // SendMessage sends a routable message to the vehicle.
