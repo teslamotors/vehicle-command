@@ -2,6 +2,7 @@ package dispatcher
 
 import (
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/teslamotors/vehicle-command/internal/authentication"
@@ -35,11 +36,22 @@ type receiver struct {
 	lastActive    time.Time
 	antireplay    authentication.SlidingWindow
 	requestID     []byte
+	// unauthenticatedFault holds the fault code of the latest response to this request that
+	// failed authentication.
+	unauthenticatedFault atomic.Int32
 }
 
 // Recv returns a channel that receives responses to the command that created the receiver.
 func (r *receiver) Recv() <-chan *universal.RoutableMessage {
 	return r.ch
+}
+
+// UnauthenticatedFault returns the fault code of the latest response to this request that failed
+// authentication, or MESSAGEFAULT_ERROR_NONE if there was none. The dispatcher drops such
+// responses, so the code is unverified. Use it to explain a timeout, not to decide whether a
+// command succeeded.
+func (r *receiver) UnauthenticatedFault() universal.MessageFault_E {
+	return universal.MessageFault_E(r.unauthenticatedFault.Load())
 }
 
 // Close tells the dispatcher to stop listening for responses to this command, freeing the

@@ -76,7 +76,7 @@ func readUntil(ctx context.Context, recv protocol.Receiver, done isTerminalTest)
 				return fromVCSEC, err
 			}
 		case <-ctx.Done():
-			return nil, &protocol.CommandError{Err: ctx.Err(), PossibleSuccess: true, PossibleTemporary: true}
+			return nil, timeoutError(ctx, recv)
 		}
 	}
 }

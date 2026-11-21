@@ -642,6 +642,108 @@ func TestDiscardUnauthenticatedSessionInfo(t *testing.T) {
 	}
 }
 
+// encryptReply addresses reply to rsp and encrypts it in place the way a vehicle encrypts responses.
+func encryptReply(t *testing.T, d *Dispatcher, conn *dummyConnector, rsp protocol.Receiver, reply *universal.RoutableMessage) {
+	t.Helper()
+	r := rsp.(*receiver)
+	verifier, err := authentication.NewVerifier(conn.domainKey(r.key.domain), []byte(conn.VIN()), r.key.domain, d.privateKey.PublicBytes())
+	if err != nil {
+		t.Fatalf("Couldn't create verifier: %s", err)
+	}
+	populateReplyMetadata(rsp, reply)
+	if err := verifier.Encrypt(reply, r.requestID, 1); err != nil {
+		t.Fatalf("Couldn't encrypt reply: %s", err)
+	}
+}
+
+func faultReply(fault universal.MessageFault_E) *universal.RoutableMessage {
+	return &universal.RoutableMessage{
+		SignedMessageStatus: &universal.MessageStatus{
+			OperationStatus:    universal.OperationStatus_E_OPERATIONSTATUS_ERROR,
+			SignedMessageFault: fault,
+		},
+	}
+}
+
+func TestEncryptedFault(t *testing.T) {
+	dispatcher, conn := getTestSetup(t)
+	defer conn.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), quiescentDelay)
+	defer cancel()
+
+	rsp, err := dispatcher.Send(ctx, testCommand(), connector.AuthMethodGCM)
+	if err != nil {
+		t.Fatalf("Error sending command: %s", err)
+	}
+	defer rsp.Close()
+
+	fault := universal.MessageFault_E_MESSAGEFAULT_ERROR_RESPONSE_MTU_EXCEEDED
+	reply := faultReply(fault)
+	encryptReply(t, dispatcher, conn, rsp, reply)
+	conn.EnqueueReply(t, encodeRoutableMessage(t, reply))
+
+	select {
+	case message := <-rsp.Recv():
+		checkFault(t, message, fault)
+	case <-ctx.Done():
+		t.Fatalf("Expected fault response but got %s", ctx.Err())
+	}
+	if observed := rsp.(*receiver).UnauthenticatedFault(); observed != universal.MessageFault_E_MESSAGEFAULT_ERROR_NONE {
+		t.Errorf("Expected no unauthenticated fault but got %s", observed)
+	}
+}
+
+func TestDiscardUnauthenticatedFault(t *testing.T) {
+	tests := []struct {
+		name     string
+		reply    *universal.RoutableMessage
+		expected universal.MessageFault_E
+	}{
+		{
+			name:     "fault",
+			reply:    faultReply(universal.MessageFault_E_MESSAGEFAULT_ERROR_RESPONSE_MTU_EXCEEDED),
+			expected: universal.MessageFault_E_MESSAGEFAULT_ERROR_RESPONSE_MTU_EXCEEDED,
+		},
+		{
+			name: "no fault",
+			reply: &universal.RoutableMessage{
+				Payload: &universal.RoutableMessage_ProtobufMessageAsBytes{ProtobufMessageAsBytes: testPayload},
+			},
+			expected: universal.MessageFault_E_MESSAGEFAULT_ERROR_NONE,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			dispatcher, conn := getTestSetup(t)
+			defer conn.Close()
+
+			ctx, cancel := context.WithTimeout(context.Background(), quiescentDelay)
+			defer cancel()
+
+			rsp, err := dispatcher.Send(ctx, testCommand(), connector.AuthMethodGCM)
+			if err != nil {
+				t.Fatalf("Error sending command: %s", err)
+			}
+			defer rsp.Close()
+
+			encryptReply(t, dispatcher, conn, rsp, test.reply)
+			// Corrupt the tag so that the reply fails authentication.
+			test.reply.GetSignatureData().GetAES_GCM_ResponseData().Tag[0] ^= 1
+			conn.EnqueueReply(t, encodeRoutableMessage(t, test.reply))
+
+			select {
+			case message := <-rsp.Recv():
+				t.Fatalf("Received a response that failed authentication: %+v", message)
+			case <-ctx.Done():
+			}
+			if observed := rsp.(*receiver).UnauthenticatedFault(); observed != test.expected {
+				t.Errorf("Expected unauthenticated fault %s but got %s", test.expected, observed)
+			}
+		})
+	}
+}
+
 func TestVehicleUnreachable(t *testing.T) {
 	dispatcher, conn := getTestSetup(t)
 	defer conn.Close()

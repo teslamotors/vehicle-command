@@ -303,6 +303,13 @@ func (d *Dispatcher) process(message *universal.RoutableMessage) {
 		log.Info("[%02x] Dropping duplicate vehicle response", requestUUID)
 		return
 	} else if err != nil {
+		if fault := message.GetSignedMessageStatus().GetSignedMessageFault(); fault != universal.MessageFault_E_MESSAGEFAULT_ERROR_NONE {
+			// An unauthenticated fault must not end the request, but keeping the code lets a
+			// timeout say what the vehicle appeared to send.
+			handler.unauthenticatedFault.Store(int32(fault))
+			log.Warning("[%02x] Dropping vehicle response with fault %s that failed authentication: %s", requestUUID, fault, err)
+			return
+		}
 		log.Warning("[%02x] Error decrypting vehicle response: %s", requestUUID, err)
 		return
 	}
